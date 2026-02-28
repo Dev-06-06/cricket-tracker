@@ -3,13 +3,14 @@ import LandingPage from "./pages/LandingPage";
 import HomePage from "./pages/HomePage";
 import ScorerPage from "./pages/ScorerPage";
 import ScoreboardPage from "./pages/ScoreboardPage";
+import UmpireSetupPage from "./pages/UmpireSetupPage";
 
 function App() {
   return (
     <Routes>
       <Route path="/" element={<LandingPage />} />
       <Route path="/view" element={<HomePage />} />
-      <Route path="/umpire" element={<HomePage />} />
+      <Route path="/umpire" element={<UmpireSetupPage />} />
       <Route path="/scorer/:matchId" element={<ScorerPage />} />
       <Route path="/scoreboard/:matchId" element={<ScoreboardPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />

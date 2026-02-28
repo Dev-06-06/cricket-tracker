@@ -14,6 +14,8 @@ app.use(cors());
 app.use(express.json());
 const matchRoutes = require('./routes/matchRoutes');
 app.use('/api/match', matchRoutes);
+const playerRoutes = require('./routes/playerRoutes');
+app.use('/api/players', playerRoutes);
 
 const server = http.createServer(app);
 const io = new Server(server, {
