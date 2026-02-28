@@ -1,5 +1,6 @@
 const Match = require('../models/Match');
 const { calculateOvers, shouldRotateStrike } = require('../utlis/cricketLogic');
+const { updateCareerStats } = require('../utils/statsUpdater');
 
 function setupSockets(io) {
     io.on('connection', (socket) => {
@@ -36,6 +37,25 @@ function setupSockets(io) {
                 await match.save();
 
                 io.to(matchId).emit('score_updated', match);
+            } catch (error) {
+                console.log(error);
+            }
+        });
+
+        socket.on('complete_match', async ({ matchId }) => {
+            try {
+                const match = await Match.findById(matchId);
+
+                if (!match) {
+                    return;
+                }
+
+                match.status = 'completed';
+                await match.save();
+
+                await updateCareerStats(match);
+
+                io.to(matchId).emit('match_completed', match);
             } catch (error) {
                 console.log(error);
             }
