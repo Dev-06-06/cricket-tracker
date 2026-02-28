@@ -19,6 +19,8 @@ function ScorerPage() {
   const [match, setMatch] = useState(null);
   const [delivery, setDelivery] = useState(initialDelivery);
   const [error, setError] = useState("");
+  const [showBatterModal, setShowBatterModal] = useState(false);
+  const [selectedBatter, setSelectedBatter] = useState("");
 
   useEffect(() => {
     if (!matchId) {
@@ -45,12 +47,24 @@ function ScorerPage() {
     loadMatch();
 
     socket.emit("join_match", matchId);
+    socket.on("matchState", (updatedMatch) => {
+      if (isMounted) {
+        setMatch(updatedMatch);
+        if (updatedMatch.striker === null && updatedMatch.status === "innings") {
+          setShowBatterModal(true);
+          setSelectedBatter("");
+        } else {
+          setShowBatterModal(false);
+        }
+      }
+    });
     socket.on("score_updated", (updatedMatch) => {
       setMatch(updatedMatch);
     });
 
     return () => {
       isMounted = false;
+      socket.off("matchState");
       socket.off("score_updated");
       socket.disconnect();
     };
@@ -65,6 +79,16 @@ function ScorerPage() {
     { label: "Bye", value: "bye" },
     { label: "Leg Bye", value: "leg-bye" },
   ];
+
+  const availableBatters = useMemo(() => {
+    if (!match?.playerStats) return [];
+    return match.playerStats.filter(
+      (p) =>
+        p.team === match.battingTeam &&
+        !p.isOut &&
+        p.name !== match.currentNonStriker,
+    );
+  }, [match]);
 
   const currentOverBalls = useMemo(() => {
     if (!match?.timeline?.length) {
@@ -118,6 +142,14 @@ function ScorerPage() {
     }
 
     socketRef.current.emit("undo_delivery", { matchId });
+  };
+
+  const confirmNewBatter = () => {
+    if (!selectedBatter || !socketRef.current) {
+      return;
+    }
+    socketRef.current.emit("setNewBatter", { matchId, batter: selectedBatter });
+    setShowBatterModal(false);
   };
 
   if (error) {
@@ -380,6 +412,44 @@ function ScorerPage() {
           {match.timeline.length === 0 ? <li>No deliveries yet.</li> : null}
         </ul>
       </section>
+
+      {showBatterModal ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl">
+            <h2 className="text-lg font-semibold text-slate-900">
+              Select New Batter
+            </h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Choose the next batter to replace the dismissed player.
+            </p>
+            <label className="mt-4 block">
+              <span className="mb-1 block text-sm font-medium text-slate-700">
+                Batter
+              </span>
+              <select
+                value={selectedBatter}
+                onChange={(event) => setSelectedBatter(event.target.value)}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none ring-slate-900/10 focus:ring"
+              >
+                <option value="">Select a batter</option>
+                {availableBatters.map((p) => (
+                  <option key={p._id} value={p.name}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={confirmNewBatter}
+              disabled={!selectedBatter}
+              className="mt-5 w-full rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+            >
+              Confirm
+            </button>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }
