@@ -21,6 +21,8 @@ function ScorerPage() {
   const [error, setError] = useState("");
   const [showBatterModal, setShowBatterModal] = useState(false);
   const [selectedBatter, setSelectedBatter] = useState("");
+  const [showBowlerModal, setShowBowlerModal] = useState(false);
+  const [selectedBowler, setSelectedBowler] = useState("");
 
   useEffect(() => {
     if (!matchId) {
@@ -56,6 +58,14 @@ function ScorerPage() {
         } else {
           setShowBatterModal(false);
         }
+        if (
+          updatedMatch.ballsBowled > 0 &&
+          updatedMatch.ballsBowled % 6 === 0 &&
+          updatedMatch.status === "innings"
+        ) {
+          setShowBowlerModal(true);
+          setSelectedBowler("");
+        }
       }
     });
     socket.on("score_updated", (updatedMatch) => {
@@ -88,6 +98,11 @@ function ScorerPage() {
         !p.isOut &&
         p.name !== match.currentNonStriker,
     );
+  }, [match]);
+
+  const availableBowlers = useMemo(() => {
+    if (!match?.playerStats) return [];
+    return match.playerStats.filter((p) => p.team === match.bowlingTeam);
   }, [match]);
 
   const currentOverBalls = useMemo(() => {
@@ -150,6 +165,14 @@ function ScorerPage() {
     }
     socketRef.current.emit("setNewBatter", { matchId, batter: selectedBatter });
     setShowBatterModal(false);
+  };
+
+  const confirmNewBowler = () => {
+    if (!selectedBowler || !socketRef.current) {
+      return;
+    }
+    socketRef.current.emit("setNewBowler", { matchId, bowler: selectedBowler });
+    setShowBowlerModal(false);
   };
 
   if (error) {
@@ -443,6 +466,45 @@ function ScorerPage() {
               type="button"
               onClick={confirmNewBatter}
               disabled={!selectedBatter}
+              className="mt-5 w-full rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+            >
+              Confirm
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Bowler modal is suppressed while the batter modal is visible — batter takes priority */}
+      {showBowlerModal && !showBatterModal ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl">
+            <h2 className="text-lg font-semibold text-slate-900">
+              Select New Bowler
+            </h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Choose the bowler for the next over.
+            </p>
+            <label className="mt-4 block">
+              <span className="mb-1 block text-sm font-medium text-slate-700">
+                Bowler
+              </span>
+              <select
+                value={selectedBowler}
+                onChange={(event) => setSelectedBowler(event.target.value)}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none ring-slate-900/10 focus:ring"
+              >
+                <option value="">Select a bowler</option>
+                {availableBowlers.map((p) => (
+                  <option key={p._id} value={p.name}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={confirmNewBowler}
+              disabled={!selectedBowler}
               className="mt-5 w-full rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
             >
               Confirm
