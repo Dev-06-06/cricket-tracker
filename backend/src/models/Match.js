@@ -35,6 +35,27 @@ const matchSchema = new mongoose.Schema(
     currentBowler: {
       type: String
     },
+    team1Name: {
+      type: String
+    },
+    team2Name: {
+      type: String
+    },
+    team1Players: [
+      { type: mongoose.Schema.Types.ObjectId, ref: 'Player' }
+    ],
+    team2Players: [
+      { type: mongoose.Schema.Types.ObjectId, ref: 'Player' }
+    ],
+    totalOvers: {
+      type: Number,
+      default: 20
+    },
+    status: {
+      type: String,
+      enum: ['toss', 'live', 'completed'],
+      default: 'setup'
+    },
     timeline: [
       {
         overNumber: {

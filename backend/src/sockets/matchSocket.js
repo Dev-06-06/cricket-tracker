@@ -4,6 +4,29 @@ const { updateCareerStats } = require('../utils/statsUpdater');
 
 function setupSockets(io) {
     io.on('connection', (socket) => {
+        socket.on('createMatch', async ({ team1Name, team2Name, team1PlayerIds, team2PlayerIds, totalOvers }) => {
+            try {
+                if (!team1Name || !team2Name) {
+                    socket.emit('matchError', { message: 'Team names are required' });
+                    return;
+                }
+                const match = await Match.create({
+                    battingTeam: team1Name,
+                    bowlingTeam: team2Name,
+                    team1Name,
+                    team2Name,
+                    team1Players: team1PlayerIds || [],
+                    team2Players: team2PlayerIds || [],
+                    totalOvers: totalOvers || 20,
+                    status: 'toss',
+                });
+                socket.emit('matchCreated', { matchId: match._id });
+            } catch (error) {
+                console.log('Error creating match:', error);
+                socket.emit('matchError', { message: 'Failed to create match' });
+            }
+        });
+
         socket.on('join_match', (matchId) => {
             socket.join(matchId);
             console.log(`Socket ${socket.id} joined match ${matchId}`);
