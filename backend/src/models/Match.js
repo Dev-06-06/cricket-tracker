@@ -106,6 +106,10 @@ const matchSchema = new mongoose.Schema(
         batterDismissed: {
           type: String,
           default: ''
+        },
+        striker: {
+          type: String,
+          default: ''
         }
       }
     ]
