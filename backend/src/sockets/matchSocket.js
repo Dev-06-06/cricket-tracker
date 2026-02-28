@@ -3,6 +3,8 @@ const Player = require('../models/Player');
 const { calculateOvers, shouldRotateStrike } = require('../utlis/cricketLogic');
 const { updateCareerStats } = require('../utils/statsUpdater');
 
+const emptyBatting = () => ({ runs: 0, balls: 0, fours: 0, sixes: 0, dismissalType: '' });
+
 async function emitMatchState(target, matchId) {
     const match = await Match.findById(matchId)
         .populate('team1Players', 'name')
@@ -11,7 +13,10 @@ async function emitMatchState(target, matchId) {
 
     const storedStats = {};
     (match.playerStats || []).forEach((ps) => {
-        storedStats[String(ps.playerId)] = { didBat: ps.didBat, didBowl: ps.didBowl, isOut: ps.isOut };
+        const batting = ps.batting
+            ? { runs: ps.batting.runs, balls: ps.batting.balls, fours: ps.batting.fours, sixes: ps.batting.sixes, dismissalType: ps.batting.dismissalType }
+            : emptyBatting();
+        storedStats[String(ps.playerId)] = { didBat: ps.didBat, didBowl: ps.didBowl, isOut: ps.isOut, batting };
     });
 
     const playerStats = [
@@ -125,25 +130,44 @@ function setupSockets(io) {
             try {
                 const match = await Match.findById(matchId);
 
-                match.timeline.push(deliveryData);
+                const enrichedDelivery = { ...deliveryData, striker: match.currentStriker || '' };
+                match.timeline.push(enrichedDelivery);
                 match.totalRuns += deliveryData.runsOffBat + deliveryData.extraRuns;
+
+                // Update per-batter batting stats for the current striker
+                const isValidBall = deliveryData.extraType === 'none' || deliveryData.extraType === 'bye' || deliveryData.extraType === 'leg-bye';
+                if (match.currentStriker) {
+                    const strikerPs = match.playerStats.find((p) => p.name === match.currentStriker);
+                    if (strikerPs) {
+                        if (!strikerPs.batting) strikerPs.batting = emptyBatting();
+                        if (deliveryData.extraType !== 'wide') {
+                            strikerPs.batting.runs += deliveryData.runsOffBat;
+                            if (deliveryData.runsOffBat === 4) strikerPs.batting.fours += 1;
+                            if (deliveryData.runsOffBat === 6) strikerPs.batting.sixes += 1;
+                        }
+                        if (isValidBall) strikerPs.batting.balls += 1;
+                    }
+                }
 
                 if (deliveryData.isWicket) {
                     match.wickets += 1;
                     if (deliveryData.batterDismissed) {
                         const ps = match.playerStats.find((p) => p.name === deliveryData.batterDismissed);
-                        if (ps) ps.isOut = true;
+                        if (ps) {
+                            ps.isOut = true;
+                            if (!ps.batting) ps.batting = emptyBatting();
+                            ps.batting.dismissalType = deliveryData.wicketType || '';
+                        }
                     }
                 }
 
-                const isValid = deliveryData.extraType === 'none' || deliveryData.extraType === 'bye' || deliveryData.extraType === 'leg-bye';
                 let totalValidBalls = match.ballsBowled || 0;
                 
-                if (isValid) {
+                if (isValidBall) {
                     totalValidBalls += 1;
                 }
 
-                if (shouldRotateStrike(deliveryData.runsOffBat, isValid, totalValidBalls)) {
+                if (shouldRotateStrike(deliveryData.runsOffBat, isValidBall, totalValidBalls)) {
                     [match.currentStriker, match.currentNonStriker] = [match.currentNonStriker, match.currentStriker];
                 }
 
@@ -208,6 +232,38 @@ function setupSockets(io) {
                 ).length;
                 match.oversBowled = calculateOvers(validBalls);
                 match.ballsBowled = validBalls;
+
+                // Rebuild per-batter batting stats from remaining timeline
+                match.playerStats.forEach((ps) => {
+                    if (ps.batting) {
+                        ps.batting.runs = 0;
+                        ps.batting.balls = 0;
+                        ps.batting.fours = 0;
+                        ps.batting.sixes = 0;
+                        ps.batting.dismissalType = '';
+                    }
+                });
+                match.timeline.forEach((delivery) => {
+                    if (delivery.striker) {
+                        const strikerPs = match.playerStats.find((p) => p.name === delivery.striker);
+                        if (strikerPs) {
+                            if (!strikerPs.batting) strikerPs.batting = emptyBatting();
+                            const isValid = delivery.extraType === 'none' || delivery.extraType === 'bye' || delivery.extraType === 'leg-bye';
+                            if (delivery.extraType !== 'wide') {
+                                strikerPs.batting.runs += delivery.runsOffBat;
+                                if (delivery.runsOffBat === 4) strikerPs.batting.fours += 1;
+                                if (delivery.runsOffBat === 6) strikerPs.batting.sixes += 1;
+                            }
+                            if (isValid) strikerPs.batting.balls += 1;
+                        }
+                    }
+                    if (delivery.isWicket && delivery.batterDismissed) {
+                        const dismissedPs = match.playerStats.find((p) => p.name === delivery.batterDismissed);
+                        if (dismissedPs && dismissedPs.batting) {
+                            dismissedPs.batting.dismissalType = delivery.wicketType || '';
+                        }
+                    }
+                });
 
                 await match.save();
 

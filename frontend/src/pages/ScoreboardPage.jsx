@@ -47,12 +47,63 @@ function buildCurrentOver(timeline = []) {
   return overBalls;
 }
 
+function getDismissal(player, striker, nonStriker) {
+  if (!player.isOut) {
+    if (player.name === striker || player.name === nonStriker) {
+      return "batting";
+    }
+    return "not out";
+  }
+  const dt = player.batting?.dismissalType || "";
+  if (!dt) return "Out";
+  return dt.charAt(0).toUpperCase() + dt.slice(1);
+}
+
+function calcSR(runs, balls) {
+  if (!balls) return "-";
+  return ((runs / balls) * 100).toFixed(0);
+}
+
+function buildBattingRows(match) {
+  const playerStats = match.playerStats || [];
+  const striker = match.currentStriker || null;
+  const nonStriker = match.currentNonStriker || null;
+
+  const batters = playerStats.filter((p) => p.didBat);
+
+  // Build dismissal order map (timeline index where each batter was dismissed)
+  const dismissalOrder = {};
+  (match.timeline || []).forEach((ball, index) => {
+    if (ball.isWicket && ball.batterDismissed) {
+      dismissalOrder[ball.batterDismissed] = index;
+    }
+  });
+
+  return [...batters].sort((a, b) => {
+    const aIsStriker = a.name === striker;
+    const bIsStriker = b.name === striker;
+    const aIsNonStriker = a.name === nonStriker;
+    const bIsNonStriker = b.name === nonStriker;
+
+    if (aIsStriker) return -1;
+    if (bIsStriker) return 1;
+    if (aIsNonStriker) return -1;
+    if (bIsNonStriker) return 1;
+
+    // Dismissed batters: reverse order (most recently dismissed first)
+    const aOrder = dismissalOrder[a.name] ?? -1;
+    const bOrder = dismissalOrder[b.name] ?? -1;
+    return bOrder - aOrder;
+  });
+}
+
 function ScoreboardPage() {
   const { matchId } = useParams();
   const socketRef = useRef(null);
 
   const [match, setMatch] = useState(null);
   const [error, setError] = useState("");
+  const [activeTab, setActiveTab] = useState("batting");
 
   useEffect(() => {
     if (!matchId) {
@@ -113,6 +164,19 @@ function ScoreboardPage() {
   }
 
   const currentOver = buildCurrentOver(match.timeline || []);
+  const battingRows = buildBattingRows(match);
+
+  const extras = (match.timeline || []).reduce(
+    (sum, ball) => sum + (ball.extraRuns || 0),
+    0,
+  );
+  const oversBowled = Math.floor((match.ballsBowled || 0) / 6);
+  const ballsInOver = (match.ballsBowled || 0) % 6;
+  const totalValidBalls = match.ballsBowled || 0;
+  const runRate =
+    totalValidBalls > 0
+      ? ((match.totalRuns / totalValidBalls) * 6).toFixed(2)
+      : "0.00";
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-10 text-slate-100">
@@ -150,52 +214,177 @@ function ScoreboardPage() {
             </p>
           </div>
 
-          <div className="mt-6 grid gap-4 md:grid-cols-3">
-            <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-              <p className="text-xs uppercase tracking-wide text-slate-400">
-                Batters
-              </p>
-              <p className="mt-2 text-lg font-semibold text-white">
-                {match.currentStriker} *
-              </p>
-              <p className="mt-1 text-slate-300">{match.currentNonStriker}</p>
-            </div>
+          {/* Tab switcher */}
+          <div className="mt-6 flex gap-1 border-b border-slate-700">
+            <button
+              type="button"
+              onClick={() => setActiveTab("batting")}
+              className={`px-4 py-2 text-sm font-medium transition-colors ${
+                activeTab === "batting"
+                  ? "border-b-2 border-emerald-400 text-emerald-400"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              Batting
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("overview")}
+              className={`px-4 py-2 text-sm font-medium transition-colors ${
+                activeTab === "overview"
+                  ? "border-b-2 border-emerald-400 text-emerald-400"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              Overview
+            </button>
+          </div>
 
-            <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-              <p className="text-xs uppercase tracking-wide text-slate-400">
-                Current Bowler
-              </p>
-              <p className="mt-2 text-lg font-semibold text-white">
-                {match.currentBowler}
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-              <p className="text-xs uppercase tracking-wide text-slate-400">
-                Current Over
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {currentOver.length > 0 ? (
-                  currentOver.map((ballLabel, index) => (
-                    <span
-                      key={`${ballLabel}-${index}`}
-                      className={`flex min-w-10 items-center justify-center rounded-full border px-3 py-1 text-sm font-semibold ${
-                        ballLabel === "W"
-                          ? "border-red-500/70 bg-red-500/20 text-red-200"
-                          : ballLabel === "Wd"
-                            ? "border-amber-400/70 bg-amber-400/20 text-amber-100"
-                            : "border-slate-700 bg-slate-900 text-slate-100"
-                      }`}
+          {/* Batting tab */}
+          {activeTab === "batting" && (
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-700 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    <th className="pb-2 pr-4">Batter</th>
+                    <th className="pb-2 pr-4">Dismissal</th>
+                    <th className="pb-2 pr-3 text-right">R</th>
+                    <th className="pb-2 pr-3 text-right">B</th>
+                    <th className="pb-2 pr-3 text-right">4s</th>
+                    <th className="pb-2 pr-3 text-right">6s</th>
+                    <th className="pb-2 text-right">SR</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {battingRows.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={7}
+                        className="py-4 text-center text-slate-400"
+                      >
+                        No batters yet
+                      </td>
+                    </tr>
+                  ) : (
+                    battingRows.map((player) => {
+                      const isStriker =
+                        player.name === match.currentStriker;
+                      const runs = player.batting?.runs ?? 0;
+                      const balls = player.batting?.balls ?? 0;
+                      const fours = player.batting?.fours ?? 0;
+                      const sixes = player.batting?.sixes ?? 0;
+                      return (
+                        <tr
+                          key={player._id || player.name}
+                          className={`border-b border-slate-800/60 ${
+                            isStriker ? "bg-emerald-900/20" : ""
+                          }`}
+                        >
+                          <td className="py-2 pr-4 font-medium text-white">
+                            {player.name}
+                            {isStriker ? (
+                              <span className="ml-1 text-emerald-400">*</span>
+                            ) : null}
+                          </td>
+                          <td className="py-2 pr-4 text-slate-300">
+                            {getDismissal(
+                              player,
+                              match.currentStriker,
+                              match.currentNonStriker,
+                            )}
+                          </td>
+                          <td className="py-2 pr-3 text-right font-semibold text-white">
+                            {runs}
+                          </td>
+                          <td className="py-2 pr-3 text-right text-slate-300">
+                            {balls}
+                          </td>
+                          <td className="py-2 pr-3 text-right text-slate-300">
+                            {fours}
+                          </td>
+                          <td className="py-2 pr-3 text-right text-slate-300">
+                            {sixes}
+                          </td>
+                          <td className="py-2 text-right text-slate-300">
+                            {calcSR(runs, balls)}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t border-slate-700">
+                    <td
+                      colSpan={7}
+                      className="pt-3 text-sm text-slate-400"
                     >
-                      {ballLabel}
-                    </span>
-                  ))
-                ) : (
-                  <span className="text-slate-400">No balls yet</span>
-                )}
+                      Extras: {extras}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td
+                      colSpan={7}
+                      className="pt-1 text-sm font-medium text-slate-300"
+                    >
+                      Total: {match.totalRuns}/{match.wickets} (
+                      {oversBowled}.{ballsInOver} Ov, RR: {runRate})
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+
+          {/* Overview tab */}
+          {activeTab === "overview" && (
+            <div className="mt-4 grid gap-4 md:grid-cols-3">
+              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+                <p className="text-xs uppercase tracking-wide text-slate-400">
+                  Batters
+                </p>
+                <p className="mt-2 text-lg font-semibold text-white">
+                  {match.currentStriker} *
+                </p>
+                <p className="mt-1 text-slate-300">{match.currentNonStriker}</p>
+              </div>
+
+              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+                <p className="text-xs uppercase tracking-wide text-slate-400">
+                  Current Bowler
+                </p>
+                <p className="mt-2 text-lg font-semibold text-white">
+                  {match.currentBowler}
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+                <p className="text-xs uppercase tracking-wide text-slate-400">
+                  Current Over
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {currentOver.length > 0 ? (
+                    currentOver.map((ballLabel, index) => (
+                      <span
+                        key={`${ballLabel}-${index}`}
+                        className={`flex min-w-10 items-center justify-center rounded-full border px-3 py-1 text-sm font-semibold ${
+                          ballLabel === "W"
+                            ? "border-red-500/70 bg-red-500/20 text-red-200"
+                            : ballLabel === "Wd"
+                              ? "border-amber-400/70 bg-amber-400/20 text-amber-100"
+                              : "border-slate-700 bg-slate-900 text-slate-100"
+                        }`}
+                      >
+                        {ballLabel}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-slate-400">No balls yet</span>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </section>
 
         <section className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/80 p-6">
