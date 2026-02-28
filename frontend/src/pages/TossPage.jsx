@@ -15,6 +15,10 @@ function TossPage() {
   const [nonStriker, setNonStriker] = useState("");
   const [bowler, setBowler] = useState("");
 
+  // Coin flip states
+  const [flipState, setFlipState] = useState("idle"); // "idle" | "flipping" | "done"
+  const [coinTransform, setCoinTransform] = useState("rotateY(0deg)");
+
   useEffect(() => {
     if (!matchId) {
       return;
@@ -37,6 +41,25 @@ function TossPage() {
       socket.disconnect();
     };
   }, [matchId, navigate]);
+
+  const handleCoinFlip = () => {
+    if (flipState !== "idle") return;
+    setFlipState("flipping");
+
+    const result = Math.random() < 0.5 ? "HEADS" : "TAILS";
+    // 1800deg = 5 full rotations, lands on HEADS; 1980deg = 5.5 rotations, lands on TAILS
+    const HEADS_ROTATION = "rotateY(1800deg)";
+    const TAILS_ROTATION = "rotateY(1980deg)";
+
+    setTimeout(() => {
+      const finalTransform = result === "HEADS" ? HEADS_ROTATION : TAILS_ROTATION;
+      setCoinTransform(finalTransform);
+      const winner =
+        result === "HEADS" ? match.team1Name : match.team2Name;
+      setTossWinner(winner);
+      setFlipState("done");
+    }, 2000);
+  };
 
   const confirmToss = () => {
     if (!tossWinner || !tossChoice || !socketRef.current) {
@@ -80,54 +103,107 @@ function TossPage() {
 
       {!tossConfirmed ? (
         <section className="mt-8 rounded-xl border border-slate-200 bg-white p-6">
-          <h2 className="text-lg font-semibold text-slate-900">
-            Who won the toss?
-          </h2>
-          <div className="mt-4 flex flex-wrap gap-3">
-            {[match.team1Name, match.team2Name].map((team) => (
-              <button
-                key={team}
-                type="button"
-                onClick={() => setTossWinner(team)}
-                className={`rounded-lg px-4 py-2 text-sm font-medium ${
-                  tossWinner === team
-                    ? "bg-slate-900 text-white"
-                    : "border border-slate-300 bg-white text-slate-700"
-                }`}
-              >
-                {team}
-              </button>
-            ))}
-          </div>
+          {/* Step 1 & 2: Coin flip */}
+          {flipState !== "done" && (
+            <>
+              <h2 className="text-lg font-semibold text-slate-900">
+                Call the toss!
+              </h2>
+              <div className="mt-4 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={handleCoinFlip}
+                  disabled={flipState === "flipping"}
+                  className="rounded-lg px-4 py-2 text-sm font-medium border border-slate-300 bg-white text-slate-700 disabled:opacity-50"
+                >
+                  {match.team1Name} called HEADS
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCoinFlip}
+                  disabled={flipState === "flipping"}
+                  className="rounded-lg px-4 py-2 text-sm font-medium border border-slate-300 bg-white text-slate-700 disabled:opacity-50"
+                >
+                  {match.team2Name} called TAILS
+                </button>
+              </div>
 
-          <h2 className="mt-6 text-lg font-semibold text-slate-900">
-            Elected to?
-          </h2>
-          <div className="mt-4 flex gap-3">
-            {["BAT", "BOWL"].map((choice) => (
-              <button
-                key={choice}
-                type="button"
-                onClick={() => setTossChoice(choice)}
-                className={`rounded-lg px-4 py-2 text-sm font-medium ${
-                  tossChoice === choice
-                    ? "bg-slate-900 text-white"
-                    : "border border-slate-300 bg-white text-slate-700"
-                }`}
-              >
-                {choice}
-              </button>
-            ))}
-          </div>
+              {/* Coin element */}
+              <div className="mt-6 flex justify-center" style={{ perspective: "600px" }}>
+                <div
+                  className={`coin${flipState === "flipping" ? " coin-flipping" : ""}`}
+                  style={flipState !== "flipping" ? { transform: coinTransform } : undefined}
+                >
+                  <div
+                    className="coin-face flex items-center justify-center bg-yellow-400 text-slate-900 font-bold text-sm"
+                  >
+                    HEADS
+                  </div>
+                  <div
+                    className="coin-face coin-tails flex items-center justify-center bg-yellow-600 text-white font-bold text-sm"
+                  >
+                    TAILS
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
 
-          <button
-            type="button"
-            onClick={confirmToss}
-            disabled={!tossWinner || !tossChoice}
-            className="mt-6 rounded-lg bg-blue-600 px-6 py-3 font-medium text-white disabled:opacity-50"
-          >
-            Confirm Toss
-          </button>
+          {/* Step 3: Result + BAT/BOWL choice */}
+          {flipState === "done" && (
+            <>
+              <p className="text-xl font-semibold text-slate-900 mb-4">
+                {tossWinner} won the toss!
+              </p>
+
+              <div className="mb-6 flex justify-center" style={{ perspective: "600px" }}>
+                <div
+                  className="coin"
+                  style={{ transform: coinTransform }}
+                >
+                  <div
+                    className="coin-face flex items-center justify-center bg-yellow-400 text-slate-900 font-bold text-sm"
+                  >
+                    HEADS
+                  </div>
+                  <div
+                    className="coin-face coin-tails flex items-center justify-center bg-yellow-600 text-white font-bold text-sm"
+                  >
+                    TAILS
+                  </div>
+                </div>
+              </div>
+
+              <h2 className="text-lg font-semibold text-slate-900">
+                {tossWinner} elected to?
+              </h2>
+              <div className="mt-4 flex gap-3">
+                {["BAT", "BOWL"].map((choice) => (
+                  <button
+                    key={choice}
+                    type="button"
+                    onClick={() => setTossChoice(choice)}
+                    className={`rounded-lg px-4 py-2 text-sm font-medium ${
+                      tossChoice === choice
+                        ? "bg-slate-900 text-white"
+                        : "border border-slate-300 bg-white text-slate-700"
+                    }`}
+                  >
+                    {choice}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={confirmToss}
+                disabled={!tossChoice}
+                className="mt-6 rounded-lg bg-blue-600 px-6 py-3 font-medium text-white disabled:opacity-50"
+              >
+                Confirm Toss
+              </button>
+            </>
+          )}
         </section>
       ) : (
         <section className="mt-8 rounded-xl border border-slate-200 bg-white p-6">
