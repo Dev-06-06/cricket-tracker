@@ -1,5 +1,5 @@
-const { Match } = require('../models/Match');
-const { calculateOvers, shouldRotateStrike } = require('../utils/cricketLogic');
+const Match = require('../models/Match');
+const { calculateOvers, shouldRotateStrike } = require('../utlis/cricketLogic');
 
 function setupSockets(io) {
     io.on('connection', (socket) => {
@@ -13,43 +13,13 @@ function setupSockets(io) {
                 const match = await Match.findById(matchId);
 
                 match.timeline.push(deliveryData);
-                socket.on('undo_delivery', async ({ matchId }) => {
-                    try {
-                        const match = await Match.findById(matchId);
-
-                        if (match.timeline.length === 0) {
-                            return;
-                        }
-
-                        match.timeline.pop();
-
-                        match.totalRuns = 0;
-                        match.timeline.forEach(delivery => {
-                            match.totalRuns += delivery.runsOffBat + delivery.extraRuns;
-                        });
-
-                        match.wickets = match.timeline.filter(delivery => delivery.isWicket).length;
-
-                        const validBalls = match.timeline.filter(delivery => 
-                            delivery.extraType === 'none' || delivery.extraType === 'bye' || delivery.extraType === 'leg-bye'
-                        ).length;
-                        match.oversBowled = calculateOvers(validBalls);
-                        match.ballsBowled = validBalls;
-
-                        await match.save();
-
-                        io.to(matchId).emit('score_updated', match);
-                    } catch (error) {
-                        console.log(error);
-                    }
-                });
                 match.totalRuns += deliveryData.runsOffBat + deliveryData.extraRuns;
 
                 if (deliveryData.isWicket) {
                     match.wickets += 1;
                 }
 
-                const isValid = !deliveryData.isWide && !deliveryData.isNoBall;
+                const isValid = deliveryData.extraType === 'none' || deliveryData.extraType === 'bye' || deliveryData.extraType === 'leg-bye';
                 let totalValidBalls = match.ballsBowled || 0;
                 
                 if (isValid) {
@@ -70,9 +40,38 @@ function setupSockets(io) {
                 console.log(error);
             }
         });
+
+        socket.on('undo_delivery', async ({ matchId }) => {
+            try {
+                const match = await Match.findById(matchId);
+
+                if (match.timeline.length === 0) {
+                    return;
+                }
+
+                match.timeline.pop();
+
+                match.totalRuns = 0;
+                match.timeline.forEach(delivery => {
+                    match.totalRuns += delivery.runsOffBat + delivery.extraRuns;
+                });
+
+                match.wickets = match.timeline.filter(delivery => delivery.isWicket).length;
+
+                const validBalls = match.timeline.filter(delivery => 
+                    delivery.extraType === 'none' || delivery.extraType === 'bye' || delivery.extraType === 'leg-bye'
+                ).length;
+                match.oversBowled = calculateOvers(validBalls);
+                match.ballsBowled = validBalls;
+
+                await match.save();
+
+                io.to(matchId).emit('score_updated', match);
+            } catch (error) {
+                console.log(error);
+            }
+        });
     });
 }
-
-module.exports = setupSockets;
 
 module.exports = setupSockets;
