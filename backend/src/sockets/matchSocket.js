@@ -2,6 +2,24 @@ const Match = require('../models/Match');
 const { calculateOvers, shouldRotateStrike } = require('../utlis/cricketLogic');
 const { updateCareerStats } = require('../utils/statsUpdater');
 
+async function emitMatchState(target, matchId) {
+    const match = await Match.findById(matchId)
+        .populate('team1Players', 'name')
+        .populate('team2Players', 'name');
+    if (!match) return;
+
+    const playerStats = [
+        ...match.team1Players.map((p) => ({ _id: p._id, name: p.name, team: match.team1Name })),
+        ...match.team2Players.map((p) => ({ _id: p._id, name: p.name, team: match.team2Name })),
+    ];
+
+    target.emit('matchState', {
+        ...match.toObject(),
+        playerStats,
+        striker: match.currentStriker || null,
+    });
+}
+
 function setupSockets(io) {
     io.on('connection', (socket) => {
         socket.on('createMatch', async ({ team1Name, team2Name, team1PlayerIds, team2PlayerIds, totalOvers }) => {
@@ -24,6 +42,48 @@ function setupSockets(io) {
             } catch (error) {
                 console.log('Error creating match:', error);
                 socket.emit('matchError', { message: 'Failed to create match' });
+            }
+        });
+
+        socket.on('joinMatch', async ({ matchId }) => {
+            socket.join(matchId);
+            await emitMatchState(socket, matchId);
+        });
+
+        socket.on('tossResult', async ({ matchId, tossWinner, tossChoice }) => {
+            try {
+                const match = await Match.findById(matchId);
+                if (!match) return;
+
+                if (tossChoice === 'BAT') {
+                    match.battingTeam = tossWinner;
+                    match.bowlingTeam = tossWinner === match.team1Name ? match.team2Name : match.team1Name;
+                } else {
+                    match.bowlingTeam = tossWinner;
+                    match.battingTeam = tossWinner === match.team1Name ? match.team2Name : match.team1Name;
+                }
+
+                await match.save();
+                await emitMatchState(io.to(matchId), matchId);
+            } catch (error) {
+                console.log('Error handling tossResult:', error);
+            }
+        });
+
+        socket.on('setOpeners', async ({ matchId, striker, nonStriker, bowler }) => {
+            try {
+                const match = await Match.findById(matchId);
+                if (!match) return;
+
+                match.currentStriker = striker;
+                match.currentNonStriker = nonStriker;
+                match.currentBowler = bowler;
+                match.status = 'live';
+                await match.save();
+
+                await emitMatchState(io.to(matchId), matchId);
+            } catch (error) {
+                console.log('Error handling setOpeners:', error);
             }
         });
 
