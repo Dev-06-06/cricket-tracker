@@ -3,3 +3,32 @@
 body {
   min-height: 100vh;
 }
+
+/* Coin flip animation */
+.coin {
+  width: 100px;
+  height: 100px;
+  position: relative;
+  transform-style: preserve-3d;
+}
+
+.coin-face {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  backface-visibility: hidden;
+  border-radius: 50%;
+}
+
+.coin-tails {
+  transform: rotateY(180deg);
+}
+
+@keyframes coinFlip {
+  0% { transform: rotateY(0deg); }
+  100% { transform: rotateY(1800deg); }
+}
+
+.coin-flipping {
+  animation: coinFlip 2s ease-in-out forwards;
+}
