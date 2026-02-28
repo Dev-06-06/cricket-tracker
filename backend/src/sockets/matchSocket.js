@@ -1,4 +1,5 @@
 const Match = require('../models/Match');
+const Player = require('../models/Player');
 const { calculateOvers, shouldRotateStrike } = require('../utlis/cricketLogic');
 const { updateCareerStats } = require('../utils/statsUpdater');
 
@@ -8,9 +9,14 @@ async function emitMatchState(target, matchId) {
         .populate('team2Players', 'name');
     if (!match) return;
 
+    const storedStats = {};
+    (match.playerStats || []).forEach((ps) => {
+        storedStats[String(ps.playerId)] = { didBat: ps.didBat, didBowl: ps.didBowl };
+    });
+
     const playerStats = [
-        ...match.team1Players.map((p) => ({ _id: p._id, name: p.name, team: match.team1Name })),
-        ...match.team2Players.map((p) => ({ _id: p._id, name: p.name, team: match.team2Name })),
+        ...match.team1Players.map((p) => ({ _id: p._id, name: p.name, team: match.team1Name, ...(storedStats[String(p._id)] || {}) })),
+        ...match.team2Players.map((p) => ({ _id: p._id, name: p.name, team: match.team2Name, ...(storedStats[String(p._id)] || {}) })),
     ];
 
     target.emit('matchState', {
@@ -28,6 +34,13 @@ function setupSockets(io) {
                     socket.emit('matchError', { message: 'Team names are required' });
                     return;
                 }
+
+                const playerStats = [];
+                const t1Players = await Player.find({ _id: { $in: team1PlayerIds || [] } });
+                t1Players.forEach((p) => playerStats.push({ playerId: p._id, name: p.name, team: team1Name, didBat: false, didBowl: false }));
+                const t2Players = await Player.find({ _id: { $in: team2PlayerIds || [] } });
+                t2Players.forEach((p) => playerStats.push({ playerId: p._id, name: p.name, team: team2Name, didBat: false, didBowl: false }));
+
                 const match = await Match.create({
                     battingTeam: team1Name,
                     bowlingTeam: team2Name,
@@ -37,8 +50,10 @@ function setupSockets(io) {
                     team2Players: team2PlayerIds || [],
                     totalOvers: totalOvers || 20,
                     status: 'toss',
+                    playerStats,
                 });
                 socket.emit('matchCreated', { matchId: match._id });
+                await emitMatchState(socket, match._id);
             } catch (error) {
                 console.log('Error creating match:', error);
                 socket.emit('matchError', { message: 'Failed to create match' });
@@ -55,6 +70,9 @@ function setupSockets(io) {
                 const match = await Match.findById(matchId);
                 if (!match) return;
 
+                match.tossWinner = tossWinner;
+                match.tossChoice = tossChoice;
+
                 if (tossChoice === 'BAT') {
                     match.battingTeam = tossWinner;
                     match.bowlingTeam = tossWinner === match.team1Name ? match.team2Name : match.team1Name;
@@ -63,6 +81,7 @@ function setupSockets(io) {
                     match.battingTeam = tossWinner === match.team1Name ? match.team2Name : match.team1Name;
                 }
 
+                match.status = 'innings';
                 await match.save();
                 await emitMatchState(io.to(matchId), matchId);
             } catch (error) {
@@ -79,6 +98,16 @@ function setupSockets(io) {
                 match.currentNonStriker = nonStriker;
                 match.currentBowler = bowler;
                 match.status = 'live';
+
+                match.playerStats.forEach((ps) => {
+                    if (String(ps.playerId) === String(striker) || String(ps.playerId) === String(nonStriker)) {
+                        ps.didBat = true;
+                    }
+                    if (String(ps.playerId) === String(bowler)) {
+                        ps.didBowl = true;
+                    }
+                });
+
                 await match.save();
 
                 await emitMatchState(io.to(matchId), matchId);

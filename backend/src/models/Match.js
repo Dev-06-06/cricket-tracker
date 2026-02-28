@@ -51,10 +51,25 @@ const matchSchema = new mongoose.Schema(
       type: Number,
       default: 20
     },
+    tossWinner: {
+      type: String
+    },
+    tossChoice: {
+      type: String
+    },
+    playerStats: [
+      {
+        playerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Player' },
+        name: { type: String },
+        team: { type: String },
+        didBat: { type: Boolean, default: false },
+        didBowl: { type: Boolean, default: false }
+      }
+    ],
     status: {
       type: String,
-      enum: ['toss', 'live', 'completed'],
-      default: 'setup'
+      enum: ['toss', 'innings', 'live', 'completed'],
+      default: 'toss'
     },
     timeline: [
       {
