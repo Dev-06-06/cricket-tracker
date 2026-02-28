@@ -203,6 +203,46 @@ function setupSockets(io) {
                 console.log(error);
             }
         });
+
+        socket.on('setNewBatter', async ({ matchId, batter }) => {
+            try {
+                const match = await Match.findById(matchId);
+                if (!match) return;
+
+                match.currentStriker = batter;
+
+                match.playerStats.forEach((ps) => {
+                    if (String(ps.playerId) === String(batter)) {
+                        ps.didBat = true;
+                    }
+                });
+
+                await match.save();
+                await emitMatchState(io.to(matchId), matchId);
+            } catch (error) {
+                console.log('Error handling setNewBatter:', error);
+            }
+        });
+
+        socket.on('setNewBowler', async ({ matchId, bowler }) => {
+            try {
+                const match = await Match.findById(matchId);
+                if (!match) return;
+
+                match.currentBowler = bowler;
+
+                match.playerStats.forEach((ps) => {
+                    if (String(ps.playerId) === String(bowler)) {
+                        ps.didBowl = true;
+                    }
+                });
+
+                await match.save();
+                await emitMatchState(io.to(matchId), matchId);
+            } catch (error) {
+                console.log('Error handling setNewBowler:', error);
+            }
+        });
     });
 }
 
