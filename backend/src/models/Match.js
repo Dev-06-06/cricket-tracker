@@ -63,7 +63,8 @@ const matchSchema = new mongoose.Schema(
         name: { type: String },
         team: { type: String },
         didBat: { type: Boolean, default: false },
-        didBowl: { type: Boolean, default: false }
+        didBowl: { type: Boolean, default: false },
+        isOut: { type: Boolean, default: false }
       }
     ],
     status: {

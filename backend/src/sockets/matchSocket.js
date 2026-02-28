@@ -11,7 +11,7 @@ async function emitMatchState(target, matchId) {
 
     const storedStats = {};
     (match.playerStats || []).forEach((ps) => {
-        storedStats[String(ps.playerId)] = { didBat: ps.didBat, didBowl: ps.didBowl };
+        storedStats[String(ps.playerId)] = { didBat: ps.didBat, didBowl: ps.didBowl, isOut: ps.isOut };
     });
 
     const playerStats = [
@@ -130,6 +130,10 @@ function setupSockets(io) {
 
                 if (deliveryData.isWicket) {
                     match.wickets += 1;
+                    if (deliveryData.batterDismissed) {
+                        const ps = match.playerStats.find((p) => p.name === deliveryData.batterDismissed);
+                        if (ps) ps.isOut = true;
+                    }
                 }
 
                 const isValid = deliveryData.extraType === 'none' || deliveryData.extraType === 'bye' || deliveryData.extraType === 'leg-bye';
@@ -146,9 +150,18 @@ function setupSockets(io) {
                 match.oversBowled = calculateOvers(totalValidBalls);
                 match.ballsBowled = totalValidBalls;
 
+                if (deliveryData.isWicket) {
+                    match.currentStriker = null;
+                    match.status = 'innings';
+                }
+
                 await match.save();
 
-                io.to(matchId).emit('score_updated', match);
+                if (deliveryData.isWicket) {
+                    await emitMatchState(io.to(matchId), matchId);
+                } else {
+                    io.to(matchId).emit('score_updated', match);
+                }
             } catch (error) {
                 console.log(error);
             }
@@ -210,6 +223,7 @@ function setupSockets(io) {
                 if (!match) return;
 
                 match.currentStriker = batter;
+                match.status = 'live';
 
                 match.playerStats.forEach((ps) => {
                     if (String(ps.playerId) === String(batter)) {
