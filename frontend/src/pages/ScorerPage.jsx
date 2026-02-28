@@ -9,7 +9,6 @@ const initialDelivery = {
   extraRuns: 0,
   isWicket: false,
   wicketType: "none",
-  batterDismissed: "",
 };
 
 function ScorerPage() {
@@ -18,6 +17,7 @@ function ScorerPage() {
 
   const [match, setMatch] = useState(null);
   const [delivery, setDelivery] = useState(initialDelivery);
+  const [dismissedBatter, setDismissedBatter] = useState("");
   const [error, setError] = useState("");
   const [showBatterModal, setShowBatterModal] = useState(false);
   const [selectedBatter, setSelectedBatter] = useState("");
@@ -105,6 +105,13 @@ function ScorerPage() {
     return match.playerStats.filter((p) => p.team === match.bowlingTeam);
   }, [match]);
 
+  const dismissableBatters = useMemo(() => {
+    if (!match?.playerStats) return [];
+    return match.playerStats.filter(
+      (p) => p.team === match.battingTeam && !p.isOut,
+    );
+  }, [match]);
+
   const currentOverBalls = useMemo(() => {
     if (!match?.timeline?.length) {
       return [];
@@ -131,13 +138,17 @@ function ScorerPage() {
       return;
     }
 
+    if (delivery.isWicket && !dismissedBatter) {
+      return;
+    }
+
     const payload = {
       runsOffBat: Number(delivery.runsOffBat),
       extraType: delivery.extraType,
       extraRuns: Number(delivery.extraRuns),
       isWicket: Boolean(delivery.isWicket),
       wicketType: delivery.isWicket ? delivery.wicketType : "none",
-      batterDismissed: delivery.isWicket ? delivery.batterDismissed : "",
+      batterDismissed: delivery.isWicket ? dismissedBatter : "",
     };
 
     socketRef.current.emit("umpire_update", {
@@ -149,6 +160,7 @@ function ScorerPage() {
       ...initialDelivery,
       extraType: previous.extraType,
     }));
+    setDismissedBatter("");
   };
 
   const undoLastDelivery = () => {
@@ -307,18 +319,18 @@ function ScorerPage() {
             <input
               type="checkbox"
               checked={delivery.isWicket}
-              onChange={(event) =>
+              onChange={(event) => {
+                if (!event.target.checked) {
+                  setDismissedBatter("");
+                }
                 setDelivery((previous) => ({
                   ...previous,
                   isWicket: event.target.checked,
                   wicketType: event.target.checked
                     ? previous.wicketType
                     : "none",
-                  batterDismissed: event.target.checked
-                    ? previous.batterDismissed
-                    : "",
-                }))
-              }
+                }));
+              }}
             />
             Wicket
           </label>
@@ -349,23 +361,25 @@ function ScorerPage() {
               </select>
             </label>
 
-            <label className="block">
-              <span className="mb-1 block text-sm font-medium text-slate-700">
-                Batter dismissed
-              </span>
-              <input
-                type="text"
-                disabled={disableWicketFields}
-                value={delivery.batterDismissed}
-                onChange={(event) =>
-                  setDelivery((previous) => ({
-                    ...previous,
-                    batterDismissed: event.target.value,
-                  }))
-                }
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none ring-slate-900/10 focus:ring disabled:bg-slate-100"
-              />
-            </label>
+            {delivery.isWicket && (
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-slate-700">
+                  Dismissed batter
+                </span>
+                <select
+                  value={dismissedBatter}
+                  onChange={(event) => setDismissedBatter(event.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none ring-slate-900/10 focus:ring"
+                >
+                  <option value="">Select batter</option>
+                  {dismissableBatters.map((batter) => (
+                    <option key={batter.name} value={batter.name}>
+                      {batter.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
           </div>
         </div>
 
