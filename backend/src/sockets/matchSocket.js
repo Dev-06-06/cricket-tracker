@@ -124,16 +124,26 @@ function setupSockets(io) {
         socket.on('umpire_update', async ({ matchId, deliveryData }) => {
             try {
                 const match = await Match.findById(matchId);
+                const { dismissedBatter } = deliveryData;
 
                 match.timeline.push(deliveryData);
                 match.totalRuns += deliveryData.runsOffBat + deliveryData.extraRuns;
 
                 if (deliveryData.isWicket) {
                     match.wickets += 1;
-                    if (deliveryData.batterDismissed) {
-                        const ps = match.playerStats.find((p) => p.name === deliveryData.batterDismissed);
-                        if (ps) ps.isOut = true;
+                    if (dismissedBatter) {
+                        const ps = match.playerStats.find((p) => p.name === dismissedBatter);
+                        if (ps) {
+                            ps.isOut = true;
+                            ps.dismissalType = deliveryData.wicketType;
+                        }
+                        if (dismissedBatter === match.currentStriker) {
+                            match.currentStriker = null;
+                        } else if (dismissedBatter === match.currentNonStriker) {
+                            match.currentNonStriker = null;
+                        }
                     }
+                    match.status = 'innings';
                 }
 
                 const isValid = deliveryData.extraType === 'none' || deliveryData.extraType === 'bye' || deliveryData.extraType === 'leg-bye';
@@ -143,17 +153,12 @@ function setupSockets(io) {
                     totalValidBalls += 1;
                 }
 
-                if (shouldRotateStrike(deliveryData.runsOffBat, isValid, totalValidBalls)) {
+                if (!deliveryData.isWicket && shouldRotateStrike(deliveryData.runsOffBat, isValid, totalValidBalls)) {
                     [match.currentStriker, match.currentNonStriker] = [match.currentNonStriker, match.currentStriker];
                 }
 
                 match.oversBowled = calculateOvers(totalValidBalls);
                 match.ballsBowled = totalValidBalls;
-
-                if (deliveryData.isWicket) {
-                    match.currentStriker = null;
-                    match.status = 'innings';
-                }
 
                 await match.save();
 
