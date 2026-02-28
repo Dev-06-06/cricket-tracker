@@ -22,6 +22,10 @@ const matchSchema = new mongoose.Schema(
       type: Number,
       default: 0
     },
+    ballsBowled: {
+      type: Number,
+      default: 0
+    },
     currentStriker: {
       type: String
     },
