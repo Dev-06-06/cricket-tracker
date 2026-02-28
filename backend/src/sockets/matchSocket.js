@@ -131,7 +131,7 @@ function setupSockets(io) {
                 const match = await Match.findById(matchId);
                 const { dismissedBatter } = deliveryData;
 
-                const enrichedDelivery = { ...deliveryData, striker: match.currentStriker || '' };
+                const enrichedDelivery = { ...deliveryData, striker: match.currentStriker || '', bowler: match.currentBowler || '' };
                 match.timeline.push(enrichedDelivery);
                 match.totalRuns += deliveryData.runsOffBat + deliveryData.extraRuns;
 
