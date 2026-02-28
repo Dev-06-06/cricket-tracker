@@ -110,6 +110,10 @@ const matchSchema = new mongoose.Schema(
         striker: {
           type: String,
           default: ''
+        },
+        bowler: {
+          type: String,
+          default: ''
         }
       }
     ]

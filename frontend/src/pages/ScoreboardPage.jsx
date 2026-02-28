@@ -64,6 +64,81 @@ function calcSR(runs, balls) {
   return ((runs / balls) * 100).toFixed(0);
 }
 
+function calcOvers(balls) {
+  return Math.floor(balls / 6) + "." + (balls % 6);
+}
+
+function calcEcon(runs, balls) {
+  if (balls === 0) return "-";
+  return (runs / (balls / 6)).toFixed(2);
+}
+
+function buildBowlingRows(match) {
+  const playerStats = match.playerStats || [];
+  const timeline = match.timeline || [];
+
+  const bowlers = playerStats.filter((p) => p.didBowl);
+
+  return bowlers.map((p) => {
+    const bowlerBalls = timeline.filter((ball) => ball.bowler === p.name);
+
+    const balls = bowlerBalls.filter(
+      (ball) => ball.extraType !== "wide" && ball.extraType !== "no-ball",
+    ).length;
+
+    const runs = bowlerBalls.reduce((sum, ball) => {
+      const extraRuns =
+        ball.extraType !== "bye" && ball.extraType !== "leg-bye"
+          ? ball.extraRuns || 0
+          : 0;
+      return sum + (ball.runsOffBat || 0) + extraRuns;
+    }, 0);
+
+    const wickets = bowlerBalls.filter(
+      (ball) => ball.isWicket && ball.wicketType !== "run-out",
+    ).length;
+
+    const wides = bowlerBalls.filter(
+      (ball) => ball.extraType === "wide",
+    ).length;
+
+    const noBalls = bowlerBalls.filter(
+      (ball) => ball.extraType === "no-ball",
+    ).length;
+
+    // Group valid balls by overNumber; a maiden is a complete over with 0 runs charged to bowler
+    const overMap = {};
+    bowlerBalls.forEach((ball) => {
+      const key = ball.overNumber;
+      if (!overMap[key]) overMap[key] = { validBalls: 0, runs: 0 };
+      const isValid =
+        ball.extraType !== "wide" && ball.extraType !== "no-ball";
+      if (isValid) {
+        overMap[key].validBalls += 1;
+        const extraRuns =
+          ball.extraType !== "bye" && ball.extraType !== "leg-bye"
+            ? ball.extraRuns || 0
+            : 0;
+        overMap[key].runs += (ball.runsOffBat || 0) + extraRuns;
+      }
+    });
+
+    const maidens = Object.values(overMap).filter(
+      (over) => over.validBalls === 6 && over.runs === 0,
+    ).length;
+
+    return {
+      ...p,
+      _balls: balls,
+      _runs: runs,
+      _wickets: wickets,
+      _wides: wides,
+      _noBalls: noBalls,
+      _maidens: maidens,
+    };
+  });
+}
+
 function buildBattingRows(match) {
   const playerStats = match.playerStats || [];
   const striker = match.currentStriker || null;
@@ -165,6 +240,7 @@ function ScoreboardPage() {
 
   const currentOver = buildCurrentOver(match.timeline || []);
   const battingRows = buildBattingRows(match);
+  const bowlingRows = buildBowlingRows(match);
 
   const extras = (match.timeline || []).reduce(
     (sum, ball) => sum + (ball.extraRuns || 0),
@@ -226,6 +302,17 @@ function ScoreboardPage() {
               }`}
             >
               Batting
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("bowling")}
+              className={`px-4 py-2 text-sm font-medium transition-colors ${
+                activeTab === "bowling"
+                  ? "border-b-2 border-emerald-400 text-emerald-400"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              Bowling
             </button>
             <button
               type="button"
@@ -332,6 +419,78 @@ function ScoreboardPage() {
                     </td>
                   </tr>
                 </tfoot>
+              </table>
+            </div>
+          )}
+
+          {/* Bowling tab */}
+          {activeTab === "bowling" && (
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-700 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    <th className="pb-2 pr-4">Bowler</th>
+                    <th className="pb-2 pr-3 text-right">O</th>
+                    <th className="pb-2 pr-3 text-right">M</th>
+                    <th className="pb-2 pr-3 text-right">R</th>
+                    <th className="pb-2 pr-3 text-right">W</th>
+                    <th className="pb-2 pr-3 text-right">ECON</th>
+                    <th className="pb-2 pr-3 text-right">WD</th>
+                    <th className="pb-2 text-right">NB</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bowlingRows.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={8}
+                        className="py-4 text-center text-slate-400"
+                      >
+                        No bowlers yet
+                      </td>
+                    </tr>
+                  ) : (
+                    bowlingRows.map((player) => {
+                      const isCurrent = player.name === match.currentBowler;
+                      return (
+                        <tr
+                          key={player._id || player.name}
+                          className={`border-b border-slate-800/60 ${
+                            isCurrent ? "bg-emerald-900/20" : ""
+                          }`}
+                        >
+                          <td className="py-2 pr-4 font-medium text-white">
+                            {player.name}
+                            {isCurrent ? (
+                              <span className="ml-1 text-emerald-400">*</span>
+                            ) : null}
+                          </td>
+                          <td className="py-2 pr-3 text-right text-slate-300">
+                            {calcOvers(player._balls)}
+                          </td>
+                          <td className="py-2 pr-3 text-right text-slate-300">
+                            {player._maidens}
+                          </td>
+                          <td className="py-2 pr-3 text-right font-semibold text-white">
+                            {player._runs}
+                          </td>
+                          <td className="py-2 pr-3 text-right font-semibold text-white">
+                            {player._wickets}
+                          </td>
+                          <td className="py-2 pr-3 text-right text-slate-300">
+                            {calcEcon(player._runs, player._balls)}
+                          </td>
+                          <td className="py-2 pr-3 text-right text-slate-300">
+                            {player._wides}
+                          </td>
+                          <td className="py-2 text-right text-slate-300">
+                            {player._noBalls}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
               </table>
             </div>
           )}
