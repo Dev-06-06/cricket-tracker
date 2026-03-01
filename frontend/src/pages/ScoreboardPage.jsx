@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { getMatch } from "../services/api";
 import { createMatchSocket } from "../services/socket";
 
 function isValidBall(ball) {
@@ -185,33 +184,20 @@ function ScoreboardPage() {
       return;
     }
 
-    let isMounted = true;
     const socket = createMatchSocket();
     socketRef.current = socket;
 
-    const loadMatch = async () => {
-      try {
-        const response = await getMatch(matchId);
-        if (isMounted) {
-          setMatch(response.match);
-        }
-      } catch (requestError) {
-        if (isMounted) {
-          setError(requestError.message);
-        }
-      }
-    };
-
-    loadMatch();
-
-    socket.emit("join_match", matchId);
-    socket.on("score_updated", (updatedMatch) => {
+    socket.emit("joinMatch", { matchId });
+    socket.on("matchState", (updatedMatch) => {
       setMatch(updatedMatch);
+    });
+    socket.on("connect_error", (err) => {
+      setError(err.message);
     });
 
     return () => {
-      isMounted = false;
-      socket.off("score_updated");
+      socket.off("matchState");
+      socket.off("connect_error");
       socket.disconnect();
     };
   }, [matchId]);
