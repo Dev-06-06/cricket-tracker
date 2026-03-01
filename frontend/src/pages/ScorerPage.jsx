@@ -64,6 +64,43 @@ function ballColor(label) {
   return "rgba(255,255,255,0.12)";
 }
 
+function calcBowlerStats(timeline, bowlerName) {
+  const bowlerBalls = (timeline || []).filter((b) => b.bowler === bowlerName);
+  const balls = bowlerBalls.filter(
+    (b) => b.extraType !== "wide" && b.extraType !== "no-ball",
+  ).length;
+  const runs = bowlerBalls.reduce((sum, b) => {
+    const extras =
+      b.extraType !== "bye" && b.extraType !== "leg-bye"
+        ? b.extraRuns || 0
+        : 0;
+    return sum + (b.runsOffBat || 0) + extras;
+  }, 0);
+  const wickets = bowlerBalls.filter(
+    (b) => b.isWicket && b.wicketType !== "run-out",
+  ).length;
+  return { balls, runs, wickets };
+}
+
+function BowlerStatsRow({ match }) {
+  const bowlerName = match.currentBowler;
+  if (!bowlerName) return null;
+  const { balls, runs, wickets } = calcBowlerStats(match.timeline, bowlerName);
+  const overs = `${Math.floor(balls / 6)}.${balls % 6}`;
+  const econ = balls === 0 ? "-" : (runs / (balls / 6)).toFixed(2);
+  return (
+    <section className="mb-6 rounded-xl border border-slate-200 bg-white p-5">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+        Bowling
+      </p>
+      <p className="mt-2 text-sm text-slate-800">
+        <span className="font-medium">{bowlerName}</span> &mdash; {overs} ov{" "}
+        {wickets}/{runs}&nbsp;&nbsp;Econ: {econ}
+      </p>
+    </section>
+  );
+}
+
 function ScorerPage() {
   const { matchId } = useParams();
   const socketRef = useRef(null);
@@ -271,6 +308,8 @@ function ScorerPage() {
           {match.currentNonStriker} | Bowler: {match.currentBowler}
         </p>
       </section>
+
+      <BowlerStatsRow match={match} />
 
       <section className="rounded-xl bg-white p-6 shadow-sm">
         <h2 className="text-lg font-semibold text-slate-900">Enter Delivery</h2>
