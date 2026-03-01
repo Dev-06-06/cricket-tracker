@@ -172,6 +172,13 @@ function ScorerPage() {
     return buildCurrentOver(match.timeline);
   }, [match]);
 
+  const battingTeamStats = useMemo(() => {
+    if (!match?.playerStats) return [];
+    return match.playerStats.filter(
+      (p) => p.team === match.battingTeam && p.didBat,
+    );
+  }, [match]);
+
   const submitDelivery = () => {
     if (!socketRef.current || !matchId) {
       return;
@@ -471,6 +478,72 @@ function ScorerPage() {
               ○
             </span>
           ))}
+        </div>
+      </section>
+
+      <section className="mt-6 rounded-xl border border-slate-200 bg-white p-5">
+        <h2 className="text-lg font-semibold text-slate-900">Batsman Stats</h2>
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full text-sm text-slate-700">
+            <thead>
+              <tr className="border-b border-slate-200 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <th className="pb-2 text-left">Batter</th>
+                <th className="pb-2 text-left">Status</th>
+                <th className="pb-2 pr-2 text-right">R</th>
+                <th className="pb-2 pr-2 text-right">B</th>
+                <th className="pb-2 pr-2 text-right">4s</th>
+                <th className="pb-2 pr-2 text-right">6s</th>
+                <th className="pb-2 text-right">SR</th>
+              </tr>
+            </thead>
+            <tbody>
+              {battingTeamStats.map((p) => {
+                  const runs = p.batting?.runs ?? 0;
+                  const balls = p.batting?.balls ?? 0;
+                  const sr =
+                    balls > 0 ? ((runs / balls) * 100).toFixed(1) : "-";
+                  const isStriker = p.name === match.currentStriker;
+                  const isNonStriker = p.name === match.currentNonStriker;
+                  const status = p.isOut
+                    ? p.dismissalType || "out"
+                    : isStriker || isNonStriker
+                      ? "batting"
+                      : "not out";
+                  return (
+                    <tr
+                      key={p.name}
+                      className={`border-b border-slate-100 ${isStriker ? "bg-emerald-50" : ""}`}
+                    >
+                      <td className="py-2 font-medium">
+                        {p.name}
+                        {isStriker && (
+                          <span className="ml-1 text-emerald-600">*</span>
+                        )}
+                      </td>
+                      <td className="py-2 capitalize text-slate-500">
+                        {status}
+                      </td>
+                      <td className="py-2 pr-2 text-right">{runs}</td>
+                      <td className="py-2 pr-2 text-right">{balls}</td>
+                      <td className="py-2 pr-2 text-right">
+                        {p.batting?.fours ?? 0}
+                      </td>
+                      <td className="py-2 pr-2 text-right">
+                        {p.batting?.sixes ?? 0}
+                      </td>
+                      <td className="py-2 text-right">{sr}</td>
+                    </tr>
+                  );
+                })}
+              {battingTeamStats.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="py-2 text-center text-slate-400">
+                    No batters yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </section>
 
