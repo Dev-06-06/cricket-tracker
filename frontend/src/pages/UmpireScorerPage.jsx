@@ -236,7 +236,7 @@ function getBatterStat(match, name) {
   const p = match.playerStats?.find(x => x.name === name);
   if (!p) return { runs: 0, balls: 0, fours: 0, sixes: 0, sr: '-' };
   const sr = p.batting?.balls > 0
-    ? ((p.batting.runs / p.batting.balls) * 100).toFixed(0)
+    ? ((p.batting.runs / p.batting.balls) * 100).toFixed(1)
     : '-';
   return {
     runs: p.batting?.runs ?? 0,
@@ -289,8 +289,6 @@ function UmpireScorerPage() {
   const [selectedNewBowler, setSelectedNewBowler] = useState('');
   const [showBatterModal, setShowBatterModal] = useState(false);
   const [selectedNewBatter, setSelectedNewBatter] = useState('');
-  const [showSwapModal, setShowSwapModal] = useState(false);
-  const [selectedSwapBatter, setSelectedSwapBatter] = useState('');
 
   // Create socket and attach listeners; re-run when matchId changes
   useEffect(() => {
@@ -395,13 +393,6 @@ function UmpireScorerPage() {
     setSelectedNewBatter('');
   }
 
-  function confirmSwap() {
-    if (!selectedSwapBatter) { alert('Please select a batter'); return; }
-    socketRef.current?.emit('setNewBatter', { matchId, batter: selectedSwapBatter });
-    setShowSwapModal(false);
-    setSelectedSwapBatter('');
-  }
-
   if (!match) {
     return (
       <div style={{ ...s.page, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -475,27 +466,6 @@ function UmpireScorerPage() {
         </div>
       )}
 
-      {/* Swap Striker Modal — manual override */}
-      {showSwapModal && (
-        <div style={s.overlay}>
-          <div style={s.modal}>
-            <div style={s.modalTitle}>Set New Striker</div>
-            <select
-              value={selectedSwapBatter}
-              onChange={e => setSelectedSwapBatter(e.target.value)}
-              style={s.modalSelect}
-            >
-              <option value="">— Choose batter —</option>
-              {battingTeamActivePlayers.map(p => (
-                <option key={p.name} value={p.name}>{p.name}</option>
-              ))}
-            </select>
-            <button onClick={confirmSwap} style={s.confirmBtn}>Confirm</button>
-            <button onClick={() => setShowSwapModal(false)} style={s.cancelBtn}>Cancel</button>
-          </div>
-        </div>
-      )}
-
       {/* Header */}
       <div style={s.header}>
         <span style={s.title}>Umpire Scorer</span>
@@ -522,7 +492,7 @@ function UmpireScorerPage() {
           🏏 {match?.striker ?? 'Striker not set'} * &nbsp;|&nbsp; {match?.nonStriker ?? 'Non-striker not set'}
           {match?.status === 'live' && (
             <button
-              onClick={() => { setShowSwapModal(true); setSelectedSwapBatter(''); }}
+              onClick={() => match.nonStriker && socketRef.current?.emit('setNewBatter', { matchId, batter: match.nonStriker })}
               style={{
                 marginLeft: '8px',
                 padding: '3px 10px',
