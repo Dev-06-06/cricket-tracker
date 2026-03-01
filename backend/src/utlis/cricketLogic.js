@@ -11,16 +11,16 @@ function calculateOvers(totalValidBalls) {
 
 /**
  * Determines if batters should rotate strike
- * @param {number} runsOffBat - Runs scored off the bat
+ * @param {number} runs - Total runs scored on the delivery (runsOffBat + extraRuns)
  * @param {boolean} isValidBall - Whether the ball was valid
  * @param {number} totalValidBalls - Total valid balls bowled (used to detect end-of-over)
  * @returns {boolean} Whether strike should rotate
  */
-function shouldRotateStrike(runsOffBat, isValidBall, totalValidBalls) {
+function shouldRotateStrike(runs, isValidBall, totalValidBalls) {
     let strikeRotates = false;
 
-    // Rule A: Odd runs rotate strike
-    if (runsOffBat % 2 === 1) {
+    // Rule A: Odd runs rotate strike (includes extras from wides/no-balls)
+    if (runs % 2 === 1) {
         strikeRotates = true;
     }
 
