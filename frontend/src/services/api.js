@@ -7,10 +7,22 @@ async function request(path, options = {}) {
     ...options,
   });
 
-  const data = await response.json();
+  let data = null;
 
-  if (!response.ok || !data.success) {
-    throw new Error(data.message || "Request failed");
+  try {
+    data = await response.json();
+  } catch {
+    data = null;
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      data?.message || `Request failed with status ${response.status}`,
+    );
+  }
+
+  if (!data?.success) {
+    throw new Error(data?.message || "Request failed");
   }
 
   return data;
