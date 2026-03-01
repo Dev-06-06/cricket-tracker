@@ -8,6 +8,12 @@ const emptyBatting = () => ({ runs: 0, balls: 0, fours: 0, sixes: 0, dismissalTy
 const isValidBallType = (extraType) =>
     extraType === 'none' || extraType === 'bye' || extraType === 'leg-bye';
 
+function isAllOut(match) {
+    const battingTeamPlayers = match[match.battingTeam === match.team1Name ? 'team1Players' : 'team2Players'];
+    const battingTeamSize = battingTeamPlayers ? battingTeamPlayers.length : 0;
+    return battingTeamSize > 0 && match.wickets >= battingTeamSize - 1;
+}
+
 async function emitMatchState(target, matchId) {
     const match = await Match.findById(matchId)
         .populate('team1Players', 'name')
@@ -212,6 +218,13 @@ function setupSockets(io) {
                             match.currentNonStriker = null;
                         }
                     }
+                    if (isAllOut(match)) {
+                        match.status = 'completed';
+                        await match.save();
+                        await updateCareerStats(match);
+                        io.to(matchId).emit('match_completed', match);
+                        return;
+                    }
                     match.status = 'innings';
                 }
 
@@ -301,6 +314,13 @@ function setupSockets(io) {
                             match.currentNonStriker = null;
                         }
                     }
+                    if (isAllOut(match)) {
+                        match.status = 'completed';
+                        await match.save();
+                        await updateCareerStats(match);
+                        io.to(matchId).emit('match_completed', match);
+                        return;
+                    }
                 }
 
                 let totalValidBalls = match.ballsBowled || 0;
@@ -377,8 +397,9 @@ function setupSockets(io) {
                 match.oversBowled = calculateOvers(validBalls);
                 match.ballsBowled = validBalls;
 
-                // Rebuild per-batter batting stats from remaining timeline
+                // Rebuild per-batter batting stats (including isOut) from remaining timeline
                 match.playerStats.forEach((ps) => {
+                    ps.isOut = false;
                     if (ps.batting) {
                         ps.batting.runs = 0;
                         ps.batting.balls = 0;
@@ -403,7 +424,9 @@ function setupSockets(io) {
                     }
                     if (delivery.isWicket && delivery.batterDismissed) {
                         const dismissedPs = match.playerStats.find((p) => p.name === delivery.batterDismissed);
-                        if (dismissedPs && dismissedPs.batting) {
+                        if (dismissedPs) {
+                            dismissedPs.isOut = true;
+                            if (!dismissedPs.batting) dismissedPs.batting = emptyBatting();
                             dismissedPs.batting.dismissalType = delivery.wicketType || '';
                         }
                     }
@@ -411,7 +434,7 @@ function setupSockets(io) {
 
                 await match.save();
 
-                io.to(matchId).emit('score_updated', match);
+                await emitMatchState(io.to(matchId), matchId);
             } catch (error) {
                 console.log(error);
             }

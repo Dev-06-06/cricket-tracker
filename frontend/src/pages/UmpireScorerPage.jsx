@@ -317,11 +317,13 @@ function UmpireScorerPage() {
       }
     });
 
+    socket.on('match_completed', () => navigate(`/scoreboard/${matchId}`));
     socket.on('matchEnded', () => navigate(`/scoreboard/${matchId}`));
     socket.on('error', ({ message }) => alert('Error: ' + message));
 
     return () => {
       socket.off('matchState');
+      socket.off('match_completed');
       socket.off('matchEnded');
       socket.off('error');
       socket.disconnect();
@@ -372,6 +374,17 @@ function UmpireScorerPage() {
     console.log('Emitting delivery:', payload);
     socket.emit('delivery', payload);
 
+    // Reset delivery modifier state
+    setIsWicket(false);
+    setWicketType('');
+    setExtraType('');
+    setDismissedBatter('');
+  }
+
+  function undoDelivery() {
+    const socket = socketRef.current;
+    if (!socket) { alert('Not connected to server'); return; }
+    socket.emit('undo_delivery', { matchId });
     // Reset delivery modifier state
     setIsWicket(false);
     setWicketType('');
@@ -657,6 +670,29 @@ function UmpireScorerPage() {
             </button>
           ))}
         </div>
+
+        {/* Undo button */}
+        <button
+          type="button"
+          onClick={undoDelivery}
+          disabled={!match?.timeline?.length}
+          style={{
+            ...s.statsCard,
+            marginTop: '12px',
+            marginBottom: 0,
+            width: '100%',
+            padding: '12px',
+            border: '1px solid rgba(239,68,68,0.4)',
+            background: 'rgba(239,68,68,0.1)',
+            color: !match?.timeline?.length ? 'rgba(255,255,255,0.3)' : '#ef4444',
+            fontSize: '14px',
+            fontWeight: 600,
+            cursor: !match?.timeline?.length ? 'not-allowed' : 'pointer',
+            textAlign: 'center',
+          }}
+        >
+          Undo Last Ball
+        </button>
       </div>
     </div>
   );
