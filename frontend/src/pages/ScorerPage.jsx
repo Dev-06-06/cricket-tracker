@@ -11,6 +11,59 @@ const initialDelivery = {
   wicketType: "none",
 };
 
+function isValidBall(ball) {
+  return (
+    ball.extraType === "none" ||
+    ball.extraType === "bye" ||
+    ball.extraType === "leg-bye"
+  );
+}
+
+function buildCurrentOver(timeline) {
+  let validCount = 0;
+  let currentOverBalls = [];
+  for (const ball of timeline) {
+    currentOverBalls.push(ball);
+    if (isValidBall(ball)) {
+      validCount += 1;
+      if (validCount > 0 && validCount % 6 === 0) {
+        currentOverBalls = [];
+      }
+    }
+  }
+  return currentOverBalls;
+}
+
+function ballLabel(ball) {
+  if (ball.extraType === "wide") {
+    return ball.extraRuns === 1 ? "Wd" : "Wd+" + (ball.extraRuns - 1);
+  }
+  if (ball.extraType === "no-ball") {
+    return ball.runsOffBat === 0 ? "Nb" : "Nb+" + ball.runsOffBat;
+  }
+  if (ball.extraType === "bye") {
+    return "B" + ball.extraRuns;
+  }
+  if (ball.isWicket) {
+    return "W";
+  }
+  const runs = ball.runsOffBat + ball.extraRuns;
+  if (runs === 0) {
+    return "0";
+  }
+  return String(runs);
+}
+
+function ballColor(label) {
+  if (label === "W") return "#7f1d1d";
+  if (label === "4") return "#1e3a5f";
+  if (label === "6") return "#1a3a1a";
+  if (label.startsWith("Wd") || label.startsWith("Nb")) return "#3b2a00";
+  if (label.startsWith("B")) return "#1f2937";
+  if (label === "0") return "rgba(255,255,255,0.08)";
+  return "rgba(255,255,255,0.12)";
+}
+
 function ScorerPage() {
   const { matchId } = useParams();
   const socketRef = useRef(null);
@@ -116,21 +169,7 @@ function ScorerPage() {
     if (!match?.timeline?.length) {
       return [];
     }
-
-    const validTimeline = match.timeline.filter(
-      (ball) =>
-        ball.extraType === "none" ||
-        ball.extraType === "bye" ||
-        ball.extraType === "leg-bye",
-    );
-
-    return validTimeline.slice(-6).map((ball) => {
-      if (ball.isWicket) {
-        return "W";
-      }
-
-      return ball.runsOffBat + ball.extraRuns;
-    });
+    return buildCurrentOver(match.timeline);
   }, [match]);
 
   const submitDelivery = () => {
@@ -403,27 +442,35 @@ function ScorerPage() {
 
       <section className="mt-6 rounded-xl border border-slate-200 bg-white p-5">
         <h2 className="text-lg font-semibold text-slate-900">Current Over</h2>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {Array.from({ length: 6 }).map((_, index) => {
-            const ballValue = currentOverBalls[index];
-
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="text-sm font-medium text-slate-700">
+            Over {match.oversBowled + 1}:
+          </span>
+          {currentOverBalls.map((ball, index) => {
+            const label = ballLabel(ball);
             return (
               <span
                 key={index}
-                className={`flex h-10 w-10 items-center justify-center rounded-full border text-sm font-semibold ${
-                  ballValue === undefined
-                    ? "border-slate-300 bg-white text-slate-400"
-                    : "border-slate-900 bg-slate-900 text-white"
-                }`}
+                style={{ backgroundColor: ballColor(label) }}
+                className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold text-white"
               >
-                {ballValue === undefined
-                  ? "○"
-                  : ballValue === 0
-                    ? "•"
-                    : ballValue}
+                {label}
               </span>
             );
           })}
+          {Array.from({
+            length: Math.max(
+              0,
+              6 - currentOverBalls.filter(isValidBall).length,
+            ),
+          }).map((_, index) => (
+            <span
+              key={`placeholder-${index}`}
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-400 text-sm"
+            >
+              ○
+            </span>
+          ))}
         </div>
       </section>
 
