@@ -65,7 +65,13 @@ const matchSchema = new mongoose.Schema(
         didBat: { type: Boolean, default: false },
         didBowl: { type: Boolean, default: false },
         isOut: { type: Boolean, default: false },
-        dismissalType: { type: String, default: '' }
+        dismissalType: { type: String, default: '' },
+        batting: {
+          runs: { type: Number, default: 0 },
+          balls: { type: Number, default: 0 },
+          fours: { type: Number, default: 0 },
+          sixes: { type: Number, default: 0 }
+        }
       }
     ],
     status: {
