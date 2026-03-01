@@ -11,6 +11,25 @@ function calculateOversFromBalls(totalBalls) {
 function buildBowlingByName(match) {
   const bowlingByName = {};
 
+  const firstInningsBowlingRows =
+    match?.firstInningsSummary &&
+    Array.isArray(match.firstInningsSummary.bowlingRows)
+      ? match.firstInningsSummary.bowlingRows
+      : [];
+
+  firstInningsBowlingRows.forEach((row) => {
+    const bowler = row?.name;
+    if (!bowler) return;
+
+    if (!bowlingByName[bowler]) {
+      bowlingByName[bowler] = { balls: 0, runs: 0, wickets: 0 };
+    }
+
+    bowlingByName[bowler].balls += Number(row.balls) || 0;
+    bowlingByName[bowler].runs += Number(row.runs) || 0;
+    bowlingByName[bowler].wickets += Number(row.wickets) || 0;
+  });
+
   (match.timeline || []).forEach((delivery) => {
     const bowler = delivery.bowler;
     if (!bowler) return;
@@ -29,7 +48,7 @@ function buildBowlingByName(match) {
 
     bowlingByName[bowler].runs += Number(delivery.extraRuns) || 0;
 
-    if (delivery.isWicket) {
+    if (delivery.isWicket && delivery.wicketType !== "run-out") {
       bowlingByName[bowler].wickets += 1;
     }
   });

@@ -61,6 +61,25 @@ async function completeMatchWithStats({ matchId, resultMessage, io }) {
         return;
       }
 
+      const inningsNumber = getCurrentInningsNumber(match);
+      if (inningsNumber === 2 && typeof match.targetScore === "number") {
+        const chasingTeamSize = getBattingTeamSize(match);
+        const wicketsToAllOut =
+          chasingTeamSize > 1 ? chasingTeamSize - 1 : Number.MAX_SAFE_INTEGER;
+        const totalOvers = Number(match.totalOvers) || 0;
+        const totalValidBalls = Number(match.ballsBowled) || 0;
+
+        const targetNotReached =
+          (Number(match.totalRuns) || 0) < match.targetScore;
+        const inningsStillHasBalls =
+          totalOvers > 0 ? totalValidBalls < totalOvers * 6 : false;
+        const inningsNotAllOut = (Number(match.wickets) || 0) < wicketsToAllOut;
+
+        if (targetNotReached && inningsStillHasBalls && inningsNotAllOut) {
+          return;
+        }
+      }
+
       if (!match.statsApplied) {
         await updateCareerStats(match, { session });
         match.statsApplied = true;
@@ -342,6 +361,8 @@ async function handleWicketInningsCompletion(match, matchId, io) {
         ? "Match Tied"
         : `Team B won by ${Math.max(0, chasingTeamSize - 1 - match.wickets)} wickets`;
 
+  await match.save();
+
   return completeMatchWithStats({
     matchId,
     resultMessage,
@@ -371,6 +392,8 @@ async function finalizeSecondInningsIfMatchEnded(
   if (!evaluation.isMatchOver) {
     return false;
   }
+
+  await match.save();
 
   return completeMatchWithStats({
     matchId,
@@ -426,6 +449,8 @@ async function handleMaxOversTransition(match, matchId, io, totalValidBalls) {
     if (!evaluation.isMatchOver) {
       return false;
     }
+
+    await match.save();
 
     return completeMatchWithStats({
       matchId,
