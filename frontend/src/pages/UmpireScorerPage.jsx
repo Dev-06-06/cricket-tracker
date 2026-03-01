@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { createMatchSocket } from "../services/socket";
 
 const runOptions = [0, 1, 2, 3, 4, 6];
+const wicketTypes = ['bowled', 'caught', 'lbw', 'run-out', 'stumped', 'hit-wicket'];
 
 const s = {
   page: {
@@ -94,6 +95,95 @@ const s = {
     fontVariantNumeric: 'tabular-nums',
     fontSize: '14px',
   },
+  overlay: {
+    position: 'fixed',
+    inset: 0,
+    background: 'rgba(0,0,0,0.75)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000,
+  },
+  modal: {
+    background: '#1e293b',
+    border: '1px solid rgba(255,255,255,0.15)',
+    borderRadius: '16px',
+    padding: '24px',
+    width: '320px',
+    maxWidth: '90vw',
+  },
+  modalTitle: {
+    fontSize: '18px',
+    fontWeight: 700,
+    marginBottom: '16px',
+  },
+  toggleBtn: {
+    padding: '10px 16px',
+    borderRadius: '10px',
+    border: '1px solid rgba(255,255,255,0.2)',
+    background: 'rgba(255,255,255,0.06)',
+    color: '#fff',
+    fontSize: '14px',
+    fontWeight: 600,
+    cursor: 'pointer',
+  },
+  toggleBtnActive: {
+    padding: '10px 16px',
+    borderRadius: '10px',
+    border: '1px solid #f59e0b',
+    background: 'rgba(245,158,11,0.2)',
+    color: '#f59e0b',
+    fontSize: '14px',
+    fontWeight: 600,
+    cursor: 'pointer',
+  },
+  wicketBtnActive: {
+    padding: '10px 16px',
+    borderRadius: '10px',
+    border: '1px solid #ef4444',
+    background: 'rgba(239,68,68,0.2)',
+    color: '#ef4444',
+    fontSize: '14px',
+    fontWeight: 600,
+    cursor: 'pointer',
+  },
+  modalSelect: {
+    width: '100%',
+    padding: '10px 12px',
+    borderRadius: '8px',
+    border: '1px solid rgba(255,255,255,0.2)',
+    background: '#0f172a',
+    color: '#fff',
+    fontSize: '14px',
+    marginBottom: '12px',
+    boxSizing: 'border-box',
+  },
+  confirmBtn: {
+    width: '100%',
+    padding: '12px',
+    borderRadius: '10px',
+    border: 'none',
+    background: '#3b82f6',
+    color: '#fff',
+    fontSize: '15px',
+    fontWeight: 600,
+    cursor: 'pointer',
+    marginTop: '4px',
+    boxSizing: 'border-box',
+  },
+  cancelBtn: {
+    width: '100%',
+    padding: '12px',
+    borderRadius: '10px',
+    border: '1px solid rgba(255,255,255,0.2)',
+    background: 'rgba(255,255,255,0.06)',
+    color: '#fff',
+    fontSize: '15px',
+    fontWeight: 600,
+    cursor: 'pointer',
+    marginTop: '8px',
+    boxSizing: 'border-box',
+  },
 };
 
 function getBallLabel(ball) {
@@ -174,17 +264,33 @@ function getBowlerStat(match, name) {
   };
 }
 
+function getRunButtonLabel(runs, currentExtraType) {
+  if (currentExtraType === 'wide') return runs === 0 ? 'Wd' : `+${runs}`;
+  return String(runs);
+}
+
 function UmpireScorerPage() {
   const { matchId } = useParams();
   const navigate = useNavigate();
 
   const socketRef = useRef(null);
+  const prevBallsBowledRef = useRef(null);
+
   const [match, setMatch] = useState(null);
+
+  // Delivery modifier state
   const [isWicket, setIsWicket] = useState(false);
   const [wicketType, setWicketType] = useState('');
-  const [extraType, setExtraType] = useState('');
-  const [extraRuns, setExtraRuns] = useState(0);
+  const [extraType, setExtraType] = useState(''); // 'wide' | 'no-ball' | ''
   const [dismissedBatter, setDismissedBatter] = useState('');
+
+  // Modal state
+  const [showBowlerModal, setShowBowlerModal] = useState(false);
+  const [selectedNewBowler, setSelectedNewBowler] = useState('');
+  const [showBatterModal, setShowBatterModal] = useState(false);
+  const [selectedNewBatter, setSelectedNewBatter] = useState('');
+  const [showSwapModal, setShowSwapModal] = useState(false);
+  const [selectedSwapBatter, setSelectedSwapBatter] = useState('');
 
   // Create socket and attach listeners; re-run when matchId changes
   useEffect(() => {
@@ -194,7 +300,23 @@ function UmpireScorerPage() {
     socket.emit('joinMatch', { matchId });
 
     socket.on('matchState', (updatedMatch) => {
-      setMatch({ ...updatedMatch });  // spread to force new object reference
+      const curr = updatedMatch.ballsBowled ?? 0;
+      const prev = prevBallsBowledRef.current;
+
+      // Detect end of over: valid balls transitioned to a non-zero multiple of 6 during live play
+      if (prev !== null && curr !== prev && curr > 0 && curr % 6 === 0 && updatedMatch.status === 'live') {
+        setShowBowlerModal(true);
+        setSelectedNewBowler('');
+      }
+      prevBallsBowledRef.current = curr;
+
+      setMatch({ ...updatedMatch }); // spread to force new object reference
+
+      // Auto-show new batter modal after a wicket during live play
+      if (updatedMatch.status === 'live' && !updatedMatch.striker) {
+        setShowBatterModal(true);
+        setSelectedNewBatter('');
+      }
     });
 
     socket.on('matchEnded', () => navigate(`/scoreboard/${matchId}`));
@@ -214,26 +336,70 @@ function UmpireScorerPage() {
     if (!socket) { alert('Not connected to server'); return; }
     if (!matchId) { alert('No match ID'); return; }
     if (!match) { alert('Match not loaded'); return; }
+    if (showBowlerModal) { alert('Please select the new bowler first'); return; }
 
-    const payload = {
-      matchId,
-      runs: Number(runs),
-      extraType: extraType || null,
-      extraRuns: Number(extraRuns) || 0,
-      isWicket: isWicket,
-      wicketType: isWicket ? wicketType : null,
-      dismissedBatter: isWicket ? dismissedBatter : null,
-    };
+    let payload;
+    if (extraType === 'wide') {
+      payload = {
+        matchId,
+        runs: 0,
+        extraType: 'wide',
+        extraRuns: 1 + Number(runs),
+        isWicket: false,
+        wicketType: null,
+        dismissedBatter: null,
+      };
+    } else if (extraType === 'no-ball') {
+      payload = {
+        matchId,
+        runs: Number(runs),
+        extraType: 'no-ball',
+        extraRuns: 1,
+        isWicket: isWicket,
+        wicketType: isWicket ? wicketType : null,
+        dismissedBatter: isWicket ? dismissedBatter : null,
+      };
+    } else {
+      payload = {
+        matchId,
+        runs: Number(runs),
+        extraType: null,
+        extraRuns: 0,
+        isWicket: isWicket,
+        wicketType: isWicket ? wicketType : null,
+        dismissedBatter: isWicket ? dismissedBatter : null,
+      };
+    }
 
     console.log('Emitting delivery:', payload);
     socket.emit('delivery', payload);
 
-    // Reset state
+    // Reset delivery modifier state
     setIsWicket(false);
     setWicketType('');
     setExtraType('');
-    setExtraRuns(0);
     setDismissedBatter('');
+  }
+
+  function confirmNewBowler() {
+    if (!selectedNewBowler) { alert('Please select a bowler'); return; }
+    socketRef.current?.emit('setNewBowler', { matchId, bowler: selectedNewBowler });
+    setShowBowlerModal(false);
+    setSelectedNewBowler('');
+  }
+
+  function confirmNewBatter() {
+    if (!selectedNewBatter) { alert('Please select a batter'); return; }
+    socketRef.current?.emit('setNewBatter', { matchId, batter: selectedNewBatter });
+    setShowBatterModal(false);
+    setSelectedNewBatter('');
+  }
+
+  function confirmSwap() {
+    if (!selectedSwapBatter) { alert('Please select a batter'); return; }
+    socketRef.current?.emit('setNewBatter', { matchId, batter: selectedSwapBatter });
+    setShowSwapModal(false);
+    setSelectedSwapBatter('');
   }
 
   if (!match) {
@@ -262,8 +428,74 @@ function UmpireScorerPage() {
   const nonStrikerStats = getBatterStat(match, match?.nonStriker);
   const bowlerStats = getBowlerStat(match, match?.currentBowler);
 
+  // Players for modals and wicket dropdown
+  const bowlingTeamPlayers = (match.playerStats || []).filter(p => p.team === match.bowlingTeam);
+  const battingTeamActivePlayers = (match.playerStats || []).filter(p => p.team === match.battingTeam && !p.isOut);
+  const newBatterOptions = battingTeamActivePlayers.filter(p => p.name !== match.nonStriker);
+
   return (
     <div style={s.page}>
+      {/* New Bowler Modal — shown at end of each over */}
+      {showBowlerModal && (
+        <div style={s.overlay}>
+          <div style={s.modal}>
+            <div style={s.modalTitle}>Select New Bowler</div>
+            <select
+              value={selectedNewBowler}
+              onChange={e => setSelectedNewBowler(e.target.value)}
+              style={s.modalSelect}
+            >
+              <option value="">— Choose bowler —</option>
+              {bowlingTeamPlayers.map(p => (
+                <option key={p.name} value={p.name}>{p.name}</option>
+              ))}
+            </select>
+            <button onClick={confirmNewBowler} style={s.confirmBtn}>Confirm Bowler</button>
+          </div>
+        </div>
+      )}
+
+      {/* New Batter Modal — shown after a wicket */}
+      {showBatterModal && (
+        <div style={s.overlay}>
+          <div style={s.modal}>
+            <div style={s.modalTitle}>Select New Batter</div>
+            <select
+              value={selectedNewBatter}
+              onChange={e => setSelectedNewBatter(e.target.value)}
+              style={s.modalSelect}
+            >
+              <option value="">— Choose batter —</option>
+              {newBatterOptions.map(p => (
+                <option key={p.name} value={p.name}>{p.name}</option>
+              ))}
+            </select>
+            <button onClick={confirmNewBatter} style={s.confirmBtn}>Confirm Batter</button>
+          </div>
+        </div>
+      )}
+
+      {/* Swap Striker Modal — manual override */}
+      {showSwapModal && (
+        <div style={s.overlay}>
+          <div style={s.modal}>
+            <div style={s.modalTitle}>Set New Striker</div>
+            <select
+              value={selectedSwapBatter}
+              onChange={e => setSelectedSwapBatter(e.target.value)}
+              style={s.modalSelect}
+            >
+              <option value="">— Choose batter —</option>
+              {battingTeamActivePlayers.map(p => (
+                <option key={p.name} value={p.name}>{p.name}</option>
+              ))}
+            </select>
+            <button onClick={confirmSwap} style={s.confirmBtn}>Confirm</button>
+            <button onClick={() => setShowSwapModal(false)} style={s.cancelBtn}>Cancel</button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div style={s.header}>
         <span style={s.title}>Umpire Scorer</span>
@@ -286,8 +518,25 @@ function UmpireScorerPage() {
         <div style={s.scoreMeta}>
           Ov: {oversBowled}.{ballsInOver} &nbsp;|&nbsp; RR: {runRate}
         </div>
-        <div style={{ ...s.scoreMeta, marginTop: '10px' }}>
+        <div style={{ ...s.scoreMeta, marginTop: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
           🏏 {match?.striker ?? 'Striker not set'} * &nbsp;|&nbsp; {match?.nonStriker ?? 'Non-striker not set'}
+          {match?.status === 'live' && (
+            <button
+              onClick={() => { setShowSwapModal(true); setSelectedSwapBatter(''); }}
+              style={{
+                marginLeft: '8px',
+                padding: '3px 10px',
+                borderRadius: '6px',
+                border: '1px solid rgba(255,255,255,0.3)',
+                background: 'rgba(255,255,255,0.08)',
+                color: 'rgba(255,255,255,0.8)',
+                fontSize: '11px',
+                cursor: 'pointer',
+              }}
+            >
+              Swap Striker
+            </button>
+          )}
         </div>
         <div style={s.scoreMeta}>
           🎳 {match?.currentBowler ?? 'Bowler not set'}
@@ -362,11 +611,70 @@ function UmpireScorerPage() {
         </div>
       </div>
 
-      {/* Run Buttons */}
+      {/* Record Delivery */}
       <div style={s.statsCard}>
         <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', letterSpacing: '1px', marginBottom: '12px', textTransform: 'uppercase' }}>
           Record Delivery
         </div>
+
+        {/* Extra / Wicket toggles */}
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            onClick={() => {
+              const next = extraType === 'wide' ? '' : 'wide';
+              setExtraType(next);
+              if (next === 'wide') { setIsWicket(false); setWicketType(''); setDismissedBatter(''); }
+            }}
+            style={extraType === 'wide' ? s.toggleBtnActive : s.toggleBtn}
+          >
+            Wide
+          </button>
+          <button
+            type="button"
+            onClick={() => setExtraType(extraType === 'no-ball' ? '' : 'no-ball')}
+            style={extraType === 'no-ball' ? s.toggleBtnActive : s.toggleBtn}
+          >
+            No Ball
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const next = !isWicket;
+              setIsWicket(next);
+              if (!next) { setWicketType(''); setDismissedBatter(''); }
+            }}
+            style={isWicket ? s.wicketBtnActive : s.toggleBtn}
+          >
+            Wicket
+          </button>
+        </div>
+
+        {/* Wicket detail selectors */}
+        {isWicket && (
+          <div style={{ marginBottom: '12px' }}>
+            <select
+              value={wicketType}
+              onChange={e => setWicketType(e.target.value)}
+              style={s.modalSelect}
+            >
+              <option value="">— Wicket type —</option>
+              {wicketTypes.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <select
+              value={dismissedBatter}
+              onChange={e => setDismissedBatter(e.target.value)}
+              style={{ ...s.modalSelect, marginBottom: 0 }}
+            >
+              <option value="">— Dismissed batter —</option>
+              {battingTeamActivePlayers.map(p => (
+                <option key={p.name} value={p.name}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* Run buttons */}
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
           {runOptions.map((r) => (
             <button
@@ -375,7 +683,7 @@ function UmpireScorerPage() {
               onClick={() => recordDelivery(r)}
               style={s.runBtn}
             >
-              {r}
+              {getRunButtonLabel(r, extraType)}
             </button>
           ))}
         </div>
