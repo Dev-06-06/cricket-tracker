@@ -5,6 +5,9 @@ const { updateCareerStats } = require('../utils/statsUpdater');
 
 const emptyBatting = () => ({ runs: 0, balls: 0, fours: 0, sixes: 0, dismissalType: '' });
 
+const isValidBallType = (extraType) =>
+    extraType === 'none' || extraType === 'bye' || extraType === 'leg-bye';
+
 async function emitMatchState(target, matchId) {
     const match = await Match.findById(matchId)
         .populate('team1Players', 'name')
@@ -19,15 +22,59 @@ async function emitMatchState(target, matchId) {
         storedStats[String(ps.playerId)] = { didBat: ps.didBat, didBowl: ps.didBowl, isOut: ps.isOut, batting };
     });
 
+    // Compute bowling stats by bowler name from timeline
+    const bowlingByName = {};
+    (match.timeline || []).forEach((ball) => {
+        const bowler = ball.bowler;
+        if (!bowler) return;
+        if (!bowlingByName[bowler]) bowlingByName[bowler] = { balls: 0, runs: 0, wickets: 0 };
+        const isValid = isValidBallType(ball.extraType);
+        if (isValid) bowlingByName[bowler].balls++;
+        if (ball.extraType !== 'wide' && ball.extraType !== 'no-ball') {
+            bowlingByName[bowler].runs += ball.runsOffBat || 0;
+        }
+        bowlingByName[bowler].runs += ball.extraRuns || 0;
+        if (ball.isWicket) bowlingByName[bowler].wickets++;
+    });
+
     const playerStats = [
-        ...match.team1Players.map((p) => ({ _id: p._id, name: p.name, team: match.team1Name, ...(storedStats[String(p._id)] || {}) })),
-        ...match.team2Players.map((p) => ({ _id: p._id, name: p.name, team: match.team2Name, ...(storedStats[String(p._id)] || {}) })),
+        ...match.team1Players.map((p) => ({
+            _id: p._id,
+            name: p.name,
+            team: match.team1Name,
+            ...(storedStats[String(p._id)] || {}),
+            bowling: bowlingByName[p.name] || { balls: 0, runs: 0, wickets: 0 },
+        })),
+        ...match.team2Players.map((p) => ({
+            _id: p._id,
+            name: p.name,
+            team: match.team2Name,
+            ...(storedStats[String(p._id)] || {}),
+            bowling: bowlingByName[p.name] || { balls: 0, runs: 0, wickets: 0 },
+        })),
     ];
+
+    // Transform timeline entries for frontend consumption
+    const timeline = (match.timeline || []).map((ball) => {
+        const isValidBall = isValidBallType(ball.extraType);
+        const extType = ball.extraType !== 'none' ? ball.extraType : null;
+        const extras = extType
+            ? { type: extType === 'no-ball' ? 'noBall' : extType, runs: ball.extraRuns || 0 }
+            : null;
+        return {
+            ...ball.toObject(),
+            runs: ball.runsOffBat,
+            isValidBall,
+            extras,
+        };
+    });
 
     target.emit('matchState', {
         ...match.toObject(),
         playerStats,
+        timeline,
         striker: match.currentStriker || null,
+        nonStriker: match.currentNonStriker || null,
     });
 }
 
@@ -136,7 +183,7 @@ function setupSockets(io) {
                 match.totalRuns += deliveryData.runsOffBat + deliveryData.extraRuns;
 
                 // Update per-batter batting stats for the current striker
-                const isValidBall = deliveryData.extraType === 'none' || deliveryData.extraType === 'bye' || deliveryData.extraType === 'leg-bye';
+                const isValidBall = isValidBallType(deliveryData.extraType);
                 if (match.currentStriker) {
                     const strikerPs = match.playerStats.find((p) => p.name === match.currentStriker);
                     if (strikerPs) {
@@ -189,6 +236,77 @@ function setupSockets(io) {
                 }
             } catch (error) {
                 console.log(error);
+            }
+        });
+
+        socket.on('delivery', async ({ matchId, runs, extraType, extraRuns, isWicket, wicketType, dismissedBatter }) => {
+            try {
+                const match = await Match.findById(matchId);
+                if (!match) { socket.emit('error', { message: 'Match not found' }); return; }
+
+                const normalizedExtraType = extraType === 'noBall' ? 'no-ball' : (extraType || 'none');
+                const isValidBall = isValidBallType(normalizedExtraType);
+
+                const entry = {
+                    runsOffBat: Number(runs) || 0,
+                    extraType: normalizedExtraType,
+                    extraRuns: Number(extraRuns) || 0,
+                    isWicket: Boolean(isWicket),
+                    wicketType: isWicket && wicketType ? wicketType : 'none',
+                    batterDismissed: isWicket && dismissedBatter ? dismissedBatter : '',
+                    striker: match.currentStriker || '',
+                    bowler: match.currentBowler || '',
+                };
+
+                match.timeline.push(entry);
+                match.totalRuns += entry.runsOffBat + entry.extraRuns;
+
+                // Update batter stats
+                if (match.currentStriker) {
+                    const strikerPs = match.playerStats.find((p) => p.name === match.currentStriker);
+                    if (strikerPs) {
+                        if (!strikerPs.batting) strikerPs.batting = emptyBatting();
+                        if (normalizedExtraType !== 'wide') {
+                            strikerPs.batting.runs += entry.runsOffBat;
+                            if (entry.runsOffBat === 4) strikerPs.batting.fours += 1;
+                            if (entry.runsOffBat === 6) strikerPs.batting.sixes += 1;
+                        }
+                        if (isValidBall) strikerPs.batting.balls += 1;
+                    }
+                }
+
+                if (isWicket) {
+                    match.wickets += 1;
+                    if (dismissedBatter) {
+                        const ps = match.playerStats.find((p) => p.name === dismissedBatter);
+                        if (ps) {
+                            ps.isOut = true;
+                            if (!ps.batting) ps.batting = emptyBatting();
+                            ps.batting.dismissalType = wicketType || '';
+                        }
+                        if (dismissedBatter === match.currentStriker) {
+                            match.currentStriker = null;
+                        } else if (dismissedBatter === match.currentNonStriker) {
+                            match.currentNonStriker = null;
+                        }
+                    }
+                }
+
+                let totalValidBalls = match.ballsBowled || 0;
+                if (isValidBall) totalValidBalls += 1;
+
+                if (!isWicket && shouldRotateStrike(entry.runsOffBat, isValidBall, totalValidBalls)) {
+                    [match.currentStriker, match.currentNonStriker] = [match.currentNonStriker, match.currentStriker];
+                }
+
+                match.oversBowled = calculateOvers(totalValidBalls);
+                match.ballsBowled = totalValidBalls;
+
+                await match.save();
+                await emitMatchState(io.to(matchId), matchId);
+            } catch (error) {
+                console.error('Error handling delivery:', error);
+                socket.emit('error', { message: 'Failed to record delivery' });
             }
         });
 
