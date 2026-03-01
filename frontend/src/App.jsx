@@ -4,6 +4,7 @@ import HomePage from "./pages/HomePage";
 import ScorerPage from "./pages/ScorerPage";
 import ScoreboardPage from "./pages/ScoreboardPage";
 import UmpireSetupPage from "./pages/UmpireSetupPage";
+import UmpireScorerPage from "./pages/UmpireScorerPage";
 import TossPage from "./pages/TossPage";
 
 function App() {
@@ -13,7 +14,7 @@ function App() {
       <Route path="/view" element={<HomePage />} />
       <Route path="/umpire" element={<UmpireSetupPage />} />
       <Route path="/umpire/toss/:matchId" element={<TossPage />} />
-      <Route path="/umpire/scorer/:matchId" element={<ScorerPage />} />
+      <Route path="/umpire/scorer/:matchId" element={<UmpireScorerPage />} />
       <Route path="/scorer/:matchId" element={<ScorerPage />} />
       <Route path="/scoreboard/:matchId" element={<ScoreboardPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
