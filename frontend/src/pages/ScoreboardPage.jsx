@@ -248,6 +248,19 @@ function ScoreboardPage() {
   );
   const oversBowled = Math.floor((match.ballsBowled || 0) / 6);
   const ballsInOver = (match.ballsBowled || 0) % 6;
+  const remainingDots =
+    // When an over has just completed (ballsInOver resets to 0 but balls have been bowled),
+    // don't show any placeholders; otherwise fill up to 6 valid-ball slots
+    match.ballsBowled > 0 && ballsInOver === 0 ? 0 : 6 - ballsInOver;
+  const strikerPlayer = (match.playerStats || []).find(
+    (p) => p.name === match.currentStriker,
+  );
+  const nonStrikerPlayer = (match.playerStats || []).find(
+    (p) => p.name === match.currentNonStriker,
+  );
+  const currentBowlerRow = bowlingRows.find(
+    (p) => p.name === match.currentBowler,
+  );
   const totalValidBalls = match.ballsBowled || 0;
   const runRate =
     totalValidBalls > 0
@@ -544,6 +557,63 @@ function ScoreboardPage() {
               </div>
             </div>
           )}
+        </section>
+
+        {/* Current over + mini batsman/bowler summary */}
+        <section className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/80 p-6">
+          <div>
+            <p className="mb-2 text-sm font-semibold text-slate-300">
+              Over {oversBowled + 1}:
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {currentOver.map((label, i) => (
+                <span
+                  key={`over-ball-${i}`}
+                  className={`flex min-w-10 items-center justify-center rounded-full border px-3 py-1 text-sm font-semibold ${
+                    label === "W"
+                      ? "border-red-500/70 bg-red-500/20 text-red-200"
+                      : label === "Wd"
+                        ? "border-amber-400/70 bg-amber-400/20 text-amber-100"
+                        : "border-slate-700 bg-slate-900 text-slate-100"
+                  }`}
+                >
+                  {label}
+                </span>
+              ))}
+              {Array.from({ length: remainingDots }).map((_, i) => (
+                <span
+                  key={`over-dot-${i}`}
+                  className="flex min-w-10 items-center justify-center rounded-full border border-slate-700/40 px-3 py-1 text-sm font-semibold text-slate-600"
+                >
+                  ·
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-4 text-sm">
+            {strikerPlayer && (
+              <p className="text-white">
+                <span className="font-medium">{match.currentStriker}*</span>{" "}
+                {strikerPlayer.batting?.runs ?? 0}(
+                {strikerPlayer.batting?.balls ?? 0})
+              </p>
+            )}
+            {nonStrikerPlayer && (
+              <p className="mt-1 text-slate-300">
+                <span className="font-medium">{match.currentNonStriker}</span>{" "}
+                {nonStrikerPlayer.batting?.runs ?? 0}(
+                {nonStrikerPlayer.batting?.balls ?? 0})
+              </p>
+            )}
+            {currentBowlerRow && (
+              <p className="mt-2 text-slate-400">
+                {match.currentBowler} &mdash;{" "}
+                {calcOvers(currentBowlerRow._balls)}-
+                {currentBowlerRow._wickets}/{currentBowlerRow._runs}
+              </p>
+            )}
+          </div>
         </section>
 
         <section className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/80 p-6">
