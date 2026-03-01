@@ -177,6 +177,7 @@ function setupSockets(io) {
             try {
                 const match = await Match.findById(matchId);
                 const { dismissedBatter } = deliveryData;
+                const originalNonStriker = match.currentNonStriker;
 
                 const enrichedDelivery = { ...deliveryData, striker: match.currentStriker || '', bowler: match.currentBowler || '' };
                 match.timeline.push(enrichedDelivery);
@@ -220,8 +221,22 @@ function setupSockets(io) {
                     totalValidBalls += 1;
                 }
 
-                if (!deliveryData.isWicket && shouldRotateStrike(deliveryData.runsOffBat + (deliveryData.extraRuns || 0), isValidBall, totalValidBalls)) {
-                    [match.currentStriker, match.currentNonStriker] = [match.currentNonStriker, match.currentStriker];
+                const isRunOut = deliveryData.isWicket && deliveryData.wicketType === 'run-out';
+                const nonStrikerRunOut = isRunOut && dismissedBatter === originalNonStriker;
+
+                if (!deliveryData.isWicket || isRunOut) {
+                    const runsForRotation = (deliveryData.extraType === 'bye' || deliveryData.extraType === 'leg-bye')
+                        ? deliveryData.runsOffBat + (deliveryData.extraRuns || 0)
+                        : deliveryData.runsOffBat;
+                    let rotates;
+                    if (nonStrikerRunOut) {
+                        rotates = runsForRotation % 2 === 1;
+                    } else {
+                        rotates = shouldRotateStrike(runsForRotation, deliveryData.extraType, totalValidBalls);
+                    }
+                    if (rotates) {
+                        [match.currentStriker, match.currentNonStriker] = [match.currentNonStriker, match.currentStriker];
+                    }
                 }
 
                 match.oversBowled = calculateOvers(totalValidBalls);
@@ -241,6 +256,7 @@ function setupSockets(io) {
 
                 const normalizedExtraType = extraType === 'noBall' ? 'no-ball' : (extraType || 'none');
                 const isValidBall = isValidBallType(normalizedExtraType);
+                const originalNonStriker = match.currentNonStriker;
 
                 const entry = {
                     runsOffBat: Number(runs) || 0,
@@ -290,8 +306,22 @@ function setupSockets(io) {
                 let totalValidBalls = match.ballsBowled || 0;
                 if (isValidBall) totalValidBalls += 1;
 
-                if (!isWicket && shouldRotateStrike(entry.runsOffBat + (entry.extraRuns || 0), isValidBall, totalValidBalls)) {
-                    [match.currentStriker, match.currentNonStriker] = [match.currentNonStriker, match.currentStriker];
+                const isRunOut = isWicket && wicketType === 'run-out';
+                const nonStrikerRunOut = isRunOut && dismissedBatter === originalNonStriker;
+
+                if (!isWicket || isRunOut) {
+                    const runsForRotation = (normalizedExtraType === 'bye' || normalizedExtraType === 'leg-bye')
+                        ? entry.runsOffBat + (entry.extraRuns || 0)
+                        : entry.runsOffBat;
+                    let rotates;
+                    if (nonStrikerRunOut) {
+                        rotates = runsForRotation % 2 === 1;
+                    } else {
+                        rotates = shouldRotateStrike(runsForRotation, normalizedExtraType, totalValidBalls);
+                    }
+                    if (rotates) {
+                        [match.currentStriker, match.currentNonStriker] = [match.currentNonStriker, match.currentStriker];
+                    }
                 }
 
                 match.oversBowled = calculateOvers(totalValidBalls);
