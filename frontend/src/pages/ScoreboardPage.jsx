@@ -2,14 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { createMatchSocket } from "../services/socket";
 
-function isValidBall(ball) {
-  return (
-    ball.extraType === "none" ||
-    ball.extraType === "bye" ||
-    ball.extraType === "leg-bye"
-  );
-}
-
 function getBallLabel(ball) {
   if (ball.extraType === "wide") {
     return "Wd";
@@ -24,26 +16,9 @@ function getBallLabel(ball) {
 }
 
 function buildCurrentOver(timeline = []) {
-  let validBallCount = 0;
-  let overBalls = [];
-
-  for (const ball of timeline) {
-    if (validBallCount === 0) {
-      overBalls = [];
-    }
-
-    overBalls.push(getBallLabel(ball));
-
-    if (isValidBall(ball)) {
-      validBallCount += 1;
-
-      if (validBallCount === 6) {
-        validBallCount = 0;
-      }
-    }
-  }
-
-  return overBalls;
+  if (timeline.length === 0) return [];
+  const maxOver = Math.max(...timeline.map((b) => b.overNumber));
+  return timeline.filter((b) => b.overNumber === maxOver).map(getBallLabel);
 }
 
 function getDismissal(player, striker, nonStriker) {
@@ -86,11 +61,10 @@ function buildBowlingRows(match) {
     ).length;
 
     const runs = bowlerBalls.reduce((sum, ball) => {
-      const extraRuns =
-        ball.extraType !== "bye" && ball.extraType !== "leg-bye"
-          ? ball.extraRuns || 0
-          : 0;
-      return sum + (ball.runsOffBat || 0) + extraRuns;
+      if (ball.extraType === "bye" || ball.extraType === "leg-bye") {
+        return sum;
+      }
+      return sum + (ball.runsOffBat || 0) + (ball.extraRuns || 0);
     }, 0);
 
     const wickets = bowlerBalls.filter(
@@ -114,11 +88,9 @@ function buildBowlingRows(match) {
         ball.extraType !== "wide" && ball.extraType !== "no-ball";
       if (isValid) {
         overMap[key].validBalls += 1;
-        const extraRuns =
-          ball.extraType !== "bye" && ball.extraType !== "leg-bye"
-            ? ball.extraRuns || 0
-            : 0;
-        overMap[key].runs += (ball.runsOffBat || 0) + extraRuns;
+        if (ball.extraType !== "bye" && ball.extraType !== "leg-bye") {
+          overMap[key].runs += (ball.runsOffBat || 0) + (ball.extraRuns || 0);
+        }
       }
     });
 
@@ -228,9 +200,20 @@ function ScoreboardPage() {
   const battingRows = buildBattingRows(match);
   const bowlingRows = buildBowlingRows(match);
 
-  const extras = (match.timeline || []).reduce(
-    (sum, ball) => sum + (ball.extraRuns || 0),
-    0,
+  const yetToBat = (match.playerStats || []).filter(
+    (p) => p.team === match.battingTeam && !p.didBat,
+  );
+
+  const { extras, extrasByType } = (match.timeline || []).reduce(
+    (acc, ball) => {
+      acc.extras += ball.extraRuns || 0;
+      if (ball.extraType && ball.extraType !== "none" && ball.extraRuns > 0) {
+        acc.extrasByType[ball.extraType] =
+          (acc.extrasByType[ball.extraType] || 0) + ball.extraRuns;
+      }
+      return acc;
+    },
+    { extras: 0, extrasByType: {} },
   );
   const oversBowled = Math.floor((match.ballsBowled || 0) / 6);
   const ballsInOver = (match.ballsBowled || 0) % 6;
@@ -277,6 +260,16 @@ function ScoreboardPage() {
         </div>
 
         <section className="rounded-2xl border border-slate-800 bg-slate-900/80 p-6 shadow-2xl shadow-black/30">
+          {match.status === "completed" && (
+            <div className="mb-4 rounded-lg border border-emerald-500/40 bg-emerald-900/30 px-4 py-2 text-center text-sm font-semibold uppercase tracking-widest text-emerald-300">
+              {match.wickets >= 10 ? "All Out" : "Innings Complete"}
+            </div>
+          )}
+          {match.status === "innings" && (
+            <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-900/20 px-4 py-2 text-center text-sm font-medium text-amber-300">
+              Innings Break
+            </div>
+          )}
           <p className="text-sm font-medium uppercase tracking-wide text-slate-400">
             {match.battingTeam} vs {match.bowlingTeam}
           </p>
@@ -405,7 +398,7 @@ function ScoreboardPage() {
                       colSpan={7}
                       className="pt-3 text-sm text-slate-400"
                     >
-                      Extras: {extras}
+                      Extras: Wides ({extrasByType.wide || 0}), No Balls ({extrasByType["no-ball"] || 0}), Byes ({extrasByType.bye || 0}), Leg Byes ({extrasByType["leg-bye"] || 0}), Total ({extras})
                     </td>
                   </tr>
                   <tr>
@@ -419,6 +412,16 @@ function ScoreboardPage() {
                   </tr>
                 </tfoot>
               </table>
+              {yetToBat.length > 0 && (
+                <div className="mt-4">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    Yet to bat
+                  </p>
+                  <p className="text-sm text-slate-300">
+                    {yetToBat.map((p) => p.name).join(", ")}
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
