@@ -52,10 +52,10 @@ function TossPage() {
     const TAILS_ROTATION = "rotateY(1980deg)";
 
     setTimeout(() => {
-      const finalTransform = result === "HEADS" ? HEADS_ROTATION : TAILS_ROTATION;
+      const finalTransform =
+        result === "HEADS" ? HEADS_ROTATION : TAILS_ROTATION;
       setCoinTransform(finalTransform);
-      const winner =
-        result === "HEADS" ? match.team1Name : match.team2Name;
+      const winner = result === "HEADS" ? match.team1Name : match.team2Name;
       setTossWinner(winner);
       setFlipState("done");
     }, 2000);
@@ -96,6 +96,8 @@ function TossPage() {
     match.playerStats?.filter((p) => p.team === match.battingTeam) ?? [];
   const bowlingPlayers =
     match.playerStats?.filter((p) => p.team === match.bowlingTeam) ?? [];
+  const strikerOptions = battingPlayers.filter((p) => p.name !== nonStriker);
+  const nonStrikerOptions = battingPlayers.filter((p) => p.name !== striker);
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-4xl px-4 py-10">
@@ -129,19 +131,22 @@ function TossPage() {
               </div>
 
               {/* Coin element */}
-              <div className="mt-6 flex justify-center" style={{ perspective: "600px" }}>
+              <div
+                className="mt-6 flex justify-center"
+                style={{ perspective: "600px" }}
+              >
                 <div
                   className={`coin${flipState === "flipping" ? " coin-flipping" : ""}`}
-                  style={flipState !== "flipping" ? { transform: coinTransform } : undefined}
+                  style={
+                    flipState !== "flipping"
+                      ? { transform: coinTransform }
+                      : undefined
+                  }
                 >
-                  <div
-                    className="coin-face flex items-center justify-center bg-yellow-400 text-slate-900 font-bold text-sm"
-                  >
+                  <div className="coin-face flex items-center justify-center bg-yellow-400 text-slate-900 font-bold text-sm">
                     HEADS
                   </div>
-                  <div
-                    className="coin-face coin-tails flex items-center justify-center bg-yellow-600 text-white font-bold text-sm"
-                  >
+                  <div className="coin-face coin-tails flex items-center justify-center bg-yellow-600 text-white font-bold text-sm">
                     TAILS
                   </div>
                 </div>
@@ -156,19 +161,15 @@ function TossPage() {
                 {tossWinner} won the toss!
               </p>
 
-              <div className="mb-6 flex justify-center" style={{ perspective: "600px" }}>
-                <div
-                  className="coin"
-                  style={{ transform: coinTransform }}
-                >
-                  <div
-                    className="coin-face flex items-center justify-center bg-yellow-400 text-slate-900 font-bold text-sm"
-                  >
+              <div
+                className="mb-6 flex justify-center"
+                style={{ perspective: "600px" }}
+              >
+                <div className="coin" style={{ transform: coinTransform }}>
+                  <div className="coin-face flex items-center justify-center bg-yellow-400 text-slate-900 font-bold text-sm">
                     HEADS
                   </div>
-                  <div
-                    className="coin-face coin-tails flex items-center justify-center bg-yellow-600 text-white font-bold text-sm"
-                  >
+                  <div className="coin-face coin-tails flex items-center justify-center bg-yellow-600 text-white font-bold text-sm">
                     TAILS
                   </div>
                 </div>
@@ -219,11 +220,17 @@ function TossPage() {
               </span>
               <select
                 value={striker}
-                onChange={(e) => setStriker(e.target.value)}
+                onChange={(e) => {
+                  const nextStriker = e.target.value;
+                  setStriker(nextStriker);
+                  if (nextStriker && nextStriker === nonStriker) {
+                    setNonStriker("");
+                  }
+                }}
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none ring-slate-900/10 focus:ring"
               >
                 <option value="">Select</option>
-                {battingPlayers.map((p) => (
+                {strikerOptions.map((p) => (
                   <option key={p._id} value={p.name}>
                     {p.name}
                   </option>
@@ -237,11 +244,17 @@ function TossPage() {
               </span>
               <select
                 value={nonStriker}
-                onChange={(e) => setNonStriker(e.target.value)}
+                onChange={(e) => {
+                  const nextNonStriker = e.target.value;
+                  setNonStriker(nextNonStriker);
+                  if (nextNonStriker && nextNonStriker === striker) {
+                    setStriker("");
+                  }
+                }}
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none ring-slate-900/10 focus:ring"
               >
                 <option value="">Select</option>
-                {battingPlayers.map((p) => (
+                {nonStrikerOptions.map((p) => (
                   <option key={p._id} value={p.name}>
                     {p.name}
                   </option>
@@ -271,7 +284,9 @@ function TossPage() {
           <button
             type="button"
             onClick={confirmOpeners}
-            disabled={!striker || !nonStriker || !bowler || striker === nonStriker}
+            disabled={
+              !striker || !nonStriker || !bowler || striker === nonStriker
+            }
             className="mt-6 rounded-lg bg-blue-600 px-6 py-3 font-medium text-white disabled:opacity-50"
           >
             Confirm Openers

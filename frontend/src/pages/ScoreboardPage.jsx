@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { createMatchSocket } from "../services/socket";
+import { getMatch } from "../services/api";
 import { checkMatchEnd } from "../utils/matchResult";
 
 function getBallLabel(ball) {
@@ -16,10 +17,71 @@ function getBallLabel(ball) {
   return runs === 0 ? "•" : String(runs);
 }
 
+function isValidBall(ball) {
+  if (typeof ball?.isValidBall === "boolean") {
+    return ball.isValidBall;
+  }
+
+  return ball.extraType !== "wide" && ball.extraType !== "no-ball";
+}
+
 function buildCurrentOver(timeline = []) {
   if (timeline.length === 0) return [];
-  const maxOver = Math.max(...timeline.map((b) => b.overNumber));
-  return timeline.filter((b) => b.overNumber === maxOver).map(getBallLabel);
+
+  let currentOverBalls = [];
+  let validBallCount = 0;
+
+  for (const ball of timeline) {
+    currentOverBalls.push(getBallLabel(ball));
+
+    if (isValidBall(ball)) {
+      validBallCount += 1;
+      if (validBallCount % 6 === 0) {
+        currentOverBalls = [];
+      }
+    }
+  }
+
+  return currentOverBalls;
+}
+
+function getOrdinalLabel(value) {
+  const v = Number(value) || 0;
+  if (v % 100 >= 11 && v % 100 <= 13) return `${v}th`;
+  const last = v % 10;
+  if (last === 1) return `${v}st`;
+  if (last === 2) return `${v}nd`;
+  if (last === 3) return `${v}rd`;
+  return `${v}th`;
+}
+
+function buildOversSummary(timeline = []) {
+  if (!timeline.length) return [];
+
+  const overs = [];
+  let currentOver = [];
+  let validBallCount = 0;
+
+  for (const ball of timeline) {
+    currentOver.push(getBallLabel(ball));
+
+    if (isValidBall(ball)) {
+      validBallCount += 1;
+      if (validBallCount % 6 === 0) {
+        overs.push(currentOver);
+        currentOver = [];
+      }
+    }
+  }
+
+  if (currentOver.length) {
+    overs.push(currentOver);
+  }
+
+  return overs.map((balls, index) => ({
+    overNumber: index + 1,
+    balls,
+  }));
 }
 
 function getDismissal(player, striker, nonStriker) {
@@ -48,11 +110,21 @@ function calcEcon(runs, balls) {
   return (runs / (balls / 6)).toFixed(2);
 }
 
+function formatStrikeRate(value) {
+  if (value === null || value === undefined) {
+    return "-";
+  }
+  return Number(value).toFixed(2);
+}
+
 function buildBowlingRows(match) {
   const playerStats = match.playerStats || [];
   const timeline = match.timeline || [];
+  const bowlingTeam = match.bowlingTeam;
 
-  const bowlers = playerStats.filter((p) => p.didBowl);
+  const bowlers = playerStats.filter(
+    (p) => p.team === bowlingTeam && p.didBowl,
+  );
 
   return bowlers.map((p) => {
     const bowlerBalls = timeline.filter((ball) => ball.bowler === p.name);
@@ -114,8 +186,9 @@ function buildBattingRows(match) {
   const playerStats = match.playerStats || [];
   const striker = match.currentStriker || null;
   const nonStriker = match.currentNonStriker || null;
+  const battingTeam = match.battingTeam;
 
-  const batters = playerStats.filter((p) => p.didBat);
+  const batters = playerStats.filter((p) => p.team === battingTeam && p.didBat);
 
   // Build dismissal order map (timeline index where each batter was dismissed)
   const dismissalOrder = {};
@@ -145,6 +218,7 @@ function buildBattingRows(match) {
 
 function ScoreboardPage() {
   const { matchId } = useParams();
+  const [searchParams] = useSearchParams();
   const socketRef = useRef(null);
 
   const [match, setMatch] = useState(null);
@@ -154,6 +228,7 @@ function ScoreboardPage() {
     isMatchOver: false,
     resultMessage: "",
   });
+  const isViewerMode = searchParams.get("viewer") === "1";
 
   useEffect(() => {
     if (!matchId) {
@@ -163,8 +238,7 @@ function ScoreboardPage() {
     const socket = createMatchSocket();
     socketRef.current = socket;
 
-    socket.emit("joinMatch", { matchId });
-    socket.on("matchState", (updatedMatch) => {
+    const applyMatchUpdate = (updatedMatch) => {
       setMatch(updatedMatch);
 
       const shouldEvaluateResult =
@@ -190,7 +264,11 @@ function ScoreboardPage() {
       } else {
         setMatchEndStatus({ isMatchOver: false, resultMessage: "" });
       }
-    });
+    };
+
+    socket.emit("joinMatch", { matchId });
+    socket.on("matchState", applyMatchUpdate);
+    socket.on("score_updated", applyMatchUpdate);
     socket.on("match_completed", (payload) => {
       if (payload?.resultMessage) {
         setMatchEndStatus({
@@ -203,13 +281,31 @@ function ScoreboardPage() {
       setError(err.message);
     });
 
+    let pollInterval;
+    if (isViewerMode) {
+      pollInterval = setInterval(async () => {
+        try {
+          const response = await getMatch(matchId);
+          if (response?.match) {
+            applyMatchUpdate(response.match);
+          }
+        } catch {
+          // Keep socket as primary source; ignore polling failures.
+        }
+      }, 3000);
+    }
+
     return () => {
       socket.off("matchState");
+      socket.off("score_updated");
       socket.off("match_completed");
       socket.off("connect_error");
       socket.disconnect();
+      if (pollInterval) {
+        clearInterval(pollInterval);
+      }
     };
-  }, [matchId]);
+  }, [isViewerMode, matchId]);
 
   if (error) {
     return (
@@ -234,8 +330,10 @@ function ScoreboardPage() {
   }
 
   const currentOver = buildCurrentOver(match.timeline || []);
+  const oversSummary = buildOversSummary(match.timeline || []);
   const battingRows = buildBattingRows(match);
   const bowlingRows = buildBowlingRows(match);
+  const firstInningsSummary = match.firstInningsSummary || null;
 
   const yetToBat = (match.playerStats || []).filter(
     (p) => p.team === match.battingTeam && !p.didBat,
@@ -264,9 +362,28 @@ function ScoreboardPage() {
   const nonStrikerPlayer = (match.playerStats || []).find(
     (p) => p.name === match.currentNonStriker,
   );
-  const currentBowlerRow = bowlingRows.find(
-    (p) => p.name === match.currentBowler,
+  const currentBowlerProfile = (match.playerStats || []).find(
+    (p) => p.team === match.bowlingTeam && p.name === match.currentBowler,
   );
+  const currentBowlerRow =
+    bowlingRows.find((p) => p.name === match.currentBowler) ||
+    (currentBowlerProfile
+      ? {
+          ...currentBowlerProfile,
+          _balls: 0,
+          _runs: 0,
+          _wickets: 0,
+          _wides: 0,
+          _noBalls: 0,
+          _maidens: 0,
+        }
+      : null);
+  const bowlingRowsForDisplay = currentBowlerRow
+    ? [
+        currentBowlerRow,
+        ...bowlingRows.filter((p) => p.name !== currentBowlerRow.name),
+      ]
+    : bowlingRows;
   const totalValidBalls = match.ballsBowled || 0;
   const runRate =
     totalValidBalls > 0
@@ -294,20 +411,22 @@ function ScoreboardPage() {
           <h1 className="text-3xl font-bold tracking-tight text-white">
             Live Scoreboard
           </h1>
-          <div className="flex items-center gap-4 text-sm">
-            <Link
-              to={`/scorer/${matchId}`}
-              className="font-medium text-emerald-300 hover:text-emerald-200"
-            >
-              Scorer Panel
-            </Link>
-            <Link
-              to="/"
-              className="font-medium text-sky-300 hover:text-sky-200"
-            >
-              Home
-            </Link>
-          </div>
+          {!isViewerMode ? (
+            <div className="flex items-center gap-4 text-sm">
+              <Link
+                to={`/scorer/${matchId}`}
+                className="font-medium text-emerald-300 hover:text-emerald-200"
+              >
+                Scorer Panel
+              </Link>
+              <Link
+                to="/"
+                className="font-medium text-sky-300 hover:text-sky-200"
+              >
+                Home
+              </Link>
+            </div>
+          ) : null}
         </div>
 
         <section className="rounded-2xl border border-slate-800 bg-slate-900/80 p-6 shadow-2xl shadow-black/30">
@@ -379,6 +498,19 @@ function ScoreboardPage() {
             >
               Overview
             </button>
+            {firstInningsSummary ? (
+              <button
+                type="button"
+                onClick={() => setActiveTab("first-innings")}
+                className={`px-4 py-2 text-sm font-medium transition-colors ${
+                  activeTab === "first-innings"
+                    ? "border-b-2 border-emerald-400 text-emerald-400"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                1st Innings
+              </button>
+            ) : null}
           </div>
 
           {/* Batting tab */}
@@ -503,7 +635,7 @@ function ScoreboardPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {bowlingRows.length === 0 ? (
+                  {bowlingRowsForDisplay.length === 0 ? (
                     <tr>
                       <td
                         colSpan={8}
@@ -513,7 +645,7 @@ function ScoreboardPage() {
                       </td>
                     </tr>
                   ) : (
-                    bowlingRows.map((player) => {
+                    bowlingRowsForDisplay.map((player) => {
                       const isCurrent = player.name === match.currentBowler;
                       return (
                         <tr
@@ -607,6 +739,141 @@ function ScoreboardPage() {
               </div>
             </div>
           )}
+
+          {activeTab === "first-innings" && firstInningsSummary && (
+            <div className="mt-4 space-y-6">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-wide text-slate-400">
+                  {firstInningsSummary.battingTeam} 1st Innings
+                </p>
+                <p className="mt-1 text-sm text-slate-300">
+                  {firstInningsSummary.totalRuns}/{firstInningsSummary.wickets}{" "}
+                  ({firstInningsSummary.oversBowled} Ov)
+                </p>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-700 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      <th className="pb-2 pr-4">Batter</th>
+                      <th className="pb-2 pr-4">Dismissal</th>
+                      <th className="pb-2 pr-3 text-right">R</th>
+                      <th className="pb-2 pr-3 text-right">B</th>
+                      <th className="pb-2 pr-3 text-right">4s</th>
+                      <th className="pb-2 pr-3 text-right">6s</th>
+                      <th className="pb-2 text-right">SR</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {firstInningsSummary.battingRows?.length ? (
+                      firstInningsSummary.battingRows.map((player) => (
+                        <tr
+                          key={`first-innings-bat-${player.name}`}
+                          className="border-b border-slate-800/60"
+                        >
+                          <td className="py-2 pr-4 font-medium text-white">
+                            {player.name}
+                          </td>
+                          <td className="py-2 pr-4 text-slate-300 capitalize">
+                            {player.dismissal}
+                          </td>
+                          <td className="py-2 pr-3 text-right font-semibold text-white">
+                            {player.runs}
+                          </td>
+                          <td className="py-2 pr-3 text-right text-slate-300">
+                            {player.balls}
+                          </td>
+                          <td className="py-2 pr-3 text-right text-slate-300">
+                            {player.fours}
+                          </td>
+                          <td className="py-2 pr-3 text-right text-slate-300">
+                            {player.sixes}
+                          </td>
+                          <td className="py-2 text-right text-slate-300">
+                            {formatStrikeRate(player.strikeRate)}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td
+                          colSpan={7}
+                          className="py-4 text-center text-slate-400"
+                        >
+                          No batting data available
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-700 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      <th className="pb-2 pr-4">Bowler</th>
+                      <th className="pb-2 pr-3 text-right">O</th>
+                      <th className="pb-2 pr-3 text-right">M</th>
+                      <th className="pb-2 pr-3 text-right">R</th>
+                      <th className="pb-2 pr-3 text-right">W</th>
+                      <th className="pb-2 pr-3 text-right">ECON</th>
+                      <th className="pb-2 pr-3 text-right">WD</th>
+                      <th className="pb-2 text-right">NB</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {firstInningsSummary.bowlingRows?.length ? (
+                      firstInningsSummary.bowlingRows.map((player) => (
+                        <tr
+                          key={`first-innings-bowl-${player.name}`}
+                          className="border-b border-slate-800/60"
+                        >
+                          <td className="py-2 pr-4 font-medium text-white">
+                            {player.name}
+                          </td>
+                          <td className="py-2 pr-3 text-right text-slate-300">
+                            {calcOvers(player.balls || 0)}
+                          </td>
+                          <td className="py-2 pr-3 text-right text-slate-300">
+                            {player.maidens || 0}
+                          </td>
+                          <td className="py-2 pr-3 text-right font-semibold text-white">
+                            {player.runs || 0}
+                          </td>
+                          <td className="py-2 pr-3 text-right font-semibold text-white">
+                            {player.wickets || 0}
+                          </td>
+                          <td className="py-2 pr-3 text-right text-slate-300">
+                            {player.economy === null ||
+                            player.economy === undefined
+                              ? "-"
+                              : Number(player.economy).toFixed(2)}
+                          </td>
+                          <td className="py-2 pr-3 text-right text-slate-300">
+                            {player.wides || 0}
+                          </td>
+                          <td className="py-2 text-right text-slate-300">
+                            {player.noBalls || 0}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td
+                          colSpan={8}
+                          className="py-4 text-center text-slate-400"
+                        >
+                          No bowling data available
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </section>
 
         {/* Current over + mini batsman/bowler summary */}
@@ -667,29 +934,23 @@ function ScoreboardPage() {
         </section>
 
         <section className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/80 p-6">
-          <h2 className="text-lg font-semibold text-white">
-            Recent Deliveries
-          </h2>
-          <ul className="mt-3 grid gap-2 text-sm text-slate-300 md:grid-cols-2">
-            {match.timeline
-              .slice()
-              .reverse()
-              .slice(0, 12)
-              .map((ball, index) => {
-                const display = getBallLabel(ball);
-                return (
-                  <li
-                    key={`${ball.overNumber}-${ball.ballInOver}-${index}`}
-                    className="rounded-md border border-slate-800 bg-slate-950/60 p-3"
-                  >
-                    {display}
-                    {ball.isWicket && ball.wicketType !== "none"
-                      ? ` · ${ball.wicketType}`
-                      : ""}
-                  </li>
-                );
-              })}
-            {match.timeline.length === 0 ? <li>No balls yet.</li> : null}
+          <h2 className="text-lg font-semibold text-white">Overs Summary</h2>
+          <ul className="mt-3 space-y-2 text-sm text-slate-300">
+            {oversSummary.length > 0 ? (
+              [...oversSummary].reverse().map((over) => (
+                <li
+                  key={`over-summary-${over.overNumber}`}
+                  className="rounded-md border border-slate-800 bg-slate-950/60 p-3"
+                >
+                  <span className="font-semibold text-slate-200">
+                    {getOrdinalLabel(over.overNumber)} Over:
+                  </span>{" "}
+                  {over.balls.join(" ")}
+                </li>
+              ))
+            ) : (
+              <li>No balls yet.</li>
+            )}
           </ul>
         </section>
       </div>

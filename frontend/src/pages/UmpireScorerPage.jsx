@@ -618,6 +618,12 @@ function UmpireScorerPage() {
   const battingTeamPlayers = (match.playerStats || []).filter(
     (p) => p.team === match.battingTeam,
   );
+  const secondInningsStrikerOptions = battingTeamPlayers.filter(
+    (p) => p.name !== secondInningsNonStriker,
+  );
+  const secondInningsNonStrikerOptions = battingTeamPlayers.filter(
+    (p) => p.name !== secondInningsStriker,
+  );
   const nextBatterRole =
     match?.nextBatterFor === "nonStriker" ? "Non-Striker" : "Striker";
 
@@ -630,11 +636,17 @@ function UmpireScorerPage() {
             <div style={s.modalTitle}>Set Second Innings Openers</div>
             <select
               value={secondInningsStriker}
-              onChange={(e) => setSecondInningsStriker(e.target.value)}
+              onChange={(e) => {
+                const nextStriker = e.target.value;
+                setSecondInningsStriker(nextStriker);
+                if (nextStriker && nextStriker === secondInningsNonStriker) {
+                  setSecondInningsNonStriker("");
+                }
+              }}
               style={s.modalSelect}
             >
               <option value="">— Choose striker —</option>
-              {battingTeamPlayers.map((p) => (
+              {secondInningsStrikerOptions.map((p) => (
                 <option key={p.name} value={p.name}>
                   {p.name}
                 </option>
@@ -642,11 +654,17 @@ function UmpireScorerPage() {
             </select>
             <select
               value={secondInningsNonStriker}
-              onChange={(e) => setSecondInningsNonStriker(e.target.value)}
+              onChange={(e) => {
+                const nextNonStriker = e.target.value;
+                setSecondInningsNonStriker(nextNonStriker);
+                if (nextNonStriker && nextNonStriker === secondInningsStriker) {
+                  setSecondInningsStriker("");
+                }
+              }}
               style={s.modalSelect}
             >
               <option value="">— Choose non-striker —</option>
-              {battingTeamPlayers.map((p) => (
+              {secondInningsNonStrikerOptions.map((p) => (
                 <option key={p.name} value={p.name}>
                   {p.name}
                 </option>

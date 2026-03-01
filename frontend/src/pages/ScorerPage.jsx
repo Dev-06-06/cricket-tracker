@@ -267,6 +267,22 @@ function ScorerPage() {
     return match.playerStats.filter((p) => p.team === match.bowlingTeam);
   }, [match]);
 
+  const secondInningsBatters = useMemo(() => {
+    if (!match?.playerStats) return [];
+    return match.playerStats.filter((p) => p.team === match.battingTeam);
+  }, [match]);
+
+  const secondInningsStrikerOptions = useMemo(
+    () =>
+      secondInningsBatters.filter((p) => p.name !== secondInningsNonStriker),
+    [secondInningsBatters, secondInningsNonStriker],
+  );
+
+  const secondInningsNonStrikerOptions = useMemo(
+    () => secondInningsBatters.filter((p) => p.name !== secondInningsStriker),
+    [secondInningsBatters, secondInningsStriker],
+  );
+
   const dismissableBatters = useMemo(() => {
     if (!match?.playerStats) return [];
     return match.playerStats.filter(
@@ -814,19 +830,21 @@ function ScorerPage() {
               </span>
               <select
                 value={secondInningsStriker}
-                onChange={(event) =>
-                  setSecondInningsStriker(event.target.value)
-                }
+                onChange={(event) => {
+                  const nextStriker = event.target.value;
+                  setSecondInningsStriker(nextStriker);
+                  if (nextStriker && nextStriker === secondInningsNonStriker) {
+                    setSecondInningsNonStriker("");
+                  }
+                }}
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none ring-slate-900/10 focus:ring"
               >
                 <option value="">Select striker</option>
-                {match.playerStats
-                  .filter((p) => p.team === match.battingTeam)
-                  .map((p) => (
-                    <option key={p._id || p.name} value={p.name}>
-                      {p.name}
-                    </option>
-                  ))}
+                {secondInningsStrikerOptions.map((p) => (
+                  <option key={p._id || p.name} value={p.name}>
+                    {p.name}
+                  </option>
+                ))}
               </select>
             </label>
             <label className="mt-4 block">
@@ -835,19 +853,24 @@ function ScorerPage() {
               </span>
               <select
                 value={secondInningsNonStriker}
-                onChange={(event) =>
-                  setSecondInningsNonStriker(event.target.value)
-                }
+                onChange={(event) => {
+                  const nextNonStriker = event.target.value;
+                  setSecondInningsNonStriker(nextNonStriker);
+                  if (
+                    nextNonStriker &&
+                    nextNonStriker === secondInningsStriker
+                  ) {
+                    setSecondInningsStriker("");
+                  }
+                }}
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none ring-slate-900/10 focus:ring"
               >
                 <option value="">Select non-striker</option>
-                {match.playerStats
-                  .filter((p) => p.team === match.battingTeam)
-                  .map((p) => (
-                    <option key={p._id || p.name} value={p.name}>
-                      {p.name}
-                    </option>
-                  ))}
+                {secondInningsNonStrikerOptions.map((p) => (
+                  <option key={p._id || p.name} value={p.name}>
+                    {p.name}
+                  </option>
+                ))}
               </select>
             </label>
             <label className="mt-4 block">

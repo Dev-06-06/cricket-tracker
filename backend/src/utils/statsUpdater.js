@@ -40,16 +40,19 @@ function buildBowlingByName(match) {
 /**
  * Updates career statistics for all players in a completed match.
  * @param {Object} match - Match object containing playerStats array
+ * @param {{ session?: import('mongoose').ClientSession }} [options]
  */
-async function updateCareerStats(match) {
+async function updateCareerStats(match, options = {}) {
   if (!match || !Array.isArray(match.playerStats)) {
     return;
   }
 
+  const { session } = options;
+
   const bowlingByName = buildBowlingByName(match);
 
   for (const ps of match.playerStats) {
-    const player = await Player.findById(ps.playerId);
+    const player = await Player.findById(ps.playerId).session(session || null);
     if (!player) continue;
 
     const battingStats = ps.batting || {};
@@ -110,7 +113,7 @@ async function updateCareerStats(match) {
       }
     }
 
-    await player.save();
+    await player.save(session ? { session } : undefined);
   }
 }
 

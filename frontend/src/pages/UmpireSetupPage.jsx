@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { createMatchSocket } from "../services/socket";
 
 const API_BASE_URL =
@@ -11,6 +11,7 @@ function UmpireSetupPage() {
 
   const [players, setPlayers] = useState([]);
   const [newPlayerName, setNewPlayerName] = useState("");
+  const [newPlayerPhotoUrl, setNewPlayerPhotoUrl] = useState("");
   const [team1Name, setTeam1Name] = useState("Team 1");
   const [team2Name, setTeam2Name] = useState("Team 2");
   const [team1Players, setTeam1Players] = useState([]);
@@ -50,18 +51,25 @@ function UmpireSetupPage() {
     if (!name) return;
 
     try {
+      setError("");
       const res = await fetch(`${API_BASE_URL}/api/players`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({
+          name,
+          photoUrl: newPlayerPhotoUrl.trim(),
+        }),
       });
       const data = await res.json();
       if (data.success) {
         setPlayers((prev) => [...prev, data.player]);
         setNewPlayerName("");
+        setNewPlayerPhotoUrl("");
+      } else {
+        setError(data.message || "Unable to add player");
       }
     } catch {
-      // ignore
+      setError("Unable to add player");
     }
   };
 
@@ -151,15 +159,34 @@ function UmpireSetupPage() {
             </button>
           </div>
 
+          <input
+            type="url"
+            value={newPlayerPhotoUrl}
+            onChange={(e) => setNewPlayerPhotoUrl(e.target.value)}
+            placeholder="Photo URL (optional)"
+            className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-slate-900/10 focus:ring"
+          />
+
           <ul className="mt-3 min-h-24 space-y-2">
             {poolPlayers.map((player) => (
               <li
                 key={player._id}
                 draggable
                 onDragStart={(e) => handleDragStart(e, player._id)}
-                className="cursor-grab rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 shadow-sm"
+                className="flex cursor-grab items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 shadow-sm"
               >
-                {player.name}
+                <div className="flex items-center gap-2">
+                  <PlayerAvatar player={player} />
+                  <span>{player.name}</span>
+                </div>
+                <Link
+                  to={`/players#player-${player._id}`}
+                  draggable={false}
+                  onClick={(e) => e.stopPropagation()}
+                  className="text-xs font-medium text-blue-600 hover:text-blue-700"
+                >
+                  View Profile
+                </Link>
               </li>
             ))}
             {poolPlayers.length === 0 && (
@@ -240,7 +267,15 @@ function UmpireSetupPage() {
   );
 }
 
-function TeamBox({ label, onLabelChange, playerIds, players, onDrop, onDragOver, onDragStart }) {
+function TeamBox({
+  label,
+  onLabelChange,
+  playerIds,
+  players,
+  onDrop,
+  onDragOver,
+  onDragStart,
+}) {
   const teamPlayers = players.filter((p) => playerIds.includes(p._id));
 
   return (
@@ -261,9 +296,20 @@ function TeamBox({ label, onLabelChange, playerIds, players, onDrop, onDragOver,
             key={player._id}
             draggable
             onDragStart={(e) => onDragStart(e, player._id)}
-            className="cursor-grab rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700"
+            className="flex cursor-grab items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700"
           >
-            {player.name}
+            <div className="flex items-center gap-2">
+              <PlayerAvatar player={player} />
+              <span>{player.name}</span>
+            </div>
+            <Link
+              to={`/players#player-${player._id}`}
+              draggable={false}
+              onClick={(e) => e.stopPropagation()}
+              className="text-xs font-medium text-blue-600 hover:text-blue-700"
+            >
+              View Profile
+            </Link>
           </li>
         ))}
         {teamPlayers.length === 0 && (
@@ -271,6 +317,27 @@ function TeamBox({ label, onLabelChange, playerIds, players, onDrop, onDragOver,
         )}
       </ul>
     </div>
+  );
+}
+
+function PlayerAvatar({ player }) {
+  const hasPhoto = Boolean(player?.photoUrl);
+  const initial = player?.name?.trim()?.charAt(0)?.toUpperCase() || "?";
+
+  if (hasPhoto) {
+    return (
+      <img
+        src={player.photoUrl}
+        alt={player.name}
+        className="h-7 w-7 rounded-full border border-slate-200 object-cover"
+      />
+    );
+  }
+
+  return (
+    <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-300 bg-white text-xs font-semibold text-slate-600">
+      {initial}
+    </span>
   );
 }
 

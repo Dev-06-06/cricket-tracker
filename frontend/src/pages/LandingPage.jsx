@@ -20,6 +20,12 @@ function LandingPage() {
         >
           UMPIRE
         </button>
+        <button
+          onClick={() => navigate("/players")}
+          className="rounded-xl border border-slate-300 bg-white px-8 py-4 text-lg font-semibold text-slate-800 shadow hover:bg-slate-100"
+        >
+          PLAYERS
+        </button>
       </div>
     </main>
   );

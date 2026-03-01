@@ -2,16 +2,22 @@
 
 const createMatch = async (req, res) => {
   try {
-    const { battingTeam, bowlingTeam, currentStriker, currentNonStriker, currentBowler } = req.body;
-    
+    const {
+      battingTeam,
+      bowlingTeam,
+      currentStriker,
+      currentNonStriker,
+      currentBowler,
+    } = req.body;
+
     const match = new Match({
       battingTeam,
       bowlingTeam,
       currentStriker,
       currentNonStriker,
-      currentBowler
+      currentBowler,
     });
-    
+
     const savedMatch = await match.save();
     res.status(201).json({ success: true, match: savedMatch });
   } catch (error) {
@@ -23,15 +29,33 @@ const getMatch = async (req, res) => {
   try {
     const { id } = req.params;
     const match = await Match.findById(id);
-    
+
     if (!match) {
-      return res.status(404).json({ success: false, message: "Match not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Match not found" });
     }
-    
+
     res.status(200).json({ success: true, match });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
-module.exports = { createMatch, getMatch };
+const getOngoingMatch = async (_req, res) => {
+  try {
+    const match = await Match.findOne({ status: { $ne: "completed" } }).sort({
+      updatedAt: -1,
+    });
+
+    if (!match) {
+      return res.status(200).json({ success: true, match: null });
+    }
+
+    res.status(200).json({ success: true, match });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+module.exports = { createMatch, getMatch, getOngoingMatch };

@@ -1,5 +1,6 @@
 const Match = require("../models/Match");
 const Player = require("../models/Player");
+const mongoose = require("mongoose");
 const {
   calculateOvers,
   shouldRotateStrike,
@@ -42,6 +43,159 @@ function resetBattingFigures(ps) {
   ps.batting.fours = 0;
   ps.batting.sixes = 0;
   ps.batting.dismissalType = "";
+}
+
+function capitalize(value) {
+  if (!value) return "";
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+async function completeMatchWithStats({ matchId, resultMessage, io }) {
+  const session = await mongoose.startSession();
+  let payload = null;
+
+  try {
+    await session.withTransaction(async () => {
+      const match = await Match.findById(matchId).session(session);
+      if (!match) {
+        return;
+      }
+
+      if (!match.statsApplied) {
+        await updateCareerStats(match, { session });
+        match.statsApplied = true;
+      }
+
+      if (match.status !== "completed") {
+        match.status = "completed";
+      }
+
+      await match.save({ session });
+
+      payload = {
+        ...match.toObject(),
+        resultMessage,
+        target:
+          typeof match.firstInningsScore === "number"
+            ? match.firstInningsScore + 1
+            : undefined,
+      };
+    });
+  } finally {
+    await session.endSession();
+  }
+
+  if (!payload) {
+    return false;
+  }
+
+  io.to(matchId).emit("match_completed", payload);
+  return true;
+}
+
+function buildFirstInningsSummary(match) {
+  const battingTeam = match.battingTeam;
+  const bowlingTeam = match.bowlingTeam;
+  const timeline = match.timeline || [];
+
+  const dismissalOrder = {};
+  timeline.forEach((ball, index) => {
+    if (ball.isWicket && ball.batterDismissed) {
+      dismissalOrder[ball.batterDismissed] = index;
+    }
+  });
+
+  const battingRows = (match.playerStats || [])
+    .filter((player) => player.team === battingTeam && player.didBat)
+    .map((player) => {
+      const runs = player.batting?.runs || 0;
+      const balls = player.batting?.balls || 0;
+      const fours = player.batting?.fours || 0;
+      const sixes = player.batting?.sixes || 0;
+      const dismissal = player.isOut
+        ? capitalize(player.batting?.dismissalType || "out")
+        : "not out";
+
+      return {
+        name: player.name,
+        dismissal,
+        runs,
+        balls,
+        fours,
+        sixes,
+        strikeRate:
+          balls > 0 ? Number(((runs / balls) * 100).toFixed(2)) : null,
+        dismissalOrder: dismissalOrder[player.name] ?? Number.MAX_SAFE_INTEGER,
+      };
+    })
+    .sort((a, b) => a.dismissalOrder - b.dismissalOrder)
+    .map(({ dismissalOrder: _ignored, ...rest }) => rest);
+
+  const bowlingPlayers = (match.playerStats || []).filter(
+    (player) => player.team === bowlingTeam && player.didBowl,
+  );
+
+  const bowlingRows = bowlingPlayers.map((player) => {
+    const bowlerBalls = timeline.filter((ball) => ball.bowler === player.name);
+
+    const balls = bowlerBalls.filter((ball) =>
+      isValidBallType(ball.extraType),
+    ).length;
+    const runs = bowlerBalls.reduce((sum, ball) => {
+      if (ball.extraType === "bye" || ball.extraType === "leg-bye") {
+        return sum;
+      }
+      return sum + (ball.runsOffBat || 0) + (ball.extraRuns || 0);
+    }, 0);
+    const wickets = bowlerBalls.filter(
+      (ball) => ball.isWicket && ball.wicketType !== "run-out",
+    ).length;
+    const wides = bowlerBalls.filter(
+      (ball) => ball.extraType === "wide",
+    ).length;
+    const noBalls = bowlerBalls.filter(
+      (ball) => ball.extraType === "no-ball",
+    ).length;
+
+    const oversBreakdown = [];
+    let currentOver = { validBalls: 0, runs: 0 };
+    for (const ball of bowlerBalls) {
+      const isValid = isValidBallType(ball.extraType);
+      if (isValid) {
+        currentOver.validBalls += 1;
+      }
+      if (ball.extraType !== "bye" && ball.extraType !== "leg-bye") {
+        currentOver.runs += (ball.runsOffBat || 0) + (ball.extraRuns || 0);
+      }
+      if (isValid && currentOver.validBalls === 6) {
+        oversBreakdown.push(currentOver);
+        currentOver = { validBalls: 0, runs: 0 };
+      }
+    }
+
+    const maidens = oversBreakdown.filter((over) => over.runs === 0).length;
+
+    return {
+      name: player.name,
+      balls,
+      maidens,
+      runs,
+      wickets,
+      wides,
+      noBalls,
+      economy: balls > 0 ? Number((runs / (balls / 6)).toFixed(2)) : null,
+    };
+  });
+
+  return {
+    battingTeam,
+    bowlingTeam,
+    totalRuns: match.totalRuns,
+    wickets: match.wickets,
+    oversBowled: match.oversBowled,
+    battingRows,
+    bowlingRows,
+  };
 }
 
 function applyWicketState(
@@ -88,6 +242,8 @@ function startSecondInnings(match) {
   const nextBattingTeam =
     match.battingTeam === match.team1Name ? match.team2Name : match.team1Name;
   const nextBowlingTeam = match.battingTeam;
+
+  match.firstInningsSummary = buildFirstInningsSummary(match);
 
   match.firstInningsScore = firstInningsRuns;
   match.targetScore = firstInningsRuns + 1;
@@ -186,16 +342,11 @@ async function handleWicketInningsCompletion(match, matchId, io) {
         ? "Match Tied"
         : `Team B won by ${Math.max(0, chasingTeamSize - 1 - match.wickets)} wickets`;
 
-  match.status = "completed";
-  await match.save();
-  await updateCareerStats(match);
-
-  io.to(matchId).emit("match_completed", {
-    ...match.toObject(),
+  return completeMatchWithStats({
+    matchId,
     resultMessage,
-    target: firstInningsScore + 1,
+    io,
   });
-  return true;
 }
 
 async function finalizeSecondInningsIfMatchEnded(
@@ -221,16 +372,11 @@ async function finalizeSecondInningsIfMatchEnded(
     return false;
   }
 
-  match.status = "completed";
-  await match.save();
-  await updateCareerStats(match);
-
-  io.to(matchId).emit("match_completed", {
-    ...match.toObject(),
+  return completeMatchWithStats({
+    matchId,
     resultMessage: evaluation.resultMessage,
-    target: (match.firstInningsScore || 0) + 1,
+    io,
   });
-  return true;
 }
 
 async function handleMaxOversTransition(match, matchId, io, totalValidBalls) {
@@ -281,16 +427,11 @@ async function handleMaxOversTransition(match, matchId, io, totalValidBalls) {
       return false;
     }
 
-    match.status = "completed";
-    await match.save();
-    await updateCareerStats(match);
-
-    io.to(matchId).emit("match_completed", {
-      ...match.toObject(),
+    return completeMatchWithStats({
+      matchId,
       resultMessage: evaluation.resultMessage,
-      target: (match.firstInningsScore || 0) + 1,
+      io,
     });
-    return true;
   }
 
   return false;
@@ -778,12 +919,11 @@ function setupSockets(io) {
           return;
         }
 
-        match.status = "completed";
-        await match.save();
-
-        await updateCareerStats(match);
-
-        io.to(matchId).emit("match_completed", match);
+        await completeMatchWithStats({
+          matchId,
+          resultMessage: "Match completed",
+          io,
+        });
       } catch (error) {
         console.log(error);
       }

@@ -39,4 +39,12 @@ export function getMatch(matchId) {
   return request(`/api/match/${matchId}`);
 }
 
+export function getOngoingMatch() {
+  return request("/api/match/ongoing");
+}
+
+export function getPlayers() {
+  return request("/api/players");
+}
+
 export { API_BASE_URL };

@@ -6,6 +6,7 @@ import ScoreboardPage from "./pages/ScoreboardPage";
 import UmpireSetupPage from "./pages/UmpireSetupPage";
 import UmpireScorerPage from "./pages/UmpireScorerPage";
 import TossPage from "./pages/TossPage";
+import PlayerProfilesPage from "./pages/PlayerProfilesPage";
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
       <Route path="/umpire/scorer/:matchId" element={<UmpireScorerPage />} />
       <Route path="/scorer/:matchId" element={<ScorerPage />} />
       <Route path="/scoreboard/:matchId" element={<ScoreboardPage />} />
+      <Route path="/players" element={<PlayerProfilesPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

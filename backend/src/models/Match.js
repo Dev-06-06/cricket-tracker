@@ -59,6 +59,10 @@ const matchSchema = new mongoose.Schema(
       type: Number,
       default: null,
     },
+    firstInningsSummary: {
+      type: Object,
+      default: null,
+    },
     targetScore: {
       type: Number,
       default: null,
@@ -90,6 +94,10 @@ const matchSchema = new mongoose.Schema(
       type: String,
       enum: ["toss", "innings", "live", "innings_complete", "completed"],
       default: "toss",
+    },
+    statsApplied: {
+      type: Boolean,
+      default: false,
     },
     timeline: [
       {

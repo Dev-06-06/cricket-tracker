@@ -1,10 +1,16 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
 const playerSchema = new mongoose.Schema(
   {
     name: {
       type: String,
-      required: true
+      required: true,
+      trim: true,
+    },
+    photoUrl: {
+      type: String,
+      default: "",
+      trim: true,
     },
     batting: {
       matches: { type: Number, default: 0 },
@@ -16,7 +22,7 @@ const playerSchema = new mongoose.Schema(
       highestScore: { type: Number, default: 0 },
       fifties: { type: Number, default: 0 },
       hundreds: { type: Number, default: 0 },
-      notOuts: { type: Number, default: 0 }
+      notOuts: { type: Number, default: 0 },
     },
     bowling: {
       matches: { type: Number, default: 0 },
@@ -28,10 +34,10 @@ const playerSchema = new mongoose.Schema(
       bestFiguresWickets: { type: Number, default: 0 },
       bestFiguresRuns: { type: Number, default: 0 },
       fourWickets: { type: Number, default: 0 },
-      fiveWickets: { type: Number, default: 0 }
-    }
+      fiveWickets: { type: Number, default: 0 },
+    },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
-module.exports = mongoose.model('Player', playerSchema);
+module.exports = mongoose.model("Player", playerSchema);
