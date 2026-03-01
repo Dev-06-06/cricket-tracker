@@ -220,7 +220,7 @@ function setupSockets(io) {
                     totalValidBalls += 1;
                 }
 
-                if (!deliveryData.isWicket && shouldRotateStrike(deliveryData.runsOffBat, isValidBall, totalValidBalls)) {
+                if (!deliveryData.isWicket && shouldRotateStrike(deliveryData.runsOffBat + (deliveryData.extraRuns || 0), isValidBall, totalValidBalls)) {
                     [match.currentStriker, match.currentNonStriker] = [match.currentNonStriker, match.currentStriker];
                 }
 
@@ -290,7 +290,7 @@ function setupSockets(io) {
                 let totalValidBalls = match.ballsBowled || 0;
                 if (isValidBall) totalValidBalls += 1;
 
-                if (!isWicket && shouldRotateStrike(entry.runsOffBat, isValidBall, totalValidBalls)) {
+                if (!isWicket && shouldRotateStrike(entry.runsOffBat + (entry.extraRuns || 0), isValidBall, totalValidBalls)) {
                     [match.currentStriker, match.currentNonStriker] = [match.currentNonStriker, match.currentStriker];
                 }
 
