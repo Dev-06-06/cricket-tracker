@@ -270,6 +270,10 @@ function ScoreboardPage() {
     socket.on("matchState", applyMatchUpdate);
     socket.on("score_updated", applyMatchUpdate);
     socket.on("match_completed", (payload) => {
+      if (payload) {
+        applyMatchUpdate(payload);
+      }
+
       if (payload?.resultMessage) {
         setMatchEndStatus({
           isMatchOver: true,
@@ -437,7 +441,7 @@ function ScoreboardPage() {
           )}
           {match.status === "completed" && (
             <div className="mb-4 rounded-lg border border-emerald-500/40 bg-emerald-900/30 px-4 py-2 text-center text-sm font-semibold uppercase tracking-widest text-emerald-300">
-              {match.wickets >= 10 ? "All Out" : "Innings Complete"}
+              Match Complete
             </div>
           )}
           {match.status === "innings" && (

@@ -389,12 +389,20 @@ function UmpireScorerPage() {
     });
 
     socket.on("match_completed", (payload) => {
+      if (payload) {
+        setMatch(payload);
+      }
+
       if (payload?.resultMessage) {
         setMatchEndStatus({
           isMatchOver: true,
           resultMessage: payload.resultMessage,
         });
       }
+
+      setShowBatterModal(false);
+      setShowBowlerModal(false);
+      setShowSecondInningsModal(false);
     });
     socket.on("matchEnded", () => navigate(`/scoreboard/${matchId}`));
     socket.on("error", ({ message }) => alert("Error: " + message));

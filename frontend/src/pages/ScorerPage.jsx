@@ -222,6 +222,10 @@ function ScorerPage() {
         return;
       }
 
+      if (payload) {
+        setMatch(payload);
+      }
+
       if (payload?.resultMessage) {
         setMatchEndStatus({
           isMatchOver: true,
@@ -313,6 +317,10 @@ function ScorerPage() {
     }
 
     if (matchEndStatus.isMatchOver) {
+      return;
+    }
+
+    if (match?.status === "completed") {
       return;
     }
 
