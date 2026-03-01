@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { getMatch } from "../services/api";
 import { createMatchSocket } from "../services/socket";
+import { checkMatchEnd } from "../utils/matchResult";
 
 const initialDelivery = {
   runsOffBat: 0,
@@ -71,9 +72,7 @@ function calcBowlerStats(timeline, bowlerName) {
   ).length;
   const runs = bowlerBalls.reduce((sum, b) => {
     const extras =
-      b.extraType !== "bye" && b.extraType !== "leg-bye"
-        ? b.extraRuns || 0
-        : 0;
+      b.extraType !== "bye" && b.extraType !== "leg-bye" ? b.extraRuns || 0 : 0;
     return sum + (b.runsOffBat || 0) + extras;
   }, 0);
   const wickets = bowlerBalls.filter(
@@ -113,6 +112,14 @@ function ScorerPage() {
   const [selectedBatter, setSelectedBatter] = useState("");
   const [showBowlerModal, setShowBowlerModal] = useState(false);
   const [selectedBowler, setSelectedBowler] = useState("");
+  const [showSecondInningsModal, setShowSecondInningsModal] = useState(false);
+  const [secondInningsStriker, setSecondInningsStriker] = useState("");
+  const [secondInningsNonStriker, setSecondInningsNonStriker] = useState("");
+  const [secondInningsBowler, setSecondInningsBowler] = useState("");
+  const [matchEndStatus, setMatchEndStatus] = useState({
+    isMatchOver: false,
+    resultMessage: "",
+  });
 
   useEffect(() => {
     if (!matchId) {
@@ -142,7 +149,46 @@ function ScorerPage() {
     socket.on("matchState", (updatedMatch) => {
       if (isMounted) {
         setMatch(updatedMatch);
-        if (updatedMatch.striker === null && updatedMatch.status === "innings") {
+
+        const shouldEvaluateResult =
+          (updatedMatch.inningsNumber === 2 ||
+            typeof updatedMatch.firstInningsScore === "number") &&
+          typeof updatedMatch.firstInningsScore === "number";
+
+        if (shouldEvaluateResult) {
+          const teamBPlayersCount = (updatedMatch.playerStats || []).filter(
+            (player) => player.team === updatedMatch.battingTeam,
+          ).length;
+
+          setMatchEndStatus(
+            checkMatchEnd({
+              teamAScore: updatedMatch.firstInningsScore,
+              teamBScore: updatedMatch.totalRuns,
+              teamBWickets: updatedMatch.wickets,
+              teamBPlayersCount,
+              totalValidBalls: updatedMatch.ballsBowled,
+              totalOvers: updatedMatch.totalOvers,
+            }),
+          );
+        } else {
+          setMatchEndStatus({ isMatchOver: false, resultMessage: "" });
+        }
+
+        if (updatedMatch.status === "innings_complete") {
+          setShowBatterModal(false);
+          setShowBowlerModal(false);
+          setShowSecondInningsModal(true);
+          setSecondInningsStriker("");
+          setSecondInningsNonStriker("");
+          setSecondInningsBowler("");
+          return;
+        }
+
+        setShowSecondInningsModal(false);
+        if (
+          (updatedMatch.striker === null || updatedMatch.nonStriker === null) &&
+          updatedMatch.status === "innings"
+        ) {
           setShowBatterModal(true);
           setSelectedBatter("");
         } else {
@@ -158,14 +204,38 @@ function ScorerPage() {
         }
       }
     });
+    socket.on("innings_complete", () => {
+      if (isMounted) {
+        setShowBatterModal(false);
+        setShowBowlerModal(false);
+        setShowSecondInningsModal(true);
+        setSecondInningsStriker("");
+        setSecondInningsNonStriker("");
+        setSecondInningsBowler("");
+      }
+    });
     socket.on("score_updated", (updatedMatch) => {
       setMatch(updatedMatch);
+    });
+    socket.on("match_completed", (payload) => {
+      if (!isMounted) {
+        return;
+      }
+
+      if (payload?.resultMessage) {
+        setMatchEndStatus({
+          isMatchOver: true,
+          resultMessage: payload.resultMessage,
+        });
+      }
     });
 
     return () => {
       isMounted = false;
       socket.off("matchState");
+      socket.off("innings_complete");
       socket.off("score_updated");
+      socket.off("match_completed");
       socket.disconnect();
     };
   }, [matchId]);
@@ -182,11 +252,13 @@ function ScorerPage() {
 
   const availableBatters = useMemo(() => {
     if (!match?.playerStats) return [];
+    const occupiedBatter =
+      match.currentStriker === null
+        ? match.currentNonStriker
+        : match.currentStriker;
     return match.playerStats.filter(
       (p) =>
-        p.team === match.battingTeam &&
-        !p.isOut &&
-        p.name !== match.currentNonStriker,
+        p.team === match.battingTeam && !p.isOut && p.name !== occupiedBatter,
     );
   }, [match]);
 
@@ -216,8 +288,19 @@ function ScorerPage() {
     );
   }, [match]);
 
+  const nextBatterRole =
+    match?.nextBatterFor === "nonStriker" ? "Non-Striker" : "Striker";
+
   const submitDelivery = () => {
     if (!socketRef.current || !matchId) {
+      return;
+    }
+
+    if (matchEndStatus.isMatchOver) {
+      return;
+    }
+
+    if (showSecondInningsModal || match?.status === "innings_complete") {
       return;
     }
 
@@ -231,7 +314,12 @@ function ScorerPage() {
       extraRuns: Number(delivery.extraRuns),
       isWicket: Boolean(delivery.isWicket),
       wicketType: delivery.isWicket ? delivery.wicketType : "none",
-      batterDismissed: delivery.isWicket ? dismissedBatter : "",
+      dismissedBatter: delivery.isWicket ? dismissedBatter : "",
+      dismissedPlayerType: delivery.isWicket
+        ? dismissedBatter === match?.currentNonStriker
+          ? "nonStriker"
+          : "striker"
+        : undefined,
     };
 
     socketRef.current.emit("umpire_update", {
@@ -270,6 +358,33 @@ function ScorerPage() {
     setShowBowlerModal(false);
   };
 
+  const confirmSecondInningsOpeners = () => {
+    if (
+      !secondInningsStriker ||
+      !secondInningsNonStriker ||
+      !secondInningsBowler ||
+      !socketRef.current
+    ) {
+      return;
+    }
+
+    if (secondInningsStriker === secondInningsNonStriker) {
+      return;
+    }
+
+    socketRef.current.emit("setOpeners", {
+      matchId,
+      striker: secondInningsStriker,
+      nonStriker: secondInningsNonStriker,
+      bowler: secondInningsBowler,
+    });
+
+    setShowSecondInningsModal(false);
+    setSecondInningsStriker("");
+    setSecondInningsNonStriker("");
+    setSecondInningsBowler("");
+  };
+
   if (error) {
     return (
       <main className="mx-auto min-h-screen w-full max-w-4xl px-4 py-10">
@@ -285,6 +400,21 @@ function ScorerPage() {
       </main>
     );
   }
+
+  const targetScore = match.targetScore || null;
+  const runsNeeded = targetScore
+    ? Math.max(0, targetScore - match.totalRuns)
+    : null;
+  const ballsLeft = targetScore
+    ? Math.max(0, (match.totalOvers || 0) * 6 - (match.ballsBowled || 0))
+    : null;
+  const requiredRunRate = targetScore
+    ? ballsLeft > 0
+      ? ((runsNeeded * 6) / ballsLeft).toFixed(2)
+      : runsNeeded > 0
+        ? "-"
+        : "0.00"
+    : null;
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-5xl px-4 py-10">
@@ -303,10 +433,33 @@ function ScorerPage() {
           {match.battingTeam} {match.totalRuns}/{match.wickets}
         </p>
         <p className="mt-1 text-slate-600">Overs: {match.oversBowled}</p>
+        {targetScore && (
+          <p className="mt-1 text-sm font-medium text-indigo-700">
+            Target: {targetScore} | Runs Req: {runsNeeded} | Balls Req:{" "}
+            {ballsLeft} | RRR: {requiredRunRate}
+          </p>
+        )}
+        {matchEndStatus.isMatchOver && (
+          <p className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800">
+            {matchEndStatus.resultMessage}
+          </p>
+        )}
         <p className="mt-1 text-sm text-slate-600">
           Striker: {match.currentStriker} | Non-Striker:{" "}
           {match.currentNonStriker} | Bowler: {match.currentBowler}
         </p>
+        <button
+          type="button"
+          onClick={() => socketRef.current?.emit("swapStriker", { matchId })}
+          disabled={
+            match.status !== "live" ||
+            !match.currentStriker ||
+            !match.currentNonStriker
+          }
+          className="mt-3 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Swap Striker
+        </button>
       </section>
 
       <BowlerStatsRow match={match} />
@@ -537,43 +690,40 @@ function ScorerPage() {
             </thead>
             <tbody>
               {battingTeamStats.map((p) => {
-                  const runs = p.batting?.runs ?? 0;
-                  const balls = p.batting?.balls ?? 0;
-                  const sr =
-                    balls > 0 ? ((runs / balls) * 100).toFixed(1) : "-";
-                  const isStriker = p.name === match.currentStriker;
-                  const isNonStriker = p.name === match.currentNonStriker;
-                  const status = p.isOut
-                    ? p.dismissalType || "out"
-                    : isStriker || isNonStriker
-                      ? "batting"
-                      : "not out";
-                  return (
-                    <tr
-                      key={p.name}
-                      className={`border-b border-slate-100 ${isStriker ? "bg-emerald-50" : ""}`}
-                    >
-                      <td className="py-2 font-medium">
-                        {p.name}
-                        {isStriker && (
-                          <span className="ml-1 text-emerald-600">*</span>
-                        )}
-                      </td>
-                      <td className="py-2 capitalize text-slate-500">
-                        {status}
-                      </td>
-                      <td className="py-2 pr-2 text-right">{runs}</td>
-                      <td className="py-2 pr-2 text-right">{balls}</td>
-                      <td className="py-2 pr-2 text-right">
-                        {p.batting?.fours ?? 0}
-                      </td>
-                      <td className="py-2 pr-2 text-right">
-                        {p.batting?.sixes ?? 0}
-                      </td>
-                      <td className="py-2 text-right">{sr}</td>
-                    </tr>
-                  );
-                })}
+                const runs = p.batting?.runs ?? 0;
+                const balls = p.batting?.balls ?? 0;
+                const sr = balls > 0 ? ((runs / balls) * 100).toFixed(1) : "-";
+                const isStriker = p.name === match.currentStriker;
+                const isNonStriker = p.name === match.currentNonStriker;
+                const status = p.isOut
+                  ? p.dismissalType || "out"
+                  : isStriker || isNonStriker
+                    ? "batting"
+                    : "not out";
+                return (
+                  <tr
+                    key={p.name}
+                    className={`border-b border-slate-100 ${isStriker ? "bg-emerald-50" : ""}`}
+                  >
+                    <td className="py-2 font-medium">
+                      {p.name}
+                      {isStriker && (
+                        <span className="ml-1 text-emerald-600">*</span>
+                      )}
+                    </td>
+                    <td className="py-2 capitalize text-slate-500">{status}</td>
+                    <td className="py-2 pr-2 text-right">{runs}</td>
+                    <td className="py-2 pr-2 text-right">{balls}</td>
+                    <td className="py-2 pr-2 text-right">
+                      {p.batting?.fours ?? 0}
+                    </td>
+                    <td className="py-2 pr-2 text-right">
+                      {p.batting?.sixes ?? 0}
+                    </td>
+                    <td className="py-2 text-right">{sr}</td>
+                  </tr>
+                );
+              })}
               {battingTeamStats.length === 0 && (
                 <tr>
                   <td colSpan={7} className="py-2 text-center text-slate-400">
@@ -613,21 +763,22 @@ function ScorerPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl">
             <h2 className="text-lg font-semibold text-slate-900">
-              Select New Batter
+              Select New {nextBatterRole}
             </h2>
             <p className="mt-1 text-sm text-slate-600">
-              Choose the next batter to replace the dismissed player.
+              Choose the next batter for the {nextBatterRole.toLowerCase()}{" "}
+              position.
             </p>
             <label className="mt-4 block">
               <span className="mb-1 block text-sm font-medium text-slate-700">
-                Batter
+                {nextBatterRole}
               </span>
               <select
                 value={selectedBatter}
                 onChange={(event) => setSelectedBatter(event.target.value)}
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none ring-slate-900/10 focus:ring"
               >
-                <option value="">Select a batter</option>
+                <option value="">Select {nextBatterRole.toLowerCase()}</option>
                 {availableBatters.map((p) => (
                   <option key={p._id} value={p.name}>
                     {p.name}
@@ -647,8 +798,94 @@ function ScorerPage() {
         </div>
       ) : null}
 
+      {showSecondInningsModal ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl">
+            <h2 className="text-lg font-semibold text-slate-900">
+              Set Second Innings Openers
+            </h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Select striker, non-striker, and bowler to start the second
+              innings.
+            </p>
+            <label className="mt-4 block">
+              <span className="mb-1 block text-sm font-medium text-slate-700">
+                Striker
+              </span>
+              <select
+                value={secondInningsStriker}
+                onChange={(event) =>
+                  setSecondInningsStriker(event.target.value)
+                }
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none ring-slate-900/10 focus:ring"
+              >
+                <option value="">Select striker</option>
+                {match.playerStats
+                  .filter((p) => p.team === match.battingTeam)
+                  .map((p) => (
+                    <option key={p._id || p.name} value={p.name}>
+                      {p.name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <label className="mt-4 block">
+              <span className="mb-1 block text-sm font-medium text-slate-700">
+                Non-striker
+              </span>
+              <select
+                value={secondInningsNonStriker}
+                onChange={(event) =>
+                  setSecondInningsNonStriker(event.target.value)
+                }
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none ring-slate-900/10 focus:ring"
+              >
+                <option value="">Select non-striker</option>
+                {match.playerStats
+                  .filter((p) => p.team === match.battingTeam)
+                  .map((p) => (
+                    <option key={p._id || p.name} value={p.name}>
+                      {p.name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <label className="mt-4 block">
+              <span className="mb-1 block text-sm font-medium text-slate-700">
+                Bowler
+              </span>
+              <select
+                value={secondInningsBowler}
+                onChange={(event) => setSecondInningsBowler(event.target.value)}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none ring-slate-900/10 focus:ring"
+              >
+                <option value="">Select bowler</option>
+                {availableBowlers.map((p) => (
+                  <option key={p._id} value={p.name}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={confirmSecondInningsOpeners}
+              disabled={
+                !secondInningsStriker ||
+                !secondInningsNonStriker ||
+                !secondInningsBowler ||
+                secondInningsStriker === secondInningsNonStriker
+              }
+              className="mt-5 w-full rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+            >
+              Start Second Innings
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       {/* Bowler modal is suppressed while the batter modal is visible — batter takes priority */}
-      {showBowlerModal && !showBatterModal ? (
+      {showBowlerModal && !showBatterModal && !showSecondInningsModal ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl">
             <h2 className="text-lg font-semibold text-slate-900">

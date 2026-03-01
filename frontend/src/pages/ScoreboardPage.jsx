@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { createMatchSocket } from "../services/socket";
+import { checkMatchEnd } from "../utils/matchResult";
 
 function getBallLabel(ball) {
   if (ball.extraType === "wide") {
@@ -84,8 +85,7 @@ function buildBowlingRows(match) {
     bowlerBalls.forEach((ball) => {
       const key = ball.overNumber;
       if (!overMap[key]) overMap[key] = { validBalls: 0, runs: 0 };
-      const isValid =
-        ball.extraType !== "wide" && ball.extraType !== "no-ball";
+      const isValid = ball.extraType !== "wide" && ball.extraType !== "no-ball";
       if (isValid) {
         overMap[key].validBalls += 1;
         if (ball.extraType !== "bye" && ball.extraType !== "leg-bye") {
@@ -150,6 +150,10 @@ function ScoreboardPage() {
   const [match, setMatch] = useState(null);
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState("batting");
+  const [matchEndStatus, setMatchEndStatus] = useState({
+    isMatchOver: false,
+    resultMessage: "",
+  });
 
   useEffect(() => {
     if (!matchId) {
@@ -162,6 +166,38 @@ function ScoreboardPage() {
     socket.emit("joinMatch", { matchId });
     socket.on("matchState", (updatedMatch) => {
       setMatch(updatedMatch);
+
+      const shouldEvaluateResult =
+        (updatedMatch.inningsNumber === 2 ||
+          typeof updatedMatch.firstInningsScore === "number") &&
+        typeof updatedMatch.firstInningsScore === "number";
+
+      if (shouldEvaluateResult) {
+        const teamBPlayersCount = (updatedMatch.playerStats || []).filter(
+          (player) => player.team === updatedMatch.battingTeam,
+        ).length;
+
+        setMatchEndStatus(
+          checkMatchEnd({
+            teamAScore: updatedMatch.firstInningsScore,
+            teamBScore: updatedMatch.totalRuns,
+            teamBWickets: updatedMatch.wickets,
+            teamBPlayersCount,
+            totalValidBalls: updatedMatch.ballsBowled,
+            totalOvers: updatedMatch.totalOvers,
+          }),
+        );
+      } else {
+        setMatchEndStatus({ isMatchOver: false, resultMessage: "" });
+      }
+    });
+    socket.on("match_completed", (payload) => {
+      if (payload?.resultMessage) {
+        setMatchEndStatus({
+          isMatchOver: true,
+          resultMessage: payload.resultMessage,
+        });
+      }
     });
     socket.on("connect_error", (err) => {
       setError(err.message);
@@ -169,6 +205,7 @@ function ScoreboardPage() {
 
     return () => {
       socket.off("matchState");
+      socket.off("match_completed");
       socket.off("connect_error");
       socket.disconnect();
     };
@@ -235,6 +272,20 @@ function ScoreboardPage() {
     totalValidBalls > 0
       ? ((match.totalRuns / totalValidBalls) * 6).toFixed(2)
       : "0.00";
+  const targetScore = match.targetScore || null;
+  const runsNeeded = targetScore
+    ? Math.max(0, targetScore - match.totalRuns)
+    : null;
+  const ballsLeft = targetScore
+    ? Math.max(0, (match.totalOvers || 0) * 6 - totalValidBalls)
+    : null;
+  const requiredRunRate = targetScore
+    ? ballsLeft > 0
+      ? ((runsNeeded * 6) / ballsLeft).toFixed(2)
+      : runsNeeded > 0
+        ? "-"
+        : "0.00"
+    : null;
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-10 text-slate-100">
@@ -260,6 +311,11 @@ function ScoreboardPage() {
         </div>
 
         <section className="rounded-2xl border border-slate-800 bg-slate-900/80 p-6 shadow-2xl shadow-black/30">
+          {matchEndStatus.isMatchOver && (
+            <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-900/20 px-4 py-2 text-center text-sm font-medium text-amber-300">
+              {matchEndStatus.resultMessage}
+            </div>
+          )}
           {match.status === "completed" && (
             <div className="mb-4 rounded-lg border border-emerald-500/40 bg-emerald-900/30 px-4 py-2 text-center text-sm font-semibold uppercase tracking-widest text-emerald-300">
               {match.wickets >= 10 ? "All Out" : "Innings Complete"}
@@ -281,6 +337,12 @@ function ScoreboardPage() {
               Overs {match.oversBowled}
             </p>
           </div>
+          {targetScore && (
+            <p className="mt-2 text-sm font-medium text-indigo-300">
+              Target: {targetScore} | Runs Req: {runsNeeded} | Balls Req:{" "}
+              {ballsLeft} | RRR: {requiredRunRate}
+            </p>
+          )}
 
           {/* Tab switcher */}
           <div className="mt-6 flex gap-1 border-b border-slate-700">
@@ -346,8 +408,7 @@ function ScoreboardPage() {
                     </tr>
                   ) : (
                     battingRows.map((player) => {
-                      const isStriker =
-                        player.name === match.currentStriker;
+                      const isStriker = player.name === match.currentStriker;
                       const runs = player.batting?.runs ?? 0;
                       const balls = player.batting?.balls ?? 0;
                       const fours = player.batting?.fours ?? 0;
@@ -394,11 +455,11 @@ function ScoreboardPage() {
                 </tbody>
                 <tfoot>
                   <tr className="border-t border-slate-700">
-                    <td
-                      colSpan={7}
-                      className="pt-3 text-sm text-slate-400"
-                    >
-                      Extras: Wides ({extrasByType.wide || 0}), No Balls ({extrasByType["no-ball"] || 0}), Byes ({extrasByType.bye || 0}), Leg Byes ({extrasByType["leg-bye"] || 0}), Total ({extras})
+                    <td colSpan={7} className="pt-3 text-sm text-slate-400">
+                      Extras: Wides ({extrasByType.wide || 0}), No Balls (
+                      {extrasByType["no-ball"] || 0}), Byes (
+                      {extrasByType.bye || 0}), Leg Byes (
+                      {extrasByType["leg-bye"] || 0}), Total ({extras})
                     </td>
                   </tr>
                   <tr>
@@ -406,8 +467,8 @@ function ScoreboardPage() {
                       colSpan={7}
                       className="pt-1 text-sm font-medium text-slate-300"
                     >
-                      Total: {match.totalRuns}/{match.wickets} (
-                      {oversBowled}.{ballsInOver} Ov, RR: {runRate})
+                      Total: {match.totalRuns}/{match.wickets} ({oversBowled}.
+                      {ballsInOver} Ov, RR: {runRate})
                     </td>
                   </tr>
                 </tfoot>
@@ -598,8 +659,8 @@ function ScoreboardPage() {
             {currentBowlerRow && (
               <p className="mt-2 text-slate-400">
                 {match.currentBowler} &mdash;{" "}
-                {calcOvers(currentBowlerRow._balls)}-
-                {currentBowlerRow._wickets}/{currentBowlerRow._runs}
+                {calcOvers(currentBowlerRow._balls)}-{currentBowlerRow._wickets}
+                /{currentBowlerRow._runs}
               </p>
             )}
           </div>
