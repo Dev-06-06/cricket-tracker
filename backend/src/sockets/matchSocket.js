@@ -152,10 +152,10 @@ function setupSockets(io) {
                 match.status = 'live';
 
                 match.playerStats.forEach((ps) => {
-                    if (String(ps.playerId) === String(striker) || String(ps.playerId) === String(nonStriker)) {
+                    if (ps.name === striker || ps.name === nonStriker) {
                         ps.didBat = true;
                     }
-                    if (String(ps.playerId) === String(bowler)) {
+                    if (ps.name === bowler) {
                         ps.didBowl = true;
                     }
                 });
@@ -220,7 +220,7 @@ function setupSockets(io) {
                     totalValidBalls += 1;
                 }
 
-                if (!deliveryData.isWicket && shouldRotateStrike(deliveryData.runsOffBat, isValid, totalValidBalls)) {
+                if (!deliveryData.isWicket && shouldRotateStrike(deliveryData.runsOffBat, isValidBall, totalValidBalls)) {
                     [match.currentStriker, match.currentNonStriker] = [match.currentNonStriker, match.currentStriker];
                 }
 
@@ -228,12 +228,7 @@ function setupSockets(io) {
                 match.ballsBowled = totalValidBalls;
 
                 await match.save();
-
-                if (deliveryData.isWicket) {
-                    await emitMatchState(io.to(matchId), matchId);
-                } else {
-                    io.to(matchId).emit('score_updated', match);
-                }
+                await emitMatchState(io.to(matchId), matchId);
             } catch (error) {
                 console.log(error);
             }
@@ -401,7 +396,7 @@ function setupSockets(io) {
                 match.status = 'live';
 
                 match.playerStats.forEach((ps) => {
-                    if (String(ps.playerId) === String(batter)) {
+                    if (ps.name === batter) {
                         ps.didBat = true;
                     }
                 });
@@ -421,7 +416,7 @@ function setupSockets(io) {
                 match.currentBowler = bowler;
 
                 match.playerStats.forEach((ps) => {
-                    if (String(ps.playerId) === String(bowler)) {
+                    if (ps.name === bowler) {
                         ps.didBowl = true;
                     }
                 });
