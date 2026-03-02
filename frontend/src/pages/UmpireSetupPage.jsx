@@ -77,30 +77,42 @@ function UmpireSetupPage() {
     event.dataTransfer.setData("playerId", playerId);
   };
 
+  const movePlayerTo = (playerId, destination) => {
+    if (!playerId) return;
+
+    if (destination === "team1") {
+      setTeam1Players((prev) =>
+        prev.includes(playerId) ? prev : [...prev, playerId],
+      );
+      setTeam2Players((prev) => prev.filter((id) => id !== playerId));
+      return;
+    }
+
+    if (destination === "team2") {
+      setTeam2Players((prev) =>
+        prev.includes(playerId) ? prev : [...prev, playerId],
+      );
+      setTeam1Players((prev) => prev.filter((id) => id !== playerId));
+      return;
+    }
+
+    setTeam1Players((prev) => prev.filter((id) => id !== playerId));
+    setTeam2Players((prev) => prev.filter((id) => id !== playerId));
+  };
+
   const dropToTeam = (event, teamNumber) => {
     event.preventDefault();
     const playerId = event.dataTransfer.getData("playerId");
     if (!playerId) return;
 
-    if (teamNumber === 1) {
-      if (!team1Players.includes(playerId)) {
-        setTeam1Players((prev) => [...prev, playerId]);
-        setTeam2Players((prev) => prev.filter((id) => id !== playerId));
-      }
-    } else {
-      if (!team2Players.includes(playerId)) {
-        setTeam2Players((prev) => [...prev, playerId]);
-        setTeam1Players((prev) => prev.filter((id) => id !== playerId));
-      }
-    }
+    movePlayerTo(playerId, teamNumber === 1 ? "team1" : "team2");
   };
 
   const dropToPool = (event) => {
     event.preventDefault();
     const playerId = event.dataTransfer.getData("playerId");
     if (!playerId) return;
-    setTeam1Players((prev) => prev.filter((id) => id !== playerId));
-    setTeam2Players((prev) => prev.filter((id) => id !== playerId));
+    movePlayerTo(playerId, "pool");
   };
 
   const allowDrop = (event) => {
@@ -179,14 +191,30 @@ function UmpireSetupPage() {
                   <PlayerAvatar player={player} />
                   <span>{player.name}</span>
                 </div>
-                <Link
-                  to={`/players#player-${player._id}`}
-                  draggable={false}
-                  onClick={(e) => e.stopPropagation()}
-                  className="text-xs font-medium text-blue-600 hover:text-blue-700"
-                >
-                  View Profile
-                </Link>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => movePlayerTo(player._id, "team1")}
+                    className="rounded border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700"
+                  >
+                    T1
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => movePlayerTo(player._id, "team2")}
+                    className="rounded border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700"
+                  >
+                    T2
+                  </button>
+                  <Link
+                    to={`/players#player-${player._id}`}
+                    draggable={false}
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-xs font-medium text-blue-600 hover:text-blue-700"
+                  >
+                    View Profile
+                  </Link>
+                </div>
               </li>
             ))}
             {poolPlayers.length === 0 && (
@@ -198,6 +226,7 @@ function UmpireSetupPage() {
         {/* Team Boxes */}
         <div className="flex flex-1 flex-col gap-6 sm:flex-row">
           <TeamBox
+            teamNumber={1}
             label={team1Name}
             onLabelChange={setTeam1Name}
             playerIds={team1Players}
@@ -205,8 +234,10 @@ function UmpireSetupPage() {
             onDrop={(e) => dropToTeam(e, 1)}
             onDragOver={allowDrop}
             onDragStart={handleDragStart}
+            onMovePlayer={movePlayerTo}
           />
           <TeamBox
+            teamNumber={2}
             label={team2Name}
             onLabelChange={setTeam2Name}
             playerIds={team2Players}
@@ -214,6 +245,7 @@ function UmpireSetupPage() {
             onDrop={(e) => dropToTeam(e, 2)}
             onDragOver={allowDrop}
             onDragStart={handleDragStart}
+            onMovePlayer={movePlayerTo}
           />
         </div>
       </div>
@@ -268,6 +300,7 @@ function UmpireSetupPage() {
 }
 
 function TeamBox({
+  teamNumber,
   label,
   onLabelChange,
   playerIds,
@@ -275,6 +308,7 @@ function TeamBox({
   onDrop,
   onDragOver,
   onDragStart,
+  onMovePlayer,
 }) {
   const teamPlayers = players.filter((p) => playerIds.includes(p._id));
 
@@ -302,14 +336,32 @@ function TeamBox({
               <PlayerAvatar player={player} />
               <span>{player.name}</span>
             </div>
-            <Link
-              to={`/players#player-${player._id}`}
-              draggable={false}
-              onClick={(e) => e.stopPropagation()}
-              className="text-xs font-medium text-blue-600 hover:text-blue-700"
-            >
-              View Profile
-            </Link>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  onMovePlayer(player._id, teamNumber === 1 ? "team2" : "team1")
+                }
+                className="rounded border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700"
+              >
+                {teamNumber === 1 ? "T2" : "T1"}
+              </button>
+              <button
+                type="button"
+                onClick={() => onMovePlayer(player._id, "pool")}
+                className="rounded border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700"
+              >
+                Pool
+              </button>
+              <Link
+                to={`/players#player-${player._id}`}
+                draggable={false}
+                onClick={(e) => e.stopPropagation()}
+                className="text-xs font-medium text-blue-600 hover:text-blue-700"
+              >
+                View Profile
+              </Link>
+            </div>
           </li>
         ))}
         {teamPlayers.length === 0 && (
