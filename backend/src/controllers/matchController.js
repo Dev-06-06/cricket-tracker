@@ -1,6 +1,43 @@
 ﻿const Match = require("../models/Match");
 const Player = require("../models/Player");
 
+function buildCompletedResultMessage(match) {
+  if (!match || match.status !== "completed") {
+    return "";
+  }
+
+  if (typeof match.firstInningsScore !== "number") {
+    return "";
+  }
+
+  const firstInningsScore = Number(match.firstInningsScore) || 0;
+  const chasingScore = Number(match.totalRuns) || 0;
+  const wicketsLost = Number(match.wickets) || 0;
+
+  if (chasingScore === firstInningsScore) {
+    return "Match Tied";
+  }
+
+  if (chasingScore > firstInningsScore) {
+    const battingCountFromStats = (match.playerStats || []).filter(
+      (player) => player.team === match.battingTeam,
+    ).length;
+    const battingCountFromTeams =
+      match.battingTeam === match.team1Name
+        ? (match.team1Players || []).length
+        : match.battingTeam === match.team2Name
+          ? (match.team2Players || []).length
+          : 0;
+    const battingPlayersCount =
+      battingCountFromStats || battingCountFromTeams || 11;
+    const wicketsRemaining = Math.max(0, battingPlayersCount - 1 - wicketsLost);
+    return `${match.battingTeam} won by ${wicketsRemaining} wicket${wicketsRemaining === 1 ? "" : "s"}`;
+  }
+
+  const runsMargin = firstInningsScore - chasingScore;
+  return `${match.bowlingTeam} won by ${runsMargin} run${runsMargin === 1 ? "" : "s"}`;
+}
+
 function mapMatchSummary(match) {
   return {
     _id: match._id,
@@ -12,6 +49,12 @@ function mapMatchSummary(match) {
     totalRuns: match.totalRuns,
     wickets: match.wickets,
     oversBowled: match.oversBowled,
+    ballsBowled: match.ballsBowled,
+    firstInningsScore: match.firstInningsScore,
+    targetScore: match.targetScore,
+    battingTeam: match.battingTeam,
+    bowlingTeam: match.bowlingTeam,
+    resultMessage: buildCompletedResultMessage(match),
     createdAt: match.createdAt,
     updatedAt: match.updatedAt,
     team1Players: (match.team1Players || []).map((player) => ({

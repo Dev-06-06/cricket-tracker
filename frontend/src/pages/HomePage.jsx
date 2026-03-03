@@ -70,18 +70,31 @@ function HomePage() {
       ) : null}
 
       <section className="panel mt-8">
-        <h2 className="text-lg font-semibold text-slate-900">Live Matches</h2>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="inline-flex items-center gap-2 text-lg font-semibold text-slate-900">
+            Live Matches
+            <span className="inline-flex items-center rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+              <span className="mr-1.5 h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+              LIVE
+            </span>
+          </h2>
+          <div className="inline-flex items-center gap-1.5 text-xs text-slate-500">
+            <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600" />
+            Auto-refreshing
+          </div>
+        </div>
         {loading ? (
           <p className="mt-3 text-sm text-slate-600">Loading matches...</p>
         ) : liveMatches.length === 0 ? (
           <p className="mt-3 text-sm text-slate-500">No live matches yet.</p>
         ) : (
-          <div className="mt-4 space-y-3">
+          <div className="mt-4 space-y-4">
             {liveMatches.map((match) => (
               <MatchRow
                 key={match._id}
                 match={match}
                 actionLabel="Open Scoreboard"
+                variant="live"
               />
             ))}
           </div>
@@ -97,12 +110,13 @@ function HomePage() {
         ) : upcomingMatches.length === 0 ? (
           <p className="mt-3 text-sm text-slate-500">No upcoming matches.</p>
         ) : (
-          <div className="mt-4 space-y-3">
+          <div className="mt-4 space-y-2.5">
             {upcomingMatches.map((match) => (
               <MatchRow
                 key={match._id}
                 match={match}
                 actionLabel="Watch Toss"
+                variant="upcoming"
               />
             ))}
           </div>
@@ -118,12 +132,13 @@ function HomePage() {
         ) : completedMatches.length === 0 ? (
           <p className="mt-3 text-sm text-slate-500">No completed matches.</p>
         ) : (
-          <div className="mt-4 space-y-3">
+          <div className="mt-4 space-y-2.5">
             {completedMatches.map((match) => (
               <MatchRow
                 key={match._id}
                 match={match}
                 actionLabel="View Scoreboard"
+                variant="completed"
               />
             ))}
           </div>
@@ -133,16 +148,110 @@ function HomePage() {
   );
 }
 
-function MatchRow({ match, actionLabel }) {
+function MatchRow({ match, actionLabel, variant = "upcoming" }) {
+  const players1 = match.team1Players || [];
+  const players2 = match.team2Players || [];
+  const hasInningsStarted =
+    Number(match.totalRuns || 0) > 0 ||
+    Number(match.wickets || 0) > 0 ||
+    Number(match.ballsBowled || 0) > 0;
+  const liveScoreValue = hasInningsStarted
+    ? `${match.totalRuns || 0}/${match.wickets || 0}`
+    : "0/0";
+  const liveOversValue =
+    match.oversBowled !== undefined && match.oversBowled !== null
+      ? `(${match.oversBowled} ov)`
+      : "";
+
+  const completedResultValue =
+    match.resultMessage ||
+    (typeof match.firstInningsScore === "number"
+      ? Number(match.totalRuns || 0) > Number(match.firstInningsScore)
+        ? `${match.battingTeam || "Chasing team"} won by ${Math.max(0, 10 - Number(match.wickets || 0))} wickets`
+        : Number(match.totalRuns || 0) < Number(match.firstInningsScore)
+          ? `${match.bowlingTeam || "Defending team"} won by ${Number(match.firstInningsScore) - Number(match.totalRuns || 0)} runs`
+          : "Match Tied"
+      : "Result unavailable");
+
+  if (variant === "live") {
+    return (
+      <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-wrap items-start gap-3">
+          <div className="min-w-0">
+            <p className="text-lg font-bold tracking-tight text-slate-900">
+              {match.team1Name}{" "}
+              <span className="mx-1.5 text-slate-400">vs</span>{" "}
+              {match.team2Name}
+            </p>
+            <p className="mt-1 text-3xl font-extrabold tracking-tight tabular-nums text-slate-900">
+              {liveScoreValue}
+            </p>
+            <p className="mt-0.5 text-sm font-medium text-slate-500">
+              {liveOversValue}
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <span className="status-live">LIVE</span>
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                {match.totalOvers} overs
+              </span>
+            </div>
+          </div>
+          {actionLabel ? (
+            <Link
+              to={`/scoreboard/${match._id}?viewer=1`}
+              className="btn btn-primary ml-auto"
+            >
+              {actionLabel}
+            </Link>
+          ) : null}
+        </div>
+
+        <div className="mt-4 space-y-2.5">
+          <PlayerAvatars teamName={match.team1Name} players={players1} />
+          <PlayerAvatars teamName={match.team2Name} players={players2} />
+        </div>
+      </article>
+    );
+  }
+
+  if (variant === "completed") {
+    return (
+      <article className="rounded-xl border border-slate-200 bg-slate-100/80 p-3 opacity-85">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className="text-sm font-semibold text-slate-700">
+              {match.team1Name} vs {match.team2Name}
+            </p>
+            <p className="mt-1 text-xs font-medium text-slate-600">
+              {completedResultValue}
+            </p>
+          </div>
+          {actionLabel ? (
+            <Link
+              to={`/scoreboard/${match._id}?viewer=1`}
+              className="btn px-3 py-1 text-xs"
+            >
+              {actionLabel}
+            </Link>
+          ) : null}
+        </div>
+        <div className="mt-2 space-y-2">
+          <PlayerAvatars teamName={match.team1Name} players={players1} muted />
+          <PlayerAvatars teamName={match.team2Name} players={players2} muted />
+        </div>
+      </article>
+    );
+  }
+
   return (
-    <article className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+    <article className="rounded-xl border border-slate-200 bg-white p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <p className="font-medium text-slate-900">
+          <p className="text-base font-semibold text-slate-900">
             {match.team1Name} vs {match.team2Name}
           </p>
-          <p className="text-xs text-slate-500">
-            {match.status} • {match.totalOvers} overs
+          <p className="mt-0.5 text-xs text-slate-500">
+            {match.totalOvers} overs
           </p>
         </div>
         {actionLabel ? (
@@ -154,15 +263,63 @@ function MatchRow({ match, actionLabel }) {
           </Link>
         ) : null}
       </div>
-      <p className="mt-2 text-xs text-slate-600">
-        {match.team1Name}:{" "}
-        {(match.team1Players || []).map((p) => p.name).join(", ") || "—"}
-      </p>
-      <p className="mt-1 text-xs text-slate-600">
-        {match.team2Name}:{" "}
-        {(match.team2Players || []).map((p) => p.name).join(", ") || "—"}
-      </p>
+      <div className="mt-2 space-y-2">
+        <PlayerAvatars teamName={match.team1Name} players={players1} />
+        <PlayerAvatars teamName={match.team2Name} players={players2} />
+      </div>
     </article>
+  );
+}
+
+function PlayerAvatars({ teamName, players, muted = false }) {
+  const allPlayers = (players || []).filter((player) => player?.name);
+  const visiblePlayers = allPlayers.slice(0, 6);
+  const overflowCount = Math.max(0, allPlayers.length - visiblePlayers.length);
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span
+        className={`text-xs font-medium ${muted ? "text-slate-500" : "text-slate-600"}`}
+      >
+        {teamName}
+      </span>
+      <div className="flex items-center -space-x-1">
+        {visiblePlayers.length > 0 ? (
+          visiblePlayers.map((player, index) => (
+            <span
+              key={`${player.name}-${index}`}
+              className={`inline-flex h-6 w-6 items-center justify-center rounded-full border text-[10px] font-bold ${
+                muted
+                  ? "border-slate-200 bg-slate-200 text-slate-600"
+                  : "border-slate-300 bg-slate-100 text-slate-700"
+              }`}
+              title={player.name}
+            >
+              {player.name
+                .split(" ")
+                .filter(Boolean)
+                .slice(0, 2)
+                .map((part) => part.charAt(0))
+                .join("")
+                .toUpperCase() || "?"}
+            </span>
+          ))
+        ) : (
+          <span
+            className={`text-xs ${muted ? "text-slate-400" : "text-slate-500"}`}
+          >
+            —
+          </span>
+        )}
+      </div>
+      {overflowCount > 0 ? (
+        <span
+          className={`text-[11px] font-medium ${muted ? "text-slate-500" : "text-slate-600"}`}
+        >
+          +{overflowCount} more
+        </span>
+      ) : null}
+    </div>
   );
 }
 

@@ -439,6 +439,10 @@ function ScorerPage() {
         ? "-"
         : "0.00"
     : null;
+  const currentRunRate =
+    (match.ballsBowled || 0) > 0
+      ? ((match.totalRuns * 6) / match.ballsBowled).toFixed(2)
+      : "0.00";
 
   return (
     <main className="app-shell max-w-5xl">
@@ -453,37 +457,51 @@ function ScorerPage() {
       </div>
 
       <section className="panel mb-6">
-        <p className="text-xl font-semibold text-slate-900">
-          {match.battingTeam} {match.totalRuns}/{match.wickets}
+        <p className="text-sm font-medium uppercase tracking-wide text-slate-500">
+          {match.battingTeam}
         </p>
-        <p className="mt-1 text-slate-600">Overs: {match.oversBowled}</p>
+        <p className="score-hero mt-1 text-slate-900">
+          {match.totalRuns}/{match.wickets}
+        </p>
+        <p className="mt-1 text-sm font-medium text-slate-700">
+          Over: {match.oversBowled}{" "}
+          <span className="mx-2 text-slate-300">|</span> RR: {currentRunRate}
+        </p>
         {targetScore && (
-          <p className="mt-1 text-sm font-medium text-indigo-700">
-            Target: {targetScore} | Runs Req: {runsNeeded} | Balls Req:{" "}
-            {ballsLeft} | RRR: {requiredRunRate}
+          <p className="mt-2 rounded-lg bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-700">
+            Target: {targetScore} | Need {runsNeeded} from {ballsLeft} | RRR{" "}
+            {requiredRunRate}
           </p>
         )}
         {matchEndStatus.isMatchOver && (
-          <p className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800">
+          <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">
             {matchEndStatus.resultMessage}
           </p>
         )}
-        <p className="mt-1 text-sm text-slate-600">
-          Striker: {match.currentStriker} | Non-Striker:{" "}
-          {match.currentNonStriker} | Bowler: {match.currentBowler}
-        </p>
-        <button
-          type="button"
-          onClick={() => socketRef.current?.emit("swapStriker", { matchId })}
-          disabled={
-            match.status !== "live" ||
-            !match.currentStriker ||
-            !match.currentNonStriker
-          }
-          className="btn mt-3 px-3 py-1.5 text-xs"
-        >
-          Swap Striker
-        </button>
+        <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+          <div className="flex flex-wrap items-center gap-2 text-sm text-slate-700">
+            <span className="font-semibold text-slate-900">Striker:</span>
+            <span>{match.currentStriker || "—"}</span>
+            <button
+              type="button"
+              onClick={() =>
+                socketRef.current?.emit("swapStriker", { matchId })
+              }
+              disabled={
+                match.status !== "live" ||
+                !match.currentStriker ||
+                !match.currentNonStriker
+              }
+              className="btn ml-auto px-3 py-1 text-xs"
+            >
+              Swap Striker
+            </button>
+          </div>
+          <p className="mt-1 text-sm text-slate-700">
+            <span className="font-semibold text-slate-900">Bowler:</span>{" "}
+            {match.currentBowler || "—"}
+          </p>
+        </div>
       </section>
 
       <BowlerStatsRow match={match} />
@@ -493,7 +511,7 @@ function ScorerPage() {
 
         <div className="mt-5">
           <p className="mb-2 text-sm font-medium text-slate-700">Runs</p>
-          <div className="flex flex-wrap gap-2">
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
             {runOptions.map((runs) => (
               <button
                 key={runs}
@@ -504,8 +522,10 @@ function ScorerPage() {
                     runsOffBat: runs,
                   }))
                 }
-                className={`btn px-4 py-2 text-sm ${
-                  delivery.runsOffBat === runs ? "btn-dark" : ""
+                className={`btn w-full px-0 py-3 text-lg font-bold ${
+                  delivery.runsOffBat === runs
+                    ? "border-slate-900 bg-slate-900 text-white"
+                    : ""
                 }`}
               >
                 {runs}
@@ -526,8 +546,10 @@ function ScorerPage() {
                   extraRuns: 0,
                 }))
               }
-              className={`btn px-4 py-2 text-sm ${
-                delivery.extraType === "none" ? "btn-dark" : ""
+              className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-all duration-150 ${
+                delivery.extraType === "none"
+                  ? "border-slate-900 bg-slate-900 text-white"
+                  : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
               }`}
             >
               None
@@ -543,34 +565,38 @@ function ScorerPage() {
                     extraRuns: previous.extraRuns > 0 ? previous.extraRuns : 1,
                   }))
                 }
-                className={`btn px-4 py-2 text-sm ${
-                  delivery.extraType === extra.value ? "btn-dark" : ""
+                className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-all duration-150 ${
+                  delivery.extraType === extra.value
+                    ? "border-slate-900 bg-slate-900 text-white"
+                    : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
                 }`}
               >
                 {extra.label}
               </button>
             ))}
           </div>
-          <div className="mt-3 max-w-44">
-            <label className="block text-sm text-slate-700">
-              Extra runs
-              <input
-                type="number"
-                min={0}
-                value={delivery.extraRuns}
-                onChange={(event) =>
-                  setDelivery((previous) => ({
-                    ...previous,
-                    extraRuns: Number(event.target.value || 0),
-                  }))
-                }
-                className="field mt-1"
-              />
-            </label>
-          </div>
+          {delivery.extraType !== "none" ? (
+            <div className="mt-3 w-full max-w-40">
+              <label className="block text-xs font-medium uppercase tracking-wide text-slate-500">
+                Extra runs
+                <input
+                  type="number"
+                  min={0}
+                  value={delivery.extraRuns}
+                  onChange={(event) =>
+                    setDelivery((previous) => ({
+                      ...previous,
+                      extraRuns: Number(event.target.value || 0),
+                    }))
+                  }
+                  className="field mt-1 py-1.5 text-sm"
+                />
+              </label>
+            </div>
+          ) : null}
         </div>
 
-        <div className="mt-5 rounded-lg border border-slate-200 p-4">
+        <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50/70 p-4">
           <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
             <input
               type="checkbox"
@@ -591,34 +617,34 @@ function ScorerPage() {
             Wicket
           </label>
 
-          <div className="mt-3 grid gap-3 md:grid-cols-2">
-            <label className="block">
-              <span className="mb-1 block text-sm font-medium text-slate-700">
-                Wicket type
-              </span>
-              <select
-                disabled={disableWicketFields}
-                value={delivery.wicketType}
-                onChange={(event) =>
-                  setDelivery((previous) => ({
-                    ...previous,
-                    wicketType: event.target.value,
-                  }))
-                }
-                className="field disabled:bg-slate-100"
-              >
-                <option value="none">None</option>
-                <option value="bowled">Bowled</option>
-                <option value="caught">Caught</option>
-                <option value="lbw">LBW</option>
-                <option value="run-out">Run Out</option>
-                <option value="stumped">Stumped</option>
-                <option value="hit-wicket">Hit Wicket</option>
-              </select>
-            </label>
+          {delivery.isWicket ? (
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <label className="block md:col-span-1">
+                <span className="mb-1 block text-sm font-medium text-slate-700">
+                  Wicket type
+                </span>
+                <select
+                  disabled={disableWicketFields}
+                  value={delivery.wicketType}
+                  onChange={(event) =>
+                    setDelivery((previous) => ({
+                      ...previous,
+                      wicketType: event.target.value,
+                    }))
+                  }
+                  className="field disabled:bg-slate-100"
+                >
+                  <option value="none">None</option>
+                  <option value="bowled">Bowled</option>
+                  <option value="caught">Caught</option>
+                  <option value="lbw">LBW</option>
+                  <option value="run-out">Run Out</option>
+                  <option value="stumped">Stumped</option>
+                  <option value="hit-wicket">Hit Wicket</option>
+                </select>
+              </label>
 
-            {delivery.isWicket && (
-              <label className="block">
+              <label className="block md:col-span-1">
                 <span className="mb-1 block text-sm font-medium text-slate-700">
                   Dismissed batter
                 </span>
@@ -635,19 +661,23 @@ function ScorerPage() {
                   ))}
                 </select>
               </label>
-            )}
-          </div>
+            </div>
+          ) : null}
         </div>
 
-        <div className="mt-5 flex flex-wrap gap-3">
+        <div className="mt-5">
           <button
             type="button"
             onClick={submitDelivery}
-            className="btn btn-dark"
+            className="btn btn-dark w-full py-3 text-base font-semibold"
           >
             Submit Ball
           </button>
-          <button type="button" onClick={undoLastDelivery} className="btn">
+          <button
+            type="button"
+            onClick={undoLastDelivery}
+            className="btn mt-3 w-full border-slate-300 bg-transparent"
+          >
             Undo Last Ball
           </button>
         </div>
