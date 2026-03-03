@@ -55,14 +55,14 @@ function ballLabel(ball) {
   return String(runs);
 }
 
-function ballColor(label) {
-  if (label === "W") return "#7f1d1d";
-  if (label === "4") return "#1e3a5f";
-  if (label === "6") return "#1a3a1a";
-  if (label.startsWith("Wd") || label.startsWith("Nb")) return "#3b2a00";
-  if (label.startsWith("B")) return "#1f2937";
-  if (label === "0") return "rgba(255,255,255,0.08)";
-  return "rgba(255,255,255,0.12)";
+function ballToneClass(label) {
+  if (label === "W") return "bg-red-900";
+  if (label === "4") return "bg-blue-900";
+  if (label === "6") return "bg-emerald-900";
+  if (label.startsWith("Wd") || label.startsWith("Nb")) return "bg-amber-900";
+  if (label.startsWith("B")) return "bg-slate-800";
+  if (label === "0") return "bg-slate-600";
+  return "bg-slate-700";
 }
 
 function calcBowlerStats(timeline, bowlerName) {
@@ -411,7 +411,7 @@ function ScorerPage() {
 
   if (error) {
     return (
-      <main className="mx-auto min-h-screen w-full max-w-4xl px-4 py-10">
+      <main className="app-shell max-w-4xl">
         <p className="rounded-lg bg-red-100 p-4 text-red-700">{error}</p>
       </main>
     );
@@ -419,7 +419,7 @@ function ScorerPage() {
 
   if (!match) {
     return (
-      <main className="mx-auto min-h-screen w-full max-w-4xl px-4 py-10">
+      <main className="app-shell max-w-4xl">
         <p className="text-slate-700">Loading match...</p>
       </main>
     );
@@ -441,9 +441,9 @@ function ScorerPage() {
     : null;
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-5xl px-4 py-10">
+    <main className="app-shell max-w-5xl">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-3xl font-bold text-slate-900">Scorer Panel</h1>
+        <h1 className="page-title">Scorer Panel</h1>
         <Link
           to={`/scoreboard/${matchId}`}
           className="text-sm font-medium text-blue-600"
@@ -452,7 +452,7 @@ function ScorerPage() {
         </Link>
       </div>
 
-      <section className="mb-6 rounded-xl border border-slate-200 bg-white p-5">
+      <section className="panel mb-6">
         <p className="text-xl font-semibold text-slate-900">
           {match.battingTeam} {match.totalRuns}/{match.wickets}
         </p>
@@ -480,7 +480,7 @@ function ScorerPage() {
             !match.currentStriker ||
             !match.currentNonStriker
           }
-          className="mt-3 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+          className="btn mt-3 px-3 py-1.5 text-xs"
         >
           Swap Striker
         </button>
@@ -488,7 +488,7 @@ function ScorerPage() {
 
       <BowlerStatsRow match={match} />
 
-      <section className="rounded-xl bg-white p-6 shadow-sm">
+      <section className="panel p-6">
         <h2 className="text-lg font-semibold text-slate-900">Enter Delivery</h2>
 
         <div className="mt-5">
@@ -504,10 +504,8 @@ function ScorerPage() {
                     runsOffBat: runs,
                   }))
                 }
-                className={`rounded-lg px-4 py-2 text-sm font-medium ${
-                  delivery.runsOffBat === runs
-                    ? "bg-slate-900 text-white"
-                    : "border border-slate-300 bg-white text-slate-700"
+                className={`btn px-4 py-2 text-sm ${
+                  delivery.runsOffBat === runs ? "btn-dark" : ""
                 }`}
               >
                 {runs}
@@ -528,10 +526,8 @@ function ScorerPage() {
                   extraRuns: 0,
                 }))
               }
-              className={`rounded-lg px-4 py-2 text-sm font-medium ${
-                delivery.extraType === "none"
-                  ? "bg-slate-900 text-white"
-                  : "border border-slate-300 bg-white text-slate-700"
+              className={`btn px-4 py-2 text-sm ${
+                delivery.extraType === "none" ? "btn-dark" : ""
               }`}
             >
               None
@@ -547,10 +543,8 @@ function ScorerPage() {
                     extraRuns: previous.extraRuns > 0 ? previous.extraRuns : 1,
                   }))
                 }
-                className={`rounded-lg px-4 py-2 text-sm font-medium ${
-                  delivery.extraType === extra.value
-                    ? "bg-slate-900 text-white"
-                    : "border border-slate-300 bg-white text-slate-700"
+                className={`btn px-4 py-2 text-sm ${
+                  delivery.extraType === extra.value ? "btn-dark" : ""
                 }`}
               >
                 {extra.label}
@@ -570,7 +564,7 @@ function ScorerPage() {
                     extraRuns: Number(event.target.value || 0),
                   }))
                 }
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 outline-none ring-slate-900/10 focus:ring"
+                className="field mt-1"
               />
             </label>
           </div>
@@ -611,7 +605,7 @@ function ScorerPage() {
                     wicketType: event.target.value,
                   }))
                 }
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none ring-slate-900/10 focus:ring disabled:bg-slate-100"
+                className="field disabled:bg-slate-100"
               >
                 <option value="none">None</option>
                 <option value="bowled">Bowled</option>
@@ -631,7 +625,7 @@ function ScorerPage() {
                 <select
                   value={dismissedBatter}
                   onChange={(event) => setDismissedBatter(event.target.value)}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none ring-slate-900/10 focus:ring"
+                  className="field"
                 >
                   <option value="">Select batter</option>
                   {dismissableBatters.map((batter) => (
@@ -649,21 +643,17 @@ function ScorerPage() {
           <button
             type="button"
             onClick={submitDelivery}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white"
+            className="btn btn-dark"
           >
             Submit Ball
           </button>
-          <button
-            type="button"
-            onClick={undoLastDelivery}
-            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700"
-          >
+          <button type="button" onClick={undoLastDelivery} className="btn">
             Undo Last Ball
           </button>
         </div>
       </section>
 
-      <section className="mt-6 rounded-xl border border-slate-200 bg-white p-5">
+      <section className="panel mt-6">
         <h2 className="text-lg font-semibold text-slate-900">Current Over</h2>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <span className="text-sm font-medium text-slate-700">
@@ -672,11 +662,7 @@ function ScorerPage() {
           {currentOverBalls.map((ball, index) => {
             const label = ballLabel(ball);
             return (
-              <span
-                key={index}
-                style={{ backgroundColor: ballColor(label) }}
-                className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold text-white"
-              >
+              <span key={index} className={`chip-ball ${ballToneClass(label)}`}>
                 {label}
               </span>
             );
@@ -697,7 +683,7 @@ function ScorerPage() {
         </div>
       </section>
 
-      <section className="mt-6 rounded-xl border border-slate-200 bg-white p-5">
+      <section className="panel mt-6">
         <h2 className="text-lg font-semibold text-slate-900">Batsman Stats</h2>
         <div className="mt-3 overflow-x-auto">
           <table className="w-full text-sm text-slate-700">
@@ -760,7 +746,7 @@ function ScorerPage() {
         </div>
       </section>
 
-      <section className="mt-6 rounded-xl border border-slate-200 bg-white p-5">
+      <section className="panel mt-6">
         <h2 className="text-lg font-semibold text-slate-900">
           Recent Deliveries
         </h2>
@@ -800,7 +786,7 @@ function ScorerPage() {
               <select
                 value={selectedBatter}
                 onChange={(event) => setSelectedBatter(event.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none ring-slate-900/10 focus:ring"
+                className="field"
               >
                 <option value="">Select {nextBatterRole.toLowerCase()}</option>
                 {availableBatters.map((p) => (
@@ -814,7 +800,7 @@ function ScorerPage() {
               type="button"
               onClick={confirmNewBatter}
               disabled={!selectedBatter}
-              className="mt-5 w-full rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+              className="btn btn-dark mt-5 w-full disabled:opacity-50"
             >
               Confirm
             </button>
@@ -845,7 +831,7 @@ function ScorerPage() {
                     setSecondInningsNonStriker("");
                   }
                 }}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none ring-slate-900/10 focus:ring"
+                className="field"
               >
                 <option value="">Select striker</option>
                 {secondInningsStrikerOptions.map((p) => (
@@ -871,7 +857,7 @@ function ScorerPage() {
                     setSecondInningsStriker("");
                   }
                 }}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none ring-slate-900/10 focus:ring"
+                className="field"
               >
                 <option value="">Select non-striker</option>
                 {secondInningsNonStrikerOptions.map((p) => (
@@ -888,7 +874,7 @@ function ScorerPage() {
               <select
                 value={secondInningsBowler}
                 onChange={(event) => setSecondInningsBowler(event.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none ring-slate-900/10 focus:ring"
+                className="field"
               >
                 <option value="">Select bowler</option>
                 {availableBowlers.map((p) => (
@@ -907,7 +893,7 @@ function ScorerPage() {
                 !secondInningsBowler ||
                 secondInningsStriker === secondInningsNonStriker
               }
-              className="mt-5 w-full rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+              className="btn btn-dark mt-5 w-full disabled:opacity-50"
             >
               Start Second Innings
             </button>
@@ -932,7 +918,7 @@ function ScorerPage() {
               <select
                 value={selectedBowler}
                 onChange={(event) => setSelectedBowler(event.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none ring-slate-900/10 focus:ring"
+                className="field"
               >
                 <option value="">Select a bowler</option>
                 {availableBowlers.map((p) => (
@@ -946,7 +932,7 @@ function ScorerPage() {
               type="button"
               onClick={confirmNewBowler}
               disabled={!selectedBowler}
-              className="mt-5 w-full rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+              className="btn btn-dark mt-5 w-full disabled:opacity-50"
             >
               Confirm
             </button>

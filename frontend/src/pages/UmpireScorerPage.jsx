@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { createMatchSocket } from "../services/socket";
+import { getMatch } from "../services/api";
 import { checkMatchEnd } from "../utils/matchResult";
+import { UMPIRE_AUTH_KEY } from "./UmpireLoginPage";
 
 const runOptions = [0, 1, 2, 3, 4, 6];
 const wicketTypes = [
@@ -12,187 +14,6 @@ const wicketTypes = [
   "stumped",
   "hit-wicket",
 ];
-
-const s = {
-  page: {
-    minHeight: "100vh",
-    background: "#0f172a",
-    color: "#fff",
-    padding: "20px",
-    maxWidth: "600px",
-    margin: "0 auto",
-    fontFamily: "system-ui, sans-serif",
-  },
-  header: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: "20px",
-  },
-  title: {
-    fontSize: "22px",
-    fontWeight: 700,
-  },
-  scoreCard: {
-    background: "rgba(255,255,255,0.06)",
-    border: "1px solid rgba(255,255,255,0.12)",
-    borderRadius: "14px",
-    padding: "20px",
-    marginBottom: "16px",
-  },
-  scoreMain: {
-    fontSize: "42px",
-    fontWeight: 800,
-    letterSpacing: "-1px",
-    lineHeight: 1,
-  },
-  scoreMeta: {
-    fontSize: "14px",
-    color: "rgba(255,255,255,0.5)",
-    marginTop: "6px",
-  },
-  overBall: {
-    width: "36px",
-    height: "36px",
-    borderRadius: "50%",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: "12px",
-    fontWeight: 700,
-    color: "#fff",
-    flexShrink: 0,
-  },
-  runBtn: {
-    width: "64px",
-    height: "64px",
-    borderRadius: "12px",
-    border: "1px solid rgba(255,255,255,0.2)",
-    background: "rgba(255,255,255,0.06)",
-    color: "#fff",
-    fontSize: "22px",
-    fontWeight: 700,
-    cursor: "pointer",
-  },
-  statsCard: {
-    background: "rgba(255,255,255,0.04)",
-    border: "1px solid rgba(255,255,255,0.1)",
-    borderRadius: "10px",
-    padding: "12px 16px",
-    marginBottom: "12px",
-  },
-  statsHeader: {
-    display: "flex",
-    color: "rgba(255,255,255,0.4)",
-    fontSize: "11px",
-    letterSpacing: "1px",
-    paddingBottom: "8px",
-    borderBottom: "1px solid rgba(255,255,255,0.08)",
-    marginBottom: "6px",
-  },
-  statsRow: {
-    display: "flex",
-    alignItems: "center",
-    padding: "8px 4px",
-    fontSize: "14px",
-    borderBottom: "1px solid rgba(255,255,255,0.05)",
-  },
-  statCol: {
-    flex: 1,
-    textAlign: "right",
-    fontVariantNumeric: "tabular-nums",
-    fontSize: "14px",
-  },
-  overlay: {
-    position: "fixed",
-    inset: 0,
-    background: "rgba(0,0,0,0.75)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 1000,
-  },
-  modal: {
-    background: "#1e293b",
-    border: "1px solid rgba(255,255,255,0.15)",
-    borderRadius: "16px",
-    padding: "24px",
-    width: "320px",
-    maxWidth: "90vw",
-  },
-  modalTitle: {
-    fontSize: "18px",
-    fontWeight: 700,
-    marginBottom: "16px",
-  },
-  toggleBtn: {
-    padding: "10px 16px",
-    borderRadius: "10px",
-    border: "1px solid rgba(255,255,255,0.2)",
-    background: "rgba(255,255,255,0.06)",
-    color: "#fff",
-    fontSize: "14px",
-    fontWeight: 600,
-    cursor: "pointer",
-  },
-  toggleBtnActive: {
-    padding: "10px 16px",
-    borderRadius: "10px",
-    border: "1px solid #f59e0b",
-    background: "rgba(245,158,11,0.2)",
-    color: "#f59e0b",
-    fontSize: "14px",
-    fontWeight: 600,
-    cursor: "pointer",
-  },
-  wicketBtnActive: {
-    padding: "10px 16px",
-    borderRadius: "10px",
-    border: "1px solid #ef4444",
-    background: "rgba(239,68,68,0.2)",
-    color: "#ef4444",
-    fontSize: "14px",
-    fontWeight: 600,
-    cursor: "pointer",
-  },
-  modalSelect: {
-    width: "100%",
-    padding: "10px 12px",
-    borderRadius: "8px",
-    border: "1px solid rgba(255,255,255,0.2)",
-    background: "#0f172a",
-    color: "#fff",
-    fontSize: "14px",
-    marginBottom: "12px",
-    boxSizing: "border-box",
-  },
-  confirmBtn: {
-    width: "100%",
-    padding: "12px",
-    borderRadius: "10px",
-    border: "none",
-    background: "#3b82f6",
-    color: "#fff",
-    fontSize: "15px",
-    fontWeight: 600,
-    cursor: "pointer",
-    marginTop: "4px",
-    boxSizing: "border-box",
-  },
-  cancelBtn: {
-    width: "100%",
-    padding: "12px",
-    borderRadius: "10px",
-    border: "1px solid rgba(255,255,255,0.2)",
-    background: "rgba(255,255,255,0.06)",
-    color: "#fff",
-    fontSize: "15px",
-    fontWeight: 600,
-    cursor: "pointer",
-    marginTop: "8px",
-    boxSizing: "border-box",
-  },
-};
 
 function getBallLabel(ball) {
   if (ball.isWicket) return "W";
@@ -209,13 +30,13 @@ function getBallLabel(ball) {
   return String(ball.runs ?? 0);
 }
 
-function getBallColor(label) {
-  if (label === "W") return "#7f1d1d";
-  if (label === "4") return "#1e3a5f";
-  if (label === "6") return "#1a3a1a";
-  if (label.startsWith("Wd") || label.startsWith("Nb")) return "#3b2a00";
-  if (label.startsWith("B")) return "#1f2937";
-  return "rgba(255,255,255,0.1)";
+function getBallToneClass(label) {
+  if (label === "W") return "bg-red-900";
+  if (label === "4") return "bg-blue-900";
+  if (label === "6") return "bg-emerald-900";
+  if (label.startsWith("Wd") || label.startsWith("Nb")) return "bg-amber-900";
+  if (label.startsWith("B")) return "bg-slate-700";
+  return "bg-slate-600";
 }
 
 function buildCurrentOver(timeline) {
@@ -281,6 +102,15 @@ function getRunButtonLabel(runs, currentExtraType) {
   return String(runs);
 }
 
+function normalizeMatchState(match) {
+  if (!match) return match;
+  return {
+    ...match,
+    striker: match.striker ?? match.currentStriker ?? null,
+    nonStriker: match.nonStriker ?? match.currentNonStriker ?? null,
+  };
+}
+
 function UmpireScorerPage() {
   const { matchId } = useParams();
   const navigate = useNavigate();
@@ -312,12 +142,29 @@ function UmpireScorerPage() {
 
   // Create socket and attach listeners; re-run when matchId changes
   useEffect(() => {
+    if (!matchId) {
+      return;
+    }
+
     const socket = createMatchSocket();
     socketRef.current = socket;
 
-    socket.emit("joinMatch", { matchId });
+    getMatch(matchId)
+      .then((response) => {
+        if (response?.match) {
+          setMatch(normalizeMatchState(response.match));
+        }
+      })
+      .catch(() => {
+        // Socket will still sync match state if fetch fails.
+      });
 
-    socket.on("matchState", (updatedMatch) => {
+    socket.on("connect", () => {
+      socket.emit("joinMatch", { matchId });
+    });
+
+    socket.on("matchState", (updatedMatchRaw) => {
+      const updatedMatch = normalizeMatchState(updatedMatchRaw);
       const curr = updatedMatch.ballsBowled ?? 0;
       const prev = prevBallsBowledRef.current;
 
@@ -390,7 +237,7 @@ function UmpireScorerPage() {
 
     socket.on("match_completed", (payload) => {
       if (payload) {
-        setMatch(payload);
+        setMatch(normalizeMatchState(payload));
       }
 
       if (payload?.resultMessage) {
@@ -408,6 +255,7 @@ function UmpireScorerPage() {
     socket.on("error", ({ message }) => alert("Error: " + message));
 
     return () => {
+      socket.off("connect");
       socket.off("matchState");
       socket.off("innings_complete");
       socket.off("match_completed");
@@ -565,18 +413,16 @@ function UmpireScorerPage() {
     setSecondInningsBowler("");
   }
 
+  function handleExitUmpireMode() {
+    sessionStorage.removeItem(UMPIRE_AUTH_KEY);
+    navigate("/umpire/login", { replace: true });
+  }
+
   if (!match) {
     return (
-      <div
-        style={{
-          ...s.page,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <p style={{ color: "rgba(255,255,255,0.5)" }}>Loading match...</p>
-      </div>
+      <main className="mx-auto flex min-h-screen w-full max-w-[600px] items-center justify-center bg-slate-950 px-5 py-6 text-white">
+        <p className="text-slate-400">Loading match...</p>
+      </main>
     );
   }
 
@@ -636,12 +482,14 @@ function UmpireScorerPage() {
     match?.nextBatterFor === "nonStriker" ? "Non-Striker" : "Striker";
 
   return (
-    <div style={s.page}>
+    <main className="mx-auto min-h-screen w-full max-w-[600px] bg-slate-950 px-5 py-6 font-sans text-white">
       {/* Second Innings Openers Modal — shown when first innings ends */}
       {showSecondInningsModal && (
-        <div style={s.overlay}>
-          <div style={s.modal}>
-            <div style={s.modalTitle}>Set Second Innings Openers</div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-4">
+          <div className="w-full max-w-sm rounded-2xl border border-white/15 bg-slate-800 p-6">
+            <div className="mb-4 text-lg font-bold">
+              Set Second Innings Openers
+            </div>
             <select
               value={secondInningsStriker}
               onChange={(e) => {
@@ -651,7 +499,7 @@ function UmpireScorerPage() {
                   setSecondInningsNonStriker("");
                 }
               }}
-              style={s.modalSelect}
+              className="mb-3 w-full rounded-lg border border-white/20 bg-slate-950 px-3 py-2 text-sm text-white outline-none ring-white/20 focus:ring"
             >
               <option value="">— Choose striker —</option>
               {secondInningsStrikerOptions.map((p) => (
@@ -669,7 +517,7 @@ function UmpireScorerPage() {
                   setSecondInningsStriker("");
                 }
               }}
-              style={s.modalSelect}
+              className="mb-3 w-full rounded-lg border border-white/20 bg-slate-950 px-3 py-2 text-sm text-white outline-none ring-white/20 focus:ring"
             >
               <option value="">— Choose non-striker —</option>
               {secondInningsNonStrikerOptions.map((p) => (
@@ -681,7 +529,7 @@ function UmpireScorerPage() {
             <select
               value={secondInningsBowler}
               onChange={(e) => setSecondInningsBowler(e.target.value)}
-              style={s.modalSelect}
+              className="mb-3 w-full rounded-lg border border-white/20 bg-slate-950 px-3 py-2 text-sm text-white outline-none ring-white/20 focus:ring"
             >
               <option value="">— Choose bowler —</option>
               {bowlingTeamPlayers.map((p) => (
@@ -690,7 +538,11 @@ function UmpireScorerPage() {
                 </option>
               ))}
             </select>
-            <button onClick={confirmSecondInningsOpeners} style={s.confirmBtn}>
+            <button
+              type="button"
+              onClick={confirmSecondInningsOpeners}
+              className="w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700"
+            >
               Start Second Innings
             </button>
           </div>
@@ -699,13 +551,13 @@ function UmpireScorerPage() {
 
       {/* New Bowler Modal — shown at end of each over */}
       {showBowlerModal && (
-        <div style={s.overlay}>
-          <div style={s.modal}>
-            <div style={s.modalTitle}>Select New Bowler</div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-4">
+          <div className="w-full max-w-sm rounded-2xl border border-white/15 bg-slate-800 p-6">
+            <div className="mb-4 text-lg font-bold">Select New Bowler</div>
             <select
               value={selectedNewBowler}
               onChange={(e) => setSelectedNewBowler(e.target.value)}
-              style={s.modalSelect}
+              className="mb-3 w-full rounded-lg border border-white/20 bg-slate-950 px-3 py-2 text-sm text-white outline-none ring-white/20 focus:ring"
             >
               <option value="">— Choose bowler —</option>
               {bowlingTeamPlayers.map((p) => (
@@ -714,7 +566,11 @@ function UmpireScorerPage() {
                 </option>
               ))}
             </select>
-            <button onClick={confirmNewBowler} style={s.confirmBtn}>
+            <button
+              type="button"
+              onClick={confirmNewBowler}
+              className="w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700"
+            >
               Confirm Bowler
             </button>
           </div>
@@ -723,13 +579,15 @@ function UmpireScorerPage() {
 
       {/* New Batter Modal — shown after a wicket */}
       {showBatterModal && (
-        <div style={s.overlay}>
-          <div style={s.modal}>
-            <div style={s.modalTitle}>Select New {nextBatterRole}</div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-4">
+          <div className="w-full max-w-sm rounded-2xl border border-white/15 bg-slate-800 p-6">
+            <div className="mb-4 text-lg font-bold">
+              Select New {nextBatterRole}
+            </div>
             <select
               value={selectedNewBatter}
               onChange={(e) => setSelectedNewBatter(e.target.value)}
-              style={s.modalSelect}
+              className="mb-3 w-full rounded-lg border border-white/20 bg-slate-950 px-3 py-2 text-sm text-white outline-none ring-white/20 focus:ring"
             >
               <option value="">
                 — Choose {nextBatterRole.toLowerCase()} —
@@ -740,7 +598,11 @@ function UmpireScorerPage() {
                 </option>
               ))}
             </select>
-            <button onClick={confirmNewBatter} style={s.confirmBtn}>
+            <button
+              type="button"
+              onClick={confirmNewBatter}
+              className="w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700"
+            >
               Confirm Batter
             </button>
           </div>
@@ -748,143 +610,89 @@ function UmpireScorerPage() {
       )}
 
       {/* Header */}
-      <div style={s.header}>
-        <span style={s.title}>Umpire Scorer</span>
-        <Link
-          to={`/scoreboard/${matchId}`}
-          style={{
-            color: "rgba(255,255,255,0.6)",
-            fontSize: "13px",
-            textDecoration: "none",
-          }}
-        >
-          Open Scoreboard
-        </Link>
+      <div className="mb-5 flex items-center justify-between">
+        <span className="text-[22px] font-bold">Umpire Scorer</span>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handleExitUmpireMode}
+            className="text-xs text-slate-400 hover:text-slate-200"
+          >
+            Exit Umpire Mode
+          </button>
+          <Link to="/" className="text-xs text-slate-400 hover:text-slate-200">
+            Home
+          </Link>
+          <Link
+            to={`/scoreboard/${matchId}`}
+            className="text-xs text-slate-400 hover:text-slate-200"
+          >
+            Open Scoreboard
+          </Link>
+        </div>
       </div>
 
       {/* Scoreboard — driven from match state */}
-      <div style={s.scoreCard}>
-        <div
-          style={{
-            fontSize: "13px",
-            color: "rgba(255,255,255,0.4)",
-            marginBottom: "6px",
-            letterSpacing: "0.5px",
-          }}
-        >
+      <div className="mb-4 rounded-2xl border border-white/15 bg-white/5 p-5">
+        <div className="mb-1.5 text-xs tracking-wide text-slate-400">
           {match?.battingTeam?.toUpperCase() ?? "BATTING TEAM"}
         </div>
-        <div style={s.scoreMain}>
+        <div className="text-[42px] leading-none font-extrabold tracking-tight">
           {totalRuns}/{wickets}
         </div>
-        <div style={s.scoreMeta}>
+        <div className="mt-1.5 text-sm text-slate-400">
           Ov: {oversBowled}.{ballsInOver} &nbsp;|&nbsp; RR: {runRate}
         </div>
         {targetScore && (
-          <div
-            style={{
-              ...s.scoreMeta,
-              color: "#c7d2fe",
-              fontWeight: 600,
-              marginTop: "8px",
-            }}
-          >
+          <div className="mt-2 text-sm font-semibold text-indigo-200">
             Target: {targetScore} | Runs Req: {runsNeeded} | Balls Req:{" "}
             {ballsLeft} | RRR: {requiredRunRate}
           </div>
         )}
         {matchEndStatus.isMatchOver && (
-          <div
-            style={{
-              marginTop: "10px",
-              borderRadius: "8px",
-              padding: "8px 10px",
-              background: "rgba(245, 158, 11, 0.2)",
-              border: "1px solid rgba(245, 158, 11, 0.5)",
-              color: "#fde68a",
-              fontSize: "13px",
-              fontWeight: 600,
-            }}
-          >
+          <div className="mt-2.5 rounded-lg border border-amber-400/50 bg-amber-500/20 px-2.5 py-2 text-sm font-semibold text-amber-200">
             {matchEndStatus.resultMessage}
           </div>
         )}
-        <div
-          style={{
-            ...s.scoreMeta,
-            marginTop: "10px",
-            display: "flex",
-            alignItems: "center",
-            gap: "10px",
-          }}
-        >
+        <div className="mt-2.5 flex items-center gap-2 text-sm text-slate-400">
           🏏 {match?.striker ?? "Striker not set"} * &nbsp;|&nbsp;{" "}
           {match?.nonStriker ?? "Non-striker not set"}
           {match?.status === "live" && (
             <button
+              type="button"
               onClick={() =>
                 match.nonStriker &&
                 socketRef.current?.emit("swapStriker", {
                   matchId,
                 })
               }
-              style={{
-                marginLeft: "8px",
-                padding: "3px 10px",
-                borderRadius: "6px",
-                border: "1px solid rgba(255,255,255,0.3)",
-                background: "rgba(255,255,255,0.08)",
-                color: "rgba(255,255,255,0.8)",
-                fontSize: "11px",
-                cursor: "pointer",
-              }}
+              className="ml-2 rounded-md border border-white/30 bg-white/10 px-2.5 py-1 text-[11px] text-slate-200"
             >
               Swap Striker
             </button>
           )}
         </div>
-        <div style={s.scoreMeta}>
+        <div className="mt-1.5 text-sm text-slate-400">
           🎳 {match?.currentBowler ?? "Bowler not set"}
         </div>
       </div>
 
       {/* Current Over */}
-      <div style={s.statsCard}>
-        <div
-          style={{
-            color: "rgba(255,255,255,0.4)",
-            fontSize: "11px",
-            letterSpacing: "1px",
-            marginBottom: "10px",
-            textTransform: "uppercase",
-          }}
-        >
+      <div className="mb-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+        <div className="mb-2.5 text-[11px] tracking-wider text-slate-400 uppercase">
           This Over — {validBallsThisOver}/6
         </div>
-        <div
-          style={{
-            display: "flex",
-            gap: "8px",
-            flexWrap: "wrap",
-            minHeight: "36px",
-          }}
-        >
+        <div className="flex min-h-9 flex-wrap gap-2">
           {currentOverBalls.map((item, i) => (
             <div
               key={i}
-              style={{ ...s.overBall, background: getBallColor(item.label) }}
+              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${getBallToneClass(item.label)}`}
             >
               {item.label}
             </div>
           ))}
           {currentOverBalls.length === 0 && (
-            <span
-              style={{
-                color: "rgba(255,255,255,0.3)",
-                fontSize: "13px",
-                lineHeight: "36px",
-              }}
-            >
+            <span className="text-sm leading-9 text-slate-500">
               No balls this over
             </span>
           )}
@@ -892,78 +700,91 @@ function UmpireScorerPage() {
       </div>
 
       {/* Batter Stats */}
-      <div style={s.statsCard}>
-        <div style={s.statsHeader}>
-          <span style={{ flex: 3 }}>BATTER</span>
-          <span style={s.statCol}>R</span>
-          <span style={s.statCol}>B</span>
-          <span style={s.statCol}>4s</span>
-          <span style={s.statCol}>6s</span>
-          <span style={s.statCol}>SR</span>
+      <div className="mb-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+        <div className="mb-1.5 flex border-b border-white/10 pb-2 text-[11px] tracking-wider text-slate-400 uppercase">
+          <span className="flex-[3]">BATTER</span>
+          <span className="flex-1 text-right tabular-nums">R</span>
+          <span className="flex-1 text-right tabular-nums">B</span>
+          <span className="flex-1 text-right tabular-nums">4s</span>
+          <span className="flex-1 text-right tabular-nums">6s</span>
+          <span className="flex-1 text-right tabular-nums">SR</span>
         </div>
-        <div style={s.statsRow}>
-          <span style={{ flex: 3, fontWeight: 600 }}>
+        <div className="flex items-center border-b border-white/5 px-1 py-2 text-sm">
+          <span className="flex-[3] font-semibold">
             {match?.striker ?? "-"} *
           </span>
-          <span style={s.statCol}>{strikerStats.runs}</span>
-          <span style={s.statCol}>{strikerStats.balls}</span>
-          <span style={s.statCol}>{strikerStats.fours}</span>
-          <span style={s.statCol}>{strikerStats.sixes}</span>
-          <span style={s.statCol}>{strikerStats.sr}</span>
+          <span className="flex-1 text-right tabular-nums">
+            {strikerStats.runs}
+          </span>
+          <span className="flex-1 text-right tabular-nums">
+            {strikerStats.balls}
+          </span>
+          <span className="flex-1 text-right tabular-nums">
+            {strikerStats.fours}
+          </span>
+          <span className="flex-1 text-right tabular-nums">
+            {strikerStats.sixes}
+          </span>
+          <span className="flex-1 text-right tabular-nums">
+            {strikerStats.sr}
+          </span>
         </div>
-        <div style={{ ...s.statsRow, borderBottom: "none" }}>
-          <span style={{ flex: 3 }}>{match?.nonStriker ?? "-"}</span>
-          <span style={s.statCol}>{nonStrikerStats.runs}</span>
-          <span style={s.statCol}>{nonStrikerStats.balls}</span>
-          <span style={s.statCol}>{nonStrikerStats.fours}</span>
-          <span style={s.statCol}>{nonStrikerStats.sixes}</span>
-          <span style={s.statCol}>{nonStrikerStats.sr}</span>
+        <div className="flex items-center px-1 py-2 text-sm">
+          <span className="flex-[3]">{match?.nonStriker ?? "-"}</span>
+          <span className="flex-1 text-right tabular-nums">
+            {nonStrikerStats.runs}
+          </span>
+          <span className="flex-1 text-right tabular-nums">
+            {nonStrikerStats.balls}
+          </span>
+          <span className="flex-1 text-right tabular-nums">
+            {nonStrikerStats.fours}
+          </span>
+          <span className="flex-1 text-right tabular-nums">
+            {nonStrikerStats.sixes}
+          </span>
+          <span className="flex-1 text-right tabular-nums">
+            {nonStrikerStats.sr}
+          </span>
         </div>
       </div>
 
       {/* Bowler Stats */}
-      <div style={s.statsCard}>
-        <div style={s.statsHeader}>
-          <span style={{ flex: 3 }}>BOWLER</span>
-          <span style={s.statCol}>OV</span>
-          <span style={s.statCol}>W</span>
-          <span style={s.statCol}>R</span>
-          <span style={s.statCol}>ECO</span>
+      <div className="mb-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+        <div className="mb-1.5 flex border-b border-white/10 pb-2 text-[11px] tracking-wider text-slate-400 uppercase">
+          <span className="flex-[3]">BOWLER</span>
+          <span className="flex-1 text-right tabular-nums">OV</span>
+          <span className="flex-1 text-right tabular-nums">W</span>
+          <span className="flex-1 text-right tabular-nums">R</span>
+          <span className="flex-1 text-right tabular-nums">ECO</span>
         </div>
-        <div style={{ ...s.statsRow, borderBottom: "none" }}>
-          <span style={{ flex: 3, fontWeight: 600 }}>
+        <div className="flex items-center px-1 py-2 text-sm">
+          <span className="flex-[3] font-semibold">
             {match?.currentBowler ?? "-"}
           </span>
-          <span style={s.statCol}>{bowlerStats.overs}</span>
-          <span style={s.statCol}>{bowlerStats.wickets}</span>
-          <span style={s.statCol}>{bowlerStats.runs}</span>
-          <span style={s.statCol}>{bowlerStats.economy}</span>
+          <span className="flex-1 text-right tabular-nums">
+            {bowlerStats.overs}
+          </span>
+          <span className="flex-1 text-right tabular-nums">
+            {bowlerStats.wickets}
+          </span>
+          <span className="flex-1 text-right tabular-nums">
+            {bowlerStats.runs}
+          </span>
+          <span className="flex-1 text-right tabular-nums">
+            {bowlerStats.economy}
+          </span>
         </div>
       </div>
 
       {/* Record Delivery */}
-      <div style={s.statsCard}>
-        <div
-          style={{
-            color: "rgba(255,255,255,0.4)",
-            fontSize: "11px",
-            letterSpacing: "1px",
-            marginBottom: "12px",
-            textTransform: "uppercase",
-          }}
-        >
+      <div className="mb-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+        <div className="mb-3 text-[11px] tracking-wider text-slate-400 uppercase">
           Record Delivery
         </div>
 
         {/* Extra / Wicket toggles */}
-        <div
-          style={{
-            display: "flex",
-            gap: "8px",
-            marginBottom: "12px",
-            flexWrap: "wrap",
-          }}
-        >
+        <div className="mb-3 flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => {
@@ -975,7 +796,11 @@ function UmpireScorerPage() {
                 setDismissedBatter("");
               }
             }}
-            style={extraType === "wide" ? s.toggleBtnActive : s.toggleBtn}
+            className={`rounded-lg border px-4 py-2 text-sm font-semibold ${
+              extraType === "wide"
+                ? "border-amber-500 bg-amber-500/20 text-amber-400"
+                : "border-white/20 bg-white/10 text-white"
+            }`}
           >
             Wide
           </button>
@@ -984,7 +809,11 @@ function UmpireScorerPage() {
             onClick={() =>
               setExtraType(extraType === "no-ball" ? "" : "no-ball")
             }
-            style={extraType === "no-ball" ? s.toggleBtnActive : s.toggleBtn}
+            className={`rounded-lg border px-4 py-2 text-sm font-semibold ${
+              extraType === "no-ball"
+                ? "border-amber-500 bg-amber-500/20 text-amber-400"
+                : "border-white/20 bg-white/10 text-white"
+            }`}
           >
             No Ball
           </button>
@@ -998,7 +827,11 @@ function UmpireScorerPage() {
                 setDismissedBatter("");
               }
             }}
-            style={isWicket ? s.wicketBtnActive : s.toggleBtn}
+            className={`rounded-lg border px-4 py-2 text-sm font-semibold ${
+              isWicket
+                ? "border-red-500 bg-red-500/20 text-red-400"
+                : "border-white/20 bg-white/10 text-white"
+            }`}
           >
             Wicket
           </button>
@@ -1006,11 +839,11 @@ function UmpireScorerPage() {
 
         {/* Wicket detail selectors */}
         {isWicket && (
-          <div style={{ marginBottom: "12px" }}>
+          <div className="mb-3">
             <select
               value={wicketType}
               onChange={(e) => setWicketType(e.target.value)}
-              style={s.modalSelect}
+              className="mb-3 w-full rounded-lg border border-white/20 bg-slate-950 px-3 py-2 text-sm text-white outline-none ring-white/20 focus:ring"
             >
               <option value="">— Wicket type —</option>
               {wicketTypes.map((t) => (
@@ -1022,7 +855,7 @@ function UmpireScorerPage() {
             <select
               value={dismissedBatter}
               onChange={(e) => setDismissedBatter(e.target.value)}
-              style={{ ...s.modalSelect, marginBottom: 0 }}
+              className="w-full rounded-lg border border-white/20 bg-slate-950 px-3 py-2 text-sm text-white outline-none ring-white/20 focus:ring"
             >
               <option value="">— Dismissed batter —</option>
               {battingTeamActivePlayers.map((p) => (
@@ -1035,13 +868,13 @@ function UmpireScorerPage() {
         )}
 
         {/* Run buttons */}
-        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+        <div className="flex flex-wrap gap-2.5">
           {runOptions.map((r) => (
             <button
               key={r}
               type="button"
               onClick={() => recordDelivery(r)}
-              style={s.runBtn}
+              className="flex h-16 w-16 items-center justify-center rounded-xl border border-white/20 bg-white/10 text-2xl font-bold text-white"
             >
               {getRunButtonLabel(r, extraType)}
             </button>
@@ -1053,27 +886,12 @@ function UmpireScorerPage() {
           type="button"
           onClick={undoDelivery}
           disabled={!match?.timeline?.length}
-          style={{
-            ...s.statsCard,
-            marginTop: "12px",
-            marginBottom: 0,
-            width: "100%",
-            padding: "12px",
-            border: "1px solid rgba(239,68,68,0.4)",
-            background: "rgba(239,68,68,0.1)",
-            color: !match?.timeline?.length
-              ? "rgba(255,255,255,0.3)"
-              : "#ef4444",
-            fontSize: "14px",
-            fontWeight: 600,
-            cursor: !match?.timeline?.length ? "not-allowed" : "pointer",
-            textAlign: "center",
-          }}
+          className="mt-3 w-full rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-400 disabled:cursor-not-allowed disabled:text-red-400/50"
         >
           Undo Last Ball
         </button>
       </div>
-    </div>
+    </main>
   );
 }
 

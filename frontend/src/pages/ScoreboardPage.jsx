@@ -17,6 +17,16 @@ function getBallLabel(ball) {
   return runs === 0 ? "•" : String(runs);
 }
 
+function getOverChipToneClass(ballLabel) {
+  if (ballLabel === "W") {
+    return "border-red-500/70 bg-red-500/20 text-red-200";
+  }
+  if (ballLabel === "Wd") {
+    return "border-amber-400/70 bg-amber-400/20 text-amber-100";
+  }
+  return "border-slate-700 bg-slate-900 text-slate-100";
+}
+
 function isValidBall(ball) {
   if (typeof ball?.isValidBall === "boolean") {
     return ball.isValidBall;
@@ -188,7 +198,9 @@ function buildBattingRows(match) {
   const nonStriker = match.currentNonStriker || null;
   const battingTeam = match.battingTeam;
 
-  const batters = playerStats.filter((p) => p.team === battingTeam && p.didBat);
+  const filteredBatters = playerStats.filter(
+    (p) => p.team === battingTeam && p.didBat,
+  );
 
   // Build dismissal order map (timeline index where each batter was dismissed)
   const dismissalOrder = {};
@@ -198,7 +210,7 @@ function buildBattingRows(match) {
     }
   });
 
-  return [...batters].sort((a, b) => {
+  return [...filteredBatters].sort((a, b) => {
     const aIsStriker = a.name === striker;
     const bIsStriker = b.name === striker;
     const aIsNonStriker = a.name === nonStriker;
@@ -227,6 +239,11 @@ function ScoreboardPage() {
   const [matchEndStatus, setMatchEndStatus] = useState({
     isMatchOver: false,
     resultMessage: "",
+  });
+  const [tossLiveState, setTossLiveState] = useState({
+    isFlipping: false,
+    result: "",
+    winner: "",
   });
   const isViewerMode = searchParams.get("viewer") === "1";
 
@@ -266,7 +283,9 @@ function ScoreboardPage() {
       }
     };
 
-    socket.emit("joinMatch", { matchId });
+    socket.on("connect", () => {
+      socket.emit("joinMatch", { matchId });
+    });
     socket.on("matchState", applyMatchUpdate);
     socket.on("score_updated", applyMatchUpdate);
     socket.on("match_completed", (payload) => {
@@ -280,6 +299,16 @@ function ScoreboardPage() {
           resultMessage: payload.resultMessage,
         });
       }
+    });
+    socket.on("toss_flip_started", () => {
+      setTossLiveState({ isFlipping: true, result: "", winner: "" });
+    });
+    socket.on("toss_flip_result", ({ result, winner }) => {
+      setTossLiveState({
+        isFlipping: false,
+        result: result || "",
+        winner: winner || "",
+      });
     });
     socket.on("connect_error", (err) => {
       setError(err.message);
@@ -300,9 +329,12 @@ function ScoreboardPage() {
     }
 
     return () => {
+      socket.off("connect");
       socket.off("matchState");
       socket.off("score_updated");
       socket.off("match_completed");
+      socket.off("toss_flip_started");
+      socket.off("toss_flip_result");
       socket.off("connect_error");
       socket.disconnect();
       if (pollInterval) {
@@ -313,8 +345,8 @@ function ScoreboardPage() {
 
   if (error) {
     return (
-      <main className="min-h-screen bg-slate-950 px-4 py-10 text-slate-100">
-        <div className="mx-auto w-full max-w-6xl">
+      <main className="score-shell">
+        <div className="score-container">
           <p className="rounded-lg border border-red-500/40 bg-red-900/40 p-4 text-red-200">
             {error}
           </p>
@@ -325,9 +357,118 @@ function ScoreboardPage() {
 
   if (!match) {
     return (
-      <main className="min-h-screen bg-slate-950 px-4 py-10 text-slate-100">
-        <div className="mx-auto w-full max-w-6xl">
+      <main className="score-shell">
+        <div className="score-container">
           <p className="text-slate-300">Loading scoreboard...</p>
+        </div>
+      </main>
+    );
+  }
+
+  const team1PlayersForDisplay = (match.team1Players || [])
+    .map((player) =>
+      typeof player === "string"
+        ? null
+        : player?.name
+          ? { name: player.name }
+          : null,
+    )
+    .filter(Boolean);
+  const team2PlayersForDisplay = (match.team2Players || [])
+    .map((player) =>
+      typeof player === "string"
+        ? null
+        : player?.name
+          ? { name: player.name }
+          : null,
+    )
+    .filter(Boolean);
+  const team1FallbackFromStats = (match.playerStats || []).filter(
+    (player) => player.team === match.team1Name,
+  );
+  const team2FallbackFromStats = (match.playerStats || []).filter(
+    (player) => player.team === match.team2Name,
+  );
+  const team1Players =
+    team1PlayersForDisplay.length > 0
+      ? team1PlayersForDisplay
+      : team1FallbackFromStats;
+  const team2Players =
+    team2PlayersForDisplay.length > 0
+      ? team2PlayersForDisplay
+      : team2FallbackFromStats;
+  const isPreTossViewer =
+    isViewerMode && (match.status === "upcoming" || match.status === "toss");
+
+  if (isPreTossViewer) {
+    return (
+      <main className="score-shell">
+        <div className="score-container">
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+            <h1 className="text-3xl font-bold tracking-tight text-white">
+              Match Preview
+            </h1>
+            <div className="flex items-center gap-4 text-sm">
+              <Link
+                to="/view"
+                className="font-medium text-emerald-300 hover:text-emerald-200"
+              >
+                Back to Viewer
+              </Link>
+              <Link
+                to="/"
+                className="font-medium text-sky-300 hover:text-sky-200"
+              >
+                Home
+              </Link>
+            </div>
+          </div>
+
+          {match.status === "toss" ? (
+            <div className="mb-4 rounded-lg border border-indigo-500/40 bg-indigo-900/20 px-4 py-3 text-center text-sm font-medium text-indigo-200">
+              {tossLiveState.isFlipping
+                ? "Umpire is flipping the coin..."
+                : tossLiveState.result && tossLiveState.winner
+                  ? `${tossLiveState.winner} won toss (${tossLiveState.result}). Waiting for toss choice...`
+                  : "Toss in progress. Waiting for umpire..."}
+            </div>
+          ) : (
+            <div className="mb-4 rounded-lg border border-sky-500/40 bg-sky-900/20 px-4 py-3 text-center text-sm font-medium text-sky-200">
+              Match created. Waiting for umpire to start toss.
+            </div>
+          )}
+
+          <section className="grid gap-4 md:grid-cols-2">
+            <article className="score-panel">
+              <h2 className="text-lg font-semibold text-white">
+                {match.team1Name}
+              </h2>
+              <ul className="mt-3 space-y-2 text-sm text-slate-300">
+                {team1Players.length > 0 ? (
+                  team1Players.map((player, index) => (
+                    <li key={`${player.name}-${index}`}>{player.name}</li>
+                  ))
+                ) : (
+                  <li>No players added</li>
+                )}
+              </ul>
+            </article>
+
+            <article className="score-panel">
+              <h2 className="text-lg font-semibold text-white">
+                {match.team2Name}
+              </h2>
+              <ul className="mt-3 space-y-2 text-sm text-slate-300">
+                {team2Players.length > 0 ? (
+                  team2Players.map((player, index) => (
+                    <li key={`${player.name}-${index}`}>{player.name}</li>
+                  ))
+                ) : (
+                  <li>No players added</li>
+                )}
+              </ul>
+            </article>
+          </section>
         </div>
       </main>
     );
@@ -360,12 +501,6 @@ function ScoreboardPage() {
     // When an over has just completed (ballsInOver resets to 0 but balls have been bowled),
     // don't show any placeholders; otherwise fill up to 6 valid-ball slots
     match.ballsBowled > 0 && ballsInOver === 0 ? 0 : 6 - ballsInOver;
-  const strikerPlayer = (match.playerStats || []).find(
-    (p) => p.name === match.currentStriker,
-  );
-  const nonStrikerPlayer = (match.playerStats || []).find(
-    (p) => p.name === match.currentNonStriker,
-  );
   const currentBowlerProfile = (match.playerStats || []).find(
     (p) => p.team === match.bowlingTeam && p.name === match.currentBowler,
   );
@@ -393,7 +528,11 @@ function ScoreboardPage() {
     totalValidBalls > 0
       ? ((match.totalRuns / totalValidBalls) * 6).toFixed(2)
       : "0.00";
-  const targetScore = match.targetScore || null;
+  const targetScore =
+    match.targetScore ||
+    (typeof match.firstInningsScore === "number"
+      ? match.firstInningsScore + 1
+      : null);
   const runsNeeded = targetScore
     ? Math.max(0, targetScore - match.totalRuns)
     : null;
@@ -407,33 +546,45 @@ function ScoreboardPage() {
         ? "-"
         : "0.00"
     : null;
+  const isOpenersSetupPending =
+    match.status === "innings" &&
+    Number(match.ballsBowled || 0) === 0 &&
+    !match.currentStriker &&
+    !match.currentNonStriker;
+  const isSecondInningsSetupPending =
+    isOpenersSetupPending && Number(match.inningsNumber) === 2;
+  const isNextBowlerSetupPending =
+    match.status === "live" &&
+    Number(match.ballsBowled || 0) > 0 &&
+    Number(match.ballsBowled || 0) % 6 === 0;
+  const battingTeamName = match.battingTeam || "Batting team";
 
   return (
-    <main className="min-h-screen bg-slate-950 px-4 py-10 text-slate-100">
-      <div className="mx-auto w-full max-w-6xl">
+    <main className="score-shell">
+      <div className="score-container">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-3xl font-bold tracking-tight text-white">
             Live Scoreboard
           </h1>
-          {!isViewerMode ? (
-            <div className="flex items-center gap-4 text-sm">
+          <div className="flex items-center gap-4 text-sm">
+            {!isViewerMode ? (
               <Link
                 to={`/scorer/${matchId}`}
                 className="font-medium text-emerald-300 hover:text-emerald-200"
               >
                 Scorer Panel
               </Link>
-              <Link
-                to="/"
-                className="font-medium text-sky-300 hover:text-sky-200"
-              >
-                Home
-              </Link>
-            </div>
-          ) : null}
+            ) : null}
+            <Link
+              to="/"
+              className="font-medium text-sky-300 hover:text-sky-200"
+            >
+              Home
+            </Link>
+          </div>
         </div>
 
-        <section className="rounded-2xl border border-slate-800 bg-slate-900/80 p-6 shadow-2xl shadow-black/30">
+        <section className="score-panel shadow-2xl shadow-black/30">
           {matchEndStatus.isMatchOver && (
             <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-900/20 px-4 py-2 text-center text-sm font-medium text-amber-300">
               {matchEndStatus.resultMessage}
@@ -444,9 +595,30 @@ function ScoreboardPage() {
               Match Complete
             </div>
           )}
-          {match.status === "innings" && (
+          {isOpenersSetupPending && (
+            <div className="mb-4 rounded-lg border border-sky-500/40 bg-sky-900/20 px-4 py-2 text-center text-sm font-medium text-sky-300">
+              {isSecondInningsSetupPending
+                ? `${battingTeamName} batsmen are getting ready for chase. Runs to chase: ${runsNeeded ?? "-"}`
+                : `${battingTeamName} batsmen getting ready`}
+            </div>
+          )}
+          {isNextBowlerSetupPending && (
+            <div className="mb-4 rounded-lg border border-sky-500/40 bg-sky-900/20 px-4 py-2 text-center text-sm font-medium text-sky-300">
+              Next bowler getting ready
+            </div>
+          )}
+          {match.status === "innings" && !isOpenersSetupPending && (
             <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-900/20 px-4 py-2 text-center text-sm font-medium text-amber-300">
               Innings Break
+            </div>
+          )}
+          {match.status === "toss" && (
+            <div className="mb-4 rounded-lg border border-indigo-500/40 bg-indigo-900/20 px-4 py-3 text-center text-sm font-medium text-indigo-200">
+              {tossLiveState.isFlipping
+                ? "Umpire is flipping the coin..."
+                : tossLiveState.result && tossLiveState.winner
+                  ? `${tossLiveState.winner} won toss (${tossLiveState.result}). Waiting for toss choice...`
+                  : "Toss in progress. Waiting for umpire..."}
             </div>
           )}
           <p className="text-sm font-medium uppercase tracking-wide text-slate-400">
@@ -457,7 +629,7 @@ function ScoreboardPage() {
               {match.totalRuns}/{match.wickets}
             </p>
             <p className="pb-1 text-lg text-slate-300">
-              Overs {match.oversBowled}
+              Overs {match.oversBowled} / {match.totalOvers}
             </p>
           </div>
           {targetScore && (
@@ -725,13 +897,7 @@ function ScoreboardPage() {
                     currentOver.map((ballLabel, index) => (
                       <span
                         key={`${ballLabel}-${index}`}
-                        className={`flex min-w-10 items-center justify-center rounded-full border px-3 py-1 text-sm font-semibold ${
-                          ballLabel === "W"
-                            ? "border-red-500/70 bg-red-500/20 text-red-200"
-                            : ballLabel === "Wd"
-                              ? "border-amber-400/70 bg-amber-400/20 text-amber-100"
-                              : "border-slate-700 bg-slate-900 text-slate-100"
-                        }`}
+                        className={`score-over-chip ${getOverChipToneClass(ballLabel)}`}
                       >
                         {ballLabel}
                       </span>
@@ -881,7 +1047,7 @@ function ScoreboardPage() {
         </section>
 
         {/* Current over + mini batsman/bowler summary */}
-        <section className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/80 p-6">
+        <section className="score-panel mt-6">
           <div>
             <p className="mb-2 text-sm font-semibold text-slate-300">
               Over {oversBowled + 1}:
@@ -890,13 +1056,7 @@ function ScoreboardPage() {
               {currentOver.map((label, i) => (
                 <span
                   key={`over-ball-${i}`}
-                  className={`flex min-w-10 items-center justify-center rounded-full border px-3 py-1 text-sm font-semibold ${
-                    label === "W"
-                      ? "border-red-500/70 bg-red-500/20 text-red-200"
-                      : label === "Wd"
-                        ? "border-amber-400/70 bg-amber-400/20 text-amber-100"
-                        : "border-slate-700 bg-slate-900 text-slate-100"
-                  }`}
+                  className={`score-over-chip ${getOverChipToneClass(label)}`}
                 >
                   {label}
                 </span>
@@ -913,31 +1073,22 @@ function ScoreboardPage() {
           </div>
 
           <div className="mt-4 text-sm">
-            {strikerPlayer && (
-              <p className="text-white">
-                <span className="font-medium">{match.currentStriker}*</span>{" "}
-                {strikerPlayer.batting?.runs ?? 0}(
-                {strikerPlayer.batting?.balls ?? 0})
+            {currentBowlerRow ? (
+              <p className="text-slate-300">
+                Bowler:{" "}
+                <span className="font-medium text-white">
+                  {match.currentBowler}
+                </span>{" "}
+                &mdash; {calcOvers(currentBowlerRow._balls)}-
+                {currentBowlerRow._wickets}/{currentBowlerRow._runs}
               </p>
-            )}
-            {nonStrikerPlayer && (
-              <p className="mt-1 text-slate-300">
-                <span className="font-medium">{match.currentNonStriker}</span>{" "}
-                {nonStrikerPlayer.batting?.runs ?? 0}(
-                {nonStrikerPlayer.batting?.balls ?? 0})
-              </p>
-            )}
-            {currentBowlerRow && (
-              <p className="mt-2 text-slate-400">
-                {match.currentBowler} &mdash;{" "}
-                {calcOvers(currentBowlerRow._balls)}-{currentBowlerRow._wickets}
-                /{currentBowlerRow._runs}
-              </p>
+            ) : (
+              <p className="text-slate-400">Bowler not set</p>
             )}
           </div>
         </section>
 
-        <section className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/80 p-6">
+        <section className="score-panel mt-6">
           <h2 className="text-lg font-semibold text-white">Overs Summary</h2>
           <ul className="mt-3 space-y-2 text-sm text-slate-300">
             {oversSummary.length > 0 ? (

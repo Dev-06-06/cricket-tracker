@@ -35,12 +35,43 @@ export function createMatch(payload) {
   });
 }
 
+export function createUpcomingMatch(payload) {
+  return request("/api/match/upcoming", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function getMatch(matchId) {
   return request(`/api/match/${matchId}`);
 }
 
 export function getOngoingMatch() {
   return request("/api/match/ongoing");
+}
+
+export function getUpcomingMatches() {
+  return request("/api/match/upcoming");
+}
+
+export function getLiveMatches() {
+  return request("/api/match/live");
+}
+
+export function getCompletedMatches() {
+  return request("/api/match/completed");
+}
+
+export function startMatch(matchId) {
+  return request(`/api/match/${matchId}/start`, {
+    method: "POST",
+  });
+}
+
+export function deleteMatch(matchId) {
+  return request(`/api/match/${matchId}`, {
+    method: "DELETE",
+  });
 }
 
 export function getPlayers() {

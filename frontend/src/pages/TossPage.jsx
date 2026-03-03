@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { createMatchSocket } from "../services/socket";
+import { UMPIRE_AUTH_KEY } from "./UmpireLoginPage";
 
 function TossPage() {
   const { matchId } = useParams();
@@ -27,7 +28,9 @@ function TossPage() {
     const socket = createMatchSocket();
     socketRef.current = socket;
 
-    socket.emit("joinMatch", { matchId });
+    socket.on("connect", () => {
+      socket.emit("joinMatch", { matchId });
+    });
 
     socket.on("matchState", (updatedMatch) => {
       setMatch(updatedMatch);
@@ -37,6 +40,7 @@ function TossPage() {
     });
 
     return () => {
+      socket.off("connect");
       socket.off("matchState");
       socket.disconnect();
     };
@@ -45,6 +49,7 @@ function TossPage() {
   const handleCoinFlip = () => {
     if (flipState !== "idle") return;
     setFlipState("flipping");
+    socketRef.current?.emit("toss_flip_started", { matchId });
 
     const result = Math.random() < 0.5 ? "HEADS" : "TAILS";
     // 1800deg = 5 full rotations, lands on HEADS; 1980deg = 5.5 rotations, lands on TAILS
@@ -56,6 +61,11 @@ function TossPage() {
         result === "HEADS" ? HEADS_ROTATION : TAILS_ROTATION;
       setCoinTransform(finalTransform);
       const winner = result === "HEADS" ? match.team1Name : match.team2Name;
+      socketRef.current?.emit("toss_flip_result", {
+        matchId,
+        result,
+        winner,
+      });
       setTossWinner(winner);
       setFlipState("done");
     }, 2000);
@@ -84,9 +94,14 @@ function TossPage() {
     });
   };
 
+  const handleExitUmpireMode = () => {
+    sessionStorage.removeItem(UMPIRE_AUTH_KEY);
+    navigate("/umpire/login", { replace: true });
+  };
+
   if (!match) {
     return (
-      <main className="mx-auto min-h-screen w-full max-w-4xl px-4 py-10">
+      <main className="app-shell max-w-4xl">
         <p className="text-slate-700">Loading match...</p>
       </main>
     );
@@ -100,11 +115,25 @@ function TossPage() {
   const nonStrikerOptions = battingPlayers.filter((p) => p.name !== striker);
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-4xl px-4 py-10">
-      <h1 className="text-3xl font-bold text-slate-900">Toss</h1>
+    <main className="app-shell max-w-4xl">
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="page-title">Toss</h1>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleExitUmpireMode}
+            className="btn px-3 py-1 text-xs"
+          >
+            Exit Umpire Mode
+          </button>
+          <Link to="/" className="btn px-3 py-1 text-xs">
+            Home
+          </Link>
+        </div>
+      </div>
 
       {!tossConfirmed ? (
-        <section className="mt-8 rounded-xl border border-slate-200 bg-white p-6">
+        <section className="panel mt-8 p-6">
           {/* Step 1 & 2: Coin flip */}
           {flipState !== "done" && (
             <>
@@ -116,7 +145,7 @@ function TossPage() {
                   type="button"
                   onClick={handleCoinFlip}
                   disabled={flipState === "flipping"}
-                  className="rounded-lg px-4 py-2 text-sm font-medium border border-slate-300 bg-white text-slate-700 disabled:opacity-50"
+                  className="btn disabled:opacity-50"
                 >
                   {match.team1Name} called HEADS
                 </button>
@@ -124,17 +153,14 @@ function TossPage() {
                   type="button"
                   onClick={handleCoinFlip}
                   disabled={flipState === "flipping"}
-                  className="rounded-lg px-4 py-2 text-sm font-medium border border-slate-300 bg-white text-slate-700 disabled:opacity-50"
+                  className="btn disabled:opacity-50"
                 >
                   {match.team2Name} called TAILS
                 </button>
               </div>
 
               {/* Coin element */}
-              <div
-                className="mt-6 flex justify-center"
-                style={{ perspective: "600px" }}
-              >
+              <div className="mt-6 flex justify-center [perspective:600px]">
                 <div
                   className={`coin${flipState === "flipping" ? " coin-flipping" : ""}`}
                   style={
@@ -185,9 +211,7 @@ function TossPage() {
                     type="button"
                     onClick={() => setTossChoice(choice)}
                     className={`rounded-lg px-4 py-2 text-sm font-medium ${
-                      tossChoice === choice
-                        ? "bg-slate-900 text-white"
-                        : "border border-slate-300 bg-white text-slate-700"
+                      tossChoice === choice ? "btn btn-dark" : "btn"
                     }`}
                   >
                     {choice}
@@ -199,7 +223,7 @@ function TossPage() {
                 type="button"
                 onClick={confirmToss}
                 disabled={!tossChoice}
-                className="mt-6 rounded-lg bg-blue-600 px-6 py-3 font-medium text-white disabled:opacity-50"
+                className="btn btn-primary mt-6 px-6 py-3 disabled:opacity-50"
               >
                 Confirm Toss
               </button>
@@ -207,7 +231,7 @@ function TossPage() {
           )}
         </section>
       ) : (
-        <section className="mt-8 rounded-xl border border-slate-200 bg-white p-6">
+        <section className="panel mt-8 p-6">
           <h2 className="text-lg font-semibold text-slate-900">Set Openers</h2>
           <p className="mt-1 text-sm text-slate-600">
             {match.battingTeam} batting | {match.bowlingTeam} bowling
@@ -227,7 +251,7 @@ function TossPage() {
                     setNonStriker("");
                   }
                 }}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none ring-slate-900/10 focus:ring"
+                className="field"
               >
                 <option value="">Select</option>
                 {strikerOptions.map((p) => (
@@ -251,7 +275,7 @@ function TossPage() {
                     setStriker("");
                   }
                 }}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none ring-slate-900/10 focus:ring"
+                className="field"
               >
                 <option value="">Select</option>
                 {nonStrikerOptions.map((p) => (
@@ -269,7 +293,7 @@ function TossPage() {
               <select
                 value={bowler}
                 onChange={(e) => setBowler(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none ring-slate-900/10 focus:ring"
+                className="field"
               >
                 <option value="">Select</option>
                 {bowlingPlayers.map((p) => (
@@ -287,7 +311,7 @@ function TossPage() {
             disabled={
               !striker || !nonStriker || !bowler || striker === nonStriker
             }
-            className="mt-6 rounded-lg bg-blue-600 px-6 py-3 font-medium text-white disabled:opacity-50"
+            className="btn btn-primary mt-6 px-6 py-3 disabled:opacity-50"
           >
             Confirm Openers
           </button>

@@ -89,18 +89,15 @@ function PlayerProfilesPage() {
   );
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-7xl px-4 py-10">
+    <main className="app-shell max-w-7xl">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900">Player Profiles</h1>
-          <p className="mt-1 text-slate-600">
+          <h1 className="page-title">Player Profiles</h1>
+          <p className="page-subtitle">
             Career batting and bowling stats for all saved players.
           </p>
         </div>
-        <Link
-          to="/"
-          className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700"
-        >
+        <Link to="/" className="btn">
           Back to Home
         </Link>
       </div>
@@ -122,12 +119,12 @@ function PlayerProfilesPage() {
 
       {!loading && !error && sortedPlayers.length > 0 ? (
         <>
-          <section className="mt-8 rounded-xl border border-slate-200 bg-white p-5">
+          <section className="panel mt-8">
             <h2 className="text-lg font-semibold text-slate-900">Batting</h2>
-            <div className="mt-4 overflow-x-auto">
-              <table className="w-full min-w-[980px] text-sm text-slate-700">
+            <div className="table-wrap">
+              <table className="table-base min-w-[980px]">
                 <thead>
-                  <tr className="border-b border-slate-200 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <tr className="table-head">
                     <th className="px-2 py-2">Player</th>
                     <th className="px-2 py-2 text-right">Mat</th>
                     <th className="px-2 py-2 text-right">Inns</th>
@@ -149,7 +146,7 @@ function PlayerProfilesPage() {
                       <tr
                         key={player._id}
                         id={`player-${player._id}`}
-                        className="border-b border-slate-100 last:border-0"
+                        className="table-row"
                       >
                         <td className="px-2 py-3">
                           <div className="flex items-center gap-2">
@@ -200,12 +197,12 @@ function PlayerProfilesPage() {
             </div>
           </section>
 
-          <section className="mt-8 rounded-xl border border-slate-200 bg-white p-5">
+          <section className="panel mt-8">
             <h2 className="text-lg font-semibold text-slate-900">Bowling</h2>
-            <div className="mt-4 overflow-x-auto">
-              <table className="w-full min-w-[900px] text-sm text-slate-700">
+            <div className="table-wrap">
+              <table className="table-base min-w-[900px]">
                 <thead>
-                  <tr className="border-b border-slate-200 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <tr className="table-head">
                     <th className="px-2 py-2">Player</th>
                     <th className="px-2 py-2 text-right">Mat</th>
                     <th className="px-2 py-2 text-right">Inns</th>
@@ -224,10 +221,7 @@ function PlayerProfilesPage() {
                   {sortedPlayers.map((player) => {
                     const bowling = player.bowling || {};
                     return (
-                      <tr
-                        key={`${player._id}-bowling`}
-                        className="border-b border-slate-100 last:border-0"
-                      >
+                      <tr key={`${player._id}-bowling`} className="table-row">
                         <td className="px-2 py-3">
                           <div className="flex items-center gap-2">
                             <PlayerAvatar player={player} />

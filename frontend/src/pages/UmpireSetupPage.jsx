@@ -1,81 +1,88 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { createMatchSocket } from "../services/socket";
-
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+import {
+  API_BASE_URL,
+  createUpcomingMatch,
+  deleteMatch,
+  getCompletedMatches,
+  getLiveMatches,
+  getPlayers,
+  getUpcomingMatches,
+  startMatch,
+} from "../services/api";
+import { UMPIRE_AUTH_KEY } from "./UmpireLoginPage";
 
 function UmpireSetupPage() {
   const navigate = useNavigate();
-  const socketRef = useRef(null);
 
   const [players, setPlayers] = useState([]);
-  const [newPlayerName, setNewPlayerName] = useState("");
-  const [newPlayerPhotoUrl, setNewPlayerPhotoUrl] = useState("");
+  const [upcomingMatches, setUpcomingMatches] = useState([]);
+  const [liveMatches, setLiveMatches] = useState([]);
+  const [completedMatches, setCompletedMatches] = useState([]);
+
   const [team1Name, setTeam1Name] = useState("Team 1");
   const [team2Name, setTeam2Name] = useState("Team 2");
   const [team1Players, setTeam1Players] = useState([]);
   const [team2Players, setTeam2Players] = useState([]);
-  const [totalOvers, setTotalOvers] = useState(20);
-  const [customOvers, setCustomOvers] = useState("");
+  const [totalOvers, setTotalOvers] = useState(5);
+
+  const [newPlayerName, setNewPlayerName] = useState("");
+  const [newPlayerPhotoUrl, setNewPlayerPhotoUrl] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  const loadDashboard = async () => {
+    const [playersResponse, upcomingResponse, liveResponse, completedResponse] =
+      await Promise.all([
+        getPlayers(),
+        getUpcomingMatches(),
+        getLiveMatches(),
+        getCompletedMatches(),
+      ]);
+
+    setPlayers(playersResponse.players || []);
+    setUpcomingMatches(upcomingResponse.matches || []);
+    setLiveMatches(liveResponse.matches || []);
+    setCompletedMatches(completedResponse.matches || []);
+  };
+
   useEffect(() => {
-    fetch(`${API_BASE_URL}/api/players`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success) setPlayers(data.players);
-      })
-      .catch(() => {});
+    let isMounted = true;
 
-    const socket = createMatchSocket();
-    socketRef.current = socket;
+    const init = async () => {
+      try {
+        await loadDashboard();
+      } catch (requestError) {
+        if (isMounted) {
+          setError(requestError.message || "Unable to load umpire dashboard");
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
 
-    socket.on("matchCreated", ({ matchId }) => {
-      navigate(`/umpire/toss/${matchId}`);
-    });
-
-    socket.on("matchError", ({ message }) => {
-      setError(message);
-    });
+    init();
 
     return () => {
-      socket.off("matchCreated");
-      socket.off("matchError");
-      socket.disconnect();
+      isMounted = false;
     };
-  }, [navigate]);
+  }, []);
 
-  const addPlayer = async () => {
-    const name = newPlayerName.trim();
-    if (!name) return;
+  const playerById = useMemo(() => {
+    const map = {};
+    players.forEach((player) => {
+      map[player._id] = player;
+    });
+    return map;
+  }, [players]);
 
-    try {
-      setError("");
-      const res = await fetch(`${API_BASE_URL}/api/players`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name,
-          photoUrl: newPlayerPhotoUrl.trim(),
-        }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setPlayers((prev) => [...prev, data.player]);
-        setNewPlayerName("");
-        setNewPlayerPhotoUrl("");
-      } else {
-        setError(data.message || "Unable to add player");
-      }
-    } catch {
-      setError("Unable to add player");
-    }
-  };
-
-  const handleDragStart = (event, playerId) => {
-    event.dataTransfer.setData("playerId", playerId);
-  };
+  const unassignedPlayers = players.filter(
+    (player) =>
+      !team1Players.includes(player._id) && !team2Players.includes(player._id),
+  );
 
   const movePlayerTo = (playerId, destination) => {
     if (!playerId) return;
@@ -100,294 +107,410 @@ function UmpireSetupPage() {
     setTeam2Players((prev) => prev.filter((id) => id !== playerId));
   };
 
-  const dropToTeam = (event, teamNumber) => {
-    event.preventDefault();
-    const playerId = event.dataTransfer.getData("playerId");
-    if (!playerId) return;
+  const addPlayer = async () => {
+    const name = newPlayerName.trim();
+    if (!name) return;
 
-    movePlayerTo(playerId, teamNumber === 1 ? "team1" : "team2");
+    try {
+      setError("");
+      const response = await fetch(`${API_BASE_URL}/api/players`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          photoUrl: newPlayerPhotoUrl.trim(),
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data?.success) {
+        throw new Error(data?.message || "Unable to add player");
+      }
+
+      setPlayers((prev) => [...prev, data.player]);
+      setNewPlayerName("");
+      setNewPlayerPhotoUrl("");
+    } catch (requestError) {
+      setError(requestError.message || "Unable to add player");
+    }
   };
 
-  const dropToPool = (event) => {
-    event.preventDefault();
-    const playerId = event.dataTransfer.getData("playerId");
-    if (!playerId) return;
-    movePlayerTo(playerId, "pool");
+  const resetForm = () => {
+    setTeam1Name("Team 1");
+    setTeam2Name("Team 2");
+    setTeam1Players([]);
+    setTeam2Players([]);
+    setTotalOvers(5);
   };
 
-  const allowDrop = (event) => {
-    event.preventDefault();
-  };
-
-  const confirmMatch = () => {
-    setError("");
+  const handleCreateUpcoming = async () => {
     if (!team1Name.trim() || !team2Name.trim()) {
-      setError("Both team names are required.");
+      setError("Both team names are required");
       return;
     }
-    if (!socketRef.current) return;
 
-    socketRef.current.emit("createMatch", {
-      team1Name: team1Name.trim(),
-      team2Name: team2Name.trim(),
-      team1PlayerIds: team1Players,
-      team2PlayerIds: team2Players,
-      totalOvers,
-    });
+    setSubmitting(true);
+    setError("");
+
+    try {
+      await createUpcomingMatch({
+        team1Name: team1Name.trim(),
+        team2Name: team2Name.trim(),
+        team1PlayerIds: team1Players,
+        team2PlayerIds: team2Players,
+        totalOvers,
+      });
+
+      await loadDashboard();
+      resetForm();
+    } catch (requestError) {
+      setError(requestError.message || "Unable to create upcoming match");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const poolPlayers = players.filter(
-    (p) => !team1Players.includes(p._id) && !team2Players.includes(p._id),
-  );
+  const handleStartMatch = async (matchId) => {
+    try {
+      setError("");
+      await startMatch(matchId);
+      await loadDashboard();
+      navigate(`/umpire/toss/${matchId}`);
+    } catch (requestError) {
+      setError(requestError.message || "Unable to start match");
+    }
+  };
+
+  const handleResumeMatch = (match) => {
+    if (match.status === "toss") {
+      navigate(`/umpire/toss/${match._id}`);
+      return;
+    }
+    navigate(`/umpire/scorer/${match._id}`);
+  };
+
+  const handleDeleteMatch = async (match) => {
+    const confirmed = window.confirm(
+      `Delete match ${match.team1Name} vs ${match.team2Name}?`,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setError("");
+      await deleteMatch(match._id);
+      await loadDashboard();
+    } catch (requestError) {
+      setError(requestError.message || "Unable to delete match");
+    }
+  };
+
+  const handleExitUmpireMode = () => {
+    sessionStorage.removeItem(UMPIRE_AUTH_KEY);
+    navigate("/umpire/login", { replace: true });
+  };
+
+  if (loading) {
+    return (
+      <main className="app-shell">
+        <p className="text-slate-700">Loading umpire dashboard...</p>
+      </main>
+    );
+  }
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-6xl px-4 py-10">
-      <h1 className="text-3xl font-bold text-slate-900">Match Setup</h1>
-
-      <div className="mt-8 flex flex-col gap-6 lg:flex-row">
-        {/* Player Pool */}
-        <section
-          className="w-full rounded-xl border border-slate-200 bg-white p-4 lg:w-64 lg:shrink-0"
-          onDrop={dropToPool}
-          onDragOver={allowDrop}
-        >
-          <h2 className="text-lg font-semibold text-slate-900">Player Pool</h2>
-
-          <div className="mt-3 flex gap-2">
-            <input
-              type="text"
-              value={newPlayerName}
-              onChange={(e) => setNewPlayerName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && addPlayer()}
-              placeholder="Player name"
-              className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-slate-900/10 focus:ring"
-            />
-            <button
-              type="button"
-              onClick={addPlayer}
-              className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white"
-            >
-              +
-            </button>
-          </div>
-
-          <input
-            type="url"
-            value={newPlayerPhotoUrl}
-            onChange={(e) => setNewPlayerPhotoUrl(e.target.value)}
-            placeholder="Photo URL (optional)"
-            className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-slate-900/10 focus:ring"
-          />
-
-          <ul className="mt-3 min-h-24 space-y-2">
-            {poolPlayers.map((player) => (
-              <li
-                key={player._id}
-                draggable
-                onDragStart={(e) => handleDragStart(e, player._id)}
-                className="flex cursor-grab items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 shadow-sm"
-              >
-                <div className="flex items-center gap-2">
-                  <PlayerAvatar player={player} />
-                  <span>{player.name}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => movePlayerTo(player._id, "team1")}
-                    className="rounded border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700"
-                  >
-                    T1
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => movePlayerTo(player._id, "team2")}
-                    className="rounded border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700"
-                  >
-                    T2
-                  </button>
-                  <Link
-                    to={`/players#player-${player._id}`}
-                    draggable={false}
-                    onClick={(e) => e.stopPropagation()}
-                    className="text-xs font-medium text-blue-600 hover:text-blue-700"
-                  >
-                    View Profile
-                  </Link>
-                </div>
-              </li>
-            ))}
-            {poolPlayers.length === 0 && (
-              <li className="text-sm text-slate-400">No players available</li>
-            )}
-          </ul>
-        </section>
-
-        {/* Team Boxes */}
-        <div className="flex flex-1 flex-col gap-6 sm:flex-row">
-          <TeamBox
-            teamNumber={1}
-            label={team1Name}
-            onLabelChange={setTeam1Name}
-            playerIds={team1Players}
-            players={players}
-            onDrop={(e) => dropToTeam(e, 1)}
-            onDragOver={allowDrop}
-            onDragStart={handleDragStart}
-            onMovePlayer={movePlayerTo}
-          />
-          <TeamBox
-            teamNumber={2}
-            label={team2Name}
-            onLabelChange={setTeam2Name}
-            playerIds={team2Players}
-            players={players}
-            onDrop={(e) => dropToTeam(e, 2)}
-            onDragOver={allowDrop}
-            onDragStart={handleDragStart}
-            onMovePlayer={movePlayerTo}
-          />
+    <main className="app-shell">
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="page-title">Umpire Dashboard</h1>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleExitUmpireMode}
+            className="btn px-3 py-1 text-xs"
+          >
+            Exit Umpire Mode
+          </button>
+          <Link to="/" className="btn px-3 py-1 text-xs">
+            Home
+          </Link>
         </div>
       </div>
 
-      {/* Overs Selector */}
-      <section className="mt-8 rounded-xl border border-slate-200 bg-white p-5">
-        <h2 className="mb-3 text-lg font-semibold text-slate-900">Overs</h2>
-        <div className="flex flex-wrap items-center gap-2">
-          {[5, 10, 15, 20].map((o) => (
-            <button
-              key={o}
-              type="button"
-              onClick={() => {
-                setTotalOvers(o);
-                setCustomOvers("");
-              }}
-              className={`rounded-lg px-4 py-2 text-sm font-medium ${
-                totalOvers === o && !customOvers
-                  ? "bg-slate-900 text-white"
-                  : "border border-slate-300 bg-white text-slate-700"
-              }`}
-            >
-              {o}
-            </button>
-          ))}
+      {error ? (
+        <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+          {error}
+        </p>
+      ) : null}
+
+      <section className="panel mt-8">
+        <h2 className="text-lg font-semibold text-slate-900">
+          Create Upcoming Match
+        </h2>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <input
+            value={team1Name}
+            onChange={(e) => setTeam1Name(e.target.value)}
+            className="field"
+            placeholder="Team 1"
+          />
+          <input
+            value={team2Name}
+            onChange={(e) => setTeam2Name(e.target.value)}
+            className="field"
+            placeholder="Team 2"
+          />
           <input
             type="number"
             min={1}
-            value={customOvers}
-            onChange={(e) => {
-              setCustomOvers(e.target.value);
-              const parsed = parseInt(e.target.value, 10);
-              if (parsed > 0) setTotalOvers(parsed);
-            }}
-            placeholder="Custom"
-            className="w-24 rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-slate-900/10 focus:ring"
+            value={totalOvers}
+            onChange={(e) => setTotalOvers(Number(e.target.value) || 1)}
+            className="field"
+            placeholder="Overs"
           />
         </div>
+
+        <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_auto]">
+          <input
+            value={newPlayerName}
+            onChange={(e) => setNewPlayerName(e.target.value)}
+            className="field"
+            placeholder="Add player name"
+            onKeyDown={(e) => e.key === "Enter" && addPlayer()}
+          />
+          <button type="button" onClick={addPlayer} className="btn btn-dark">
+            Add Player
+          </button>
+        </div>
+
+        <input
+          value={newPlayerPhotoUrl}
+          onChange={(e) => setNewPlayerPhotoUrl(e.target.value)}
+          className="field mt-2"
+          placeholder="Photo URL (optional)"
+        />
+
+        <div className="mt-6 grid gap-4 md:grid-cols-3">
+          <PlayerColumn
+            title="Unassigned"
+            players={unassignedPlayers}
+            onAssign={movePlayerTo}
+            destinationButtons={["team1", "team2"]}
+          />
+          <PlayerColumn
+            title={team1Name || "Team 1"}
+            players={team1Players.map((id) => playerById[id]).filter(Boolean)}
+            onAssign={movePlayerTo}
+            destinationButtons={["pool", "team2"]}
+          />
+          <PlayerColumn
+            title={team2Name || "Team 2"}
+            players={team2Players.map((id) => playerById[id]).filter(Boolean)}
+            onAssign={movePlayerTo}
+            destinationButtons={["pool", "team1"]}
+          />
+        </div>
+
+        <button
+          type="button"
+          onClick={handleCreateUpcoming}
+          disabled={submitting}
+          className="btn btn-primary mt-6"
+        >
+          {submitting ? "Creating..." : "Create Upcoming Match"}
+        </button>
       </section>
 
-      {error ? <p className="mt-4 text-sm text-red-600">{error}</p> : null}
+      <section className="panel mt-8">
+        <h2 className="text-lg font-semibold text-slate-900">
+          Upcoming Matches
+        </h2>
+        {upcomingMatches.length === 0 ? (
+          <p className="mt-3 text-sm text-slate-500">No upcoming matches.</p>
+        ) : (
+          <div className="mt-4 space-y-3">
+            {upcomingMatches.map((match) => (
+              <MatchCard
+                key={match._id}
+                match={match}
+                actionLabel="Start Match"
+                onAction={() => handleStartMatch(match._id)}
+                onDelete={() => handleDeleteMatch(match)}
+              />
+            ))}
+          </div>
+        )}
+      </section>
 
-      <button
-        type="button"
-        onClick={confirmMatch}
-        className="mt-6 rounded-lg bg-blue-600 px-6 py-3 font-medium text-white"
-      >
-        Confirm
-      </button>
+      <section className="panel mt-8">
+        <h2 className="text-lg font-semibold text-slate-900">
+          Live / Resumable Matches
+        </h2>
+        {liveMatches.length === 0 ? (
+          <p className="mt-3 text-sm text-slate-500">No live matches.</p>
+        ) : (
+          <div className="mt-4 space-y-3">
+            {liveMatches.map((match) => (
+              <MatchCard
+                key={match._id}
+                match={match}
+                actionLabel={match.status === "toss" ? "Open Toss" : "Resume"}
+                onAction={() => handleResumeMatch(match)}
+                onDelete={() => handleDeleteMatch(match)}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="panel mt-8">
+        <h2 className="text-lg font-semibold text-slate-900">
+          Completed Matches
+        </h2>
+        {completedMatches.length === 0 ? (
+          <p className="mt-3 text-sm text-slate-500">No completed matches.</p>
+        ) : (
+          <div className="mt-4 space-y-3">
+            {completedMatches.map((match) => (
+              <MatchCard
+                key={match._id}
+                match={match}
+                actionLabel="View Scoreboard"
+                onAction={() => navigate(`/scoreboard/${match._id}?viewer=1`)}
+                onDelete={() => handleDeleteMatch(match)}
+              />
+            ))}
+          </div>
+        )}
+      </section>
     </main>
   );
 }
 
-function TeamBox({
-  teamNumber,
-  label,
-  onLabelChange,
-  playerIds,
-  players,
-  onDrop,
-  onDragOver,
-  onDragStart,
-  onMovePlayer,
-}) {
-  const teamPlayers = players.filter((p) => playerIds.includes(p._id));
-
+function PlayerColumn({ title, players, onAssign, destinationButtons }) {
   return (
-    <div
-      className="flex-1 rounded-xl border-2 border-dashed border-slate-300 bg-white p-4"
-      onDrop={onDrop}
-      onDragOver={onDragOver}
-    >
-      <input
-        type="text"
-        value={label}
-        onChange={(e) => onLabelChange(e.target.value)}
-        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-900 outline-none ring-slate-900/10 focus:ring"
-      />
-      <ul className="mt-3 min-h-24 space-y-2">
-        {teamPlayers.map((player) => (
+    <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+      <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+      <ul className="mt-2 space-y-2">
+        {players.map((player) => (
           <li
             key={player._id}
-            draggable
-            onDragStart={(e) => onDragStart(e, player._id)}
-            className="flex cursor-grab items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700"
+            className="flex items-center justify-between gap-2 rounded border border-slate-200 bg-slate-50 px-2 py-1"
           >
             <div className="flex items-center gap-2">
               <PlayerAvatar player={player} />
-              <span>{player.name}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() =>
-                  onMovePlayer(player._id, teamNumber === 1 ? "team2" : "team1")
-                }
-                className="rounded border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700"
-              >
-                {teamNumber === 1 ? "T2" : "T1"}
-              </button>
-              <button
-                type="button"
-                onClick={() => onMovePlayer(player._id, "pool")}
-                className="rounded border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700"
-              >
-                Pool
-              </button>
+              <span className="text-sm text-slate-700">{player.name}</span>
               <Link
                 to={`/players#player-${player._id}`}
-                draggable={false}
-                onClick={(e) => e.stopPropagation()}
-                className="text-xs font-medium text-blue-600 hover:text-blue-700"
+                className="text-xs text-blue-600"
               >
-                View Profile
+                View
               </Link>
+            </div>
+            <div className="flex gap-1">
+              {destinationButtons.includes("team1") ? (
+                <button
+                  type="button"
+                  onClick={() => onAssign(player._id, "team1")}
+                  className="btn px-2 py-1 text-xs"
+                >
+                  T1
+                </button>
+              ) : null}
+              {destinationButtons.includes("team2") ? (
+                <button
+                  type="button"
+                  onClick={() => onAssign(player._id, "team2")}
+                  className="btn px-2 py-1 text-xs"
+                >
+                  T2
+                </button>
+              ) : null}
+              {destinationButtons.includes("pool") ? (
+                <button
+                  type="button"
+                  onClick={() => onAssign(player._id, "pool")}
+                  className="btn px-2 py-1 text-xs"
+                >
+                  Remove
+                </button>
+              ) : null}
             </div>
           </li>
         ))}
-        {teamPlayers.length === 0 && (
-          <li className="text-sm text-slate-400">Drop players here</li>
-        )}
+        {players.length === 0 ? (
+          <li className="text-xs text-slate-400">No players</li>
+        ) : null}
       </ul>
     </div>
   );
 }
 
-function PlayerAvatar({ player }) {
-  const hasPhoto = Boolean(player?.photoUrl);
-  const initial = player?.name?.trim()?.charAt(0)?.toUpperCase() || "?";
+function MatchCard({ match, actionLabel, onAction, onDelete }) {
+  return (
+    <article className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="font-medium text-slate-900">
+            {match.team1Name} vs {match.team2Name}
+          </p>
+          <p className="text-xs text-slate-500">
+            {match.status} • {match.totalOvers} overs
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Link
+            to={`/scoreboard/${match._id}?viewer=1`}
+            className="btn px-3 py-1 text-xs"
+          >
+            View
+          </Link>
+          <button
+            type="button"
+            onClick={onAction}
+            className="btn btn-dark px-3 py-1 text-xs"
+          >
+            {actionLabel}
+          </button>
+          <button
+            type="button"
+            onClick={onDelete}
+            className="btn border-red-300 bg-red-50 px-3 py-1 text-xs text-red-600 hover:bg-red-100"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+      <p className="mt-2 text-xs text-slate-600">
+        {match.team1Name}:{" "}
+        {(match.team1Players || []).map((p) => p.name).join(", ") || "—"}
+      </p>
+      <p className="mt-1 text-xs text-slate-600">
+        {match.team2Name}:{" "}
+        {(match.team2Players || []).map((p) => p.name).join(", ") || "—"}
+      </p>
+    </article>
+  );
+}
 
-  if (hasPhoto) {
+function PlayerAvatar({ player }) {
+  const src = player.photoUrl || "";
+  if (src) {
     return (
       <img
-        src={player.photoUrl}
+        src={src}
         alt={player.name}
-        className="h-7 w-7 rounded-full border border-slate-200 object-cover"
+        className="h-6 w-6 rounded-full object-cover"
+        onError={(event) => {
+          event.currentTarget.style.display = "none";
+        }}
       />
     );
   }
 
+  const initial = (player.name || "?").trim().charAt(0).toUpperCase() || "?";
   return (
-    <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-300 bg-white text-xs font-semibold text-slate-600">
+    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-700">
       {initial}
     </span>
   );
