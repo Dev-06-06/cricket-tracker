@@ -1,4 +1,29 @@
 ﻿const Match = require("../models/Match");
+const Player = require("../models/Player");
+
+function mapMatchSummary(match) {
+  return {
+    _id: match._id,
+    team1Name: match.team1Name,
+    team2Name: match.team2Name,
+    totalOvers: match.totalOvers,
+    status: match.status,
+    inningsNumber: match.inningsNumber,
+    totalRuns: match.totalRuns,
+    wickets: match.wickets,
+    oversBowled: match.oversBowled,
+    createdAt: match.createdAt,
+    updatedAt: match.updatedAt,
+    team1Players: (match.team1Players || []).map((player) => ({
+      _id: player._id,
+      name: player.name,
+    })),
+    team2Players: (match.team2Players || []).map((player) => ({
+      _id: player._id,
+      name: player.name,
+    })),
+  };
+}
 
 const createMatch = async (req, res) => {
   try {
@@ -25,10 +50,75 @@ const createMatch = async (req, res) => {
   }
 };
 
+const createUpcomingMatch = async (req, res) => {
+  try {
+    const { team1Name, team2Name, team1PlayerIds, team2PlayerIds, totalOvers } =
+      req.body;
+
+    if (!team1Name?.trim() || !team2Name?.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Both team names are required",
+      });
+    }
+
+    const t1Players = await Player.find({
+      _id: { $in: team1PlayerIds || [] },
+    }).select("name");
+    const t2Players = await Player.find({
+      _id: { $in: team2PlayerIds || [] },
+    }).select("name");
+
+    const playerStats = [];
+    t1Players.forEach((player) => {
+      playerStats.push({
+        playerId: player._id,
+        name: player.name,
+        team: team1Name.trim(),
+        didBat: false,
+        didBowl: false,
+      });
+    });
+    t2Players.forEach((player) => {
+      playerStats.push({
+        playerId: player._id,
+        name: player.name,
+        team: team2Name.trim(),
+        didBat: false,
+        didBowl: false,
+      });
+    });
+    const match = await Match.create({
+      team1Name: team1Name.trim(),
+      team2Name: team2Name.trim(),
+      team1Players: team1PlayerIds || [],
+      team2Players: team2PlayerIds || [],
+      totalOvers: Number(totalOvers) || 5,
+      battingTeam: team1Name.trim(),
+      bowlingTeam: team2Name.trim(),
+      inningsNumber: 1,
+      status: "upcoming",
+      playerStats,
+    });
+
+    const populatedMatch = await Match.findById(match._id)
+      .populate("team1Players", "name")
+      .populate("team2Players", "name");
+
+    res
+      .status(201)
+      .json({ success: true, match: mapMatchSummary(populatedMatch) });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 const getMatch = async (req, res) => {
   try {
     const { id } = req.params;
-    const match = await Match.findById(id);
+    const match = await Match.findById(id)
+      .populate("team1Players", "name")
+      .populate("team2Players", "name");
 
     if (!match) {
       return res
@@ -42,9 +132,96 @@ const getMatch = async (req, res) => {
   }
 };
 
+const listUpcomingMatches = async (_req, res) => {
+  try {
+    const matches = await Match.find({ status: "upcoming" })
+      .populate("team1Players", "name")
+      .populate("team2Players", "name")
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      matches: matches.map(mapMatchSummary),
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const listLiveMatches = async (_req, res) => {
+  try {
+    const matches = await Match.find({
+      status: { $in: ["toss", "innings", "live", "innings_complete"] },
+    })
+      .populate("team1Players", "name")
+      .populate("team2Players", "name")
+      .sort({ updatedAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      matches: matches.map(mapMatchSummary),
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const listCompletedMatches = async (_req, res) => {
+  try {
+    const matches = await Match.find({ status: "completed" })
+      .populate("team1Players", "name")
+      .populate("team2Players", "name")
+      .sort({ updatedAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      matches: matches.map(mapMatchSummary),
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const startMatch = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const match = await Match.findById(id);
+
+    if (!match) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Match not found" });
+    }
+
+    if (match.status === "completed") {
+      return res.status(400).json({
+        success: false,
+        message: "Cannot start a completed match",
+      });
+    }
+
+    if (match.status === "upcoming") {
+      match.status = "toss";
+      await match.save();
+    }
+
+    res.status(200).json({
+      success: true,
+      match: {
+        _id: match._id,
+        status: match.status,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 const getOngoingMatch = async (_req, res) => {
   try {
-    const match = await Match.findOne({ status: { $ne: "completed" } }).sort({
+    const match = await Match.findOne({
+      status: { $in: ["toss", "innings", "live", "innings_complete"] },
+    }).sort({
       updatedAt: -1,
     });
 
@@ -58,4 +235,31 @@ const getOngoingMatch = async (_req, res) => {
   }
 };
 
-module.exports = { createMatch, getMatch, getOngoingMatch };
+const deleteMatch = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const match = await Match.findByIdAndDelete(id);
+
+    if (!match) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Match not found" });
+    }
+
+    res.status(200).json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+module.exports = {
+  createMatch,
+  createUpcomingMatch,
+  deleteMatch,
+  getMatch,
+  getOngoingMatch,
+  listCompletedMatches,
+  listUpcomingMatches,
+  listLiveMatches,
+  startMatch,
+};

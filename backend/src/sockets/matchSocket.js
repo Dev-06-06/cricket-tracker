@@ -223,6 +223,8 @@ function applyWicketState(
 ) {
   match.wickets += 1;
 
+  let resolvedDismissedBatter = dismissedBatter;
+
   if (dismissedBatter) {
     const ps = match.playerStats.find((p) => p.name === dismissedBatter);
     if (ps) {
@@ -242,6 +244,23 @@ function applyWicketState(
     }
   }
 
+  if (!resolvedDismissedBatter) {
+    resolvedDismissedBatter =
+      outType === "nonStriker" ? match.currentNonStriker : match.currentStriker;
+  }
+
+  if (resolvedDismissedBatter) {
+    const resolvedPs = match.playerStats.find(
+      (p) => p.name === resolvedDismissedBatter,
+    );
+    if (resolvedPs) {
+      resolvedPs.isOut = true;
+      if (!resolvedPs.batting) resolvedPs.batting = emptyBatting();
+      resolvedPs.batting.dismissalType = wicketType || "";
+      resolvedPs.dismissalType = wicketType || "";
+    }
+  }
+
   if (outType === "nonStriker") {
     match.currentNonStriker = null;
   } else {
@@ -251,6 +270,7 @@ function applyWicketState(
   match.nextBatterFor = outType;
 
   return {
+    dismissedBatter: resolvedDismissedBatter,
     dismissedPlayerType: outType,
     nextBatterFor: outType,
   };
@@ -496,11 +516,19 @@ async function emitMatchState(target, matchId) {
       bowlingByName[bowler] = { balls: 0, runs: 0, wickets: 0 };
     const isValid = isValidBallType(ball.extraType);
     if (isValid) bowlingByName[bowler].balls++;
-    if (ball.extraType !== "wide" && ball.extraType !== "no-ball") {
-      bowlingByName[bowler].runs += ball.runsOffBat || 0;
+    const extraType = ball.extraType || "none";
+    const runsOffBat = Number(ball.runsOffBat) || 0;
+    const extraRuns = Number(ball.extraRuns) || 0;
+    const isByeLike = extraType === "bye" || extraType === "leg-bye";
+    if (!isByeLike) {
+      bowlingByName[bowler].runs += runsOffBat;
     }
-    bowlingByName[bowler].runs += ball.extraRuns || 0;
-    if (ball.isWicket) bowlingByName[bowler].wickets++;
+    if (extraType === "wide" || extraType === "no-ball") {
+      bowlingByName[bowler].runs += extraRuns;
+    }
+    if (ball.isWicket && ball.wicketType !== "run-out") {
+      bowlingByName[bowler].wickets++;
+    }
   });
 
   const playerStats = [
@@ -607,7 +635,7 @@ function setupSockets(io) {
             team2Name,
             team1Players: team1PlayerIds || [],
             team2Players: team2PlayerIds || [],
-            totalOvers: totalOvers || 20,
+            totalOvers: totalOvers || 5,
             inningsNumber: 1,
             status: "toss",
             playerStats,
@@ -624,6 +652,16 @@ function setupSockets(io) {
     socket.on("joinMatch", async ({ matchId }) => {
       socket.join(matchId);
       await emitMatchState(socket, matchId);
+    });
+
+    socket.on("toss_flip_started", ({ matchId }) => {
+      if (!matchId) return;
+      io.to(matchId).emit("toss_flip_started");
+    });
+
+    socket.on("toss_flip_result", ({ matchId, result, winner }) => {
+      if (!matchId) return;
+      io.to(matchId).emit("toss_flip_result", { result, winner });
     });
 
     socket.on("tossResult", async ({ matchId, tossWinner, tossChoice }) => {
@@ -723,11 +761,12 @@ function setupSockets(io) {
         }
 
         if (deliveryData.isWicket) {
-          applyWicketState(match, {
+          const wicketState = applyWicketState(match, {
             dismissedBatter,
             dismissedPlayerType,
             wicketType: deliveryData.wicketType,
           });
+          enrichedDelivery.batterDismissed = wicketState.dismissedBatter || "";
           const inningsClosed = await handleWicketInningsCompletion(
             match,
             matchId,
@@ -859,11 +898,12 @@ function setupSockets(io) {
           }
 
           if (isWicket) {
-            applyWicketState(match, {
+            const wicketState = applyWicketState(match, {
               dismissedBatter,
               dismissedPlayerType,
               wicketType,
             });
+            entry.batterDismissed = wicketState.dismissedBatter || "";
             const inningsClosed = await handleWicketInningsCompletion(
               match,
               matchId,

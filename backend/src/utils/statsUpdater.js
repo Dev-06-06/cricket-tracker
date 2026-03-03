@@ -42,11 +42,18 @@ function buildBowlingByName(match) {
       bowlingByName[bowler].balls += 1;
     }
 
-    if (delivery.extraType !== "wide" && delivery.extraType !== "no-ball") {
-      bowlingByName[bowler].runs += Number(delivery.runsOffBat) || 0;
+    const extraType = delivery.extraType || "none";
+    const runsOffBat = Number(delivery.runsOffBat) || 0;
+    const extraRuns = Number(delivery.extraRuns) || 0;
+    const isByeLike = extraType === "bye" || extraType === "leg-bye";
+
+    if (!isByeLike) {
+      bowlingByName[bowler].runs += runsOffBat;
     }
 
-    bowlingByName[bowler].runs += Number(delivery.extraRuns) || 0;
+    if (extraType === "wide" || extraType === "no-ball") {
+      bowlingByName[bowler].runs += extraRuns;
+    }
 
     if (delivery.isWicket && delivery.wicketType !== "run-out") {
       bowlingByName[bowler].wickets += 1;

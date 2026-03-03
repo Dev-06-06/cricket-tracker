@@ -49,7 +49,7 @@ const matchSchema = new mongoose.Schema(
     team2Players: [{ type: mongoose.Schema.Types.ObjectId, ref: "Player" }],
     totalOvers: {
       type: Number,
-      default: 20,
+      default: 5,
     },
     inningsNumber: {
       type: Number,
@@ -92,7 +92,14 @@ const matchSchema = new mongoose.Schema(
     ],
     status: {
       type: String,
-      enum: ["toss", "innings", "live", "innings_complete", "completed"],
+      enum: [
+        "upcoming",
+        "toss",
+        "innings",
+        "live",
+        "innings_complete",
+        "completed",
+      ],
       default: "toss",
     },
     statsApplied: {
