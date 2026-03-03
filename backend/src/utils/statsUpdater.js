@@ -8,6 +8,13 @@ function calculateOversFromBalls(totalBalls) {
   return Math.floor(balls / 6) + (balls % 6) / 10;
 }
 
+function hasBowlingContribution(bowlingStats) {
+  const balls = Number(bowlingStats?.balls) || 0;
+  const runs = Number(bowlingStats?.runs) || 0;
+  const wickets = Number(bowlingStats?.wickets) || 0;
+  return balls > 0 || runs > 0 || wickets > 0;
+}
+
 function buildBowlingByName(match) {
   const bowlingByName = {};
 
@@ -111,10 +118,12 @@ async function updateCareerStats(match, options = {}) {
         player.batting.hundreds += 1;
       } else if ((Number(battingStats.runs) || 0) >= 50) {
         player.batting.fifties += 1;
+      } else if ((Number(battingStats.runs) || 0) >= 30) {
+        player.batting.thirties += 1;
       }
     }
 
-    if (didBowl) {
+    if (didBowl && hasBowlingContribution(bowlingStats)) {
       player.bowling.matches += 1;
       player.bowling.innings += 1;
       player.bowling.balls += bowlingStats.balls;
@@ -136,6 +145,8 @@ async function updateCareerStats(match, options = {}) {
         player.bowling.fiveWickets += 1;
       } else if (bowlingStats.wickets === 4) {
         player.bowling.fourWickets += 1;
+      } else if (bowlingStats.wickets === 3) {
+        player.bowling.threeWickets += 1;
       }
     }
 

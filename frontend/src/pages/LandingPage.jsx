@@ -1,28 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { useState, useEffect, useRef } from "react";
-
-function CountUp({ target, suffix = "" }) {
-  const [val, setVal] = useState(0);
-  const ref = useRef(null);
-  useEffect(() => {
-    const obs = new IntersectionObserver(([e]) => {
-      if (!e.isIntersecting) return;
-      obs.disconnect();
-      let start = null;
-      const step = (ts) => {
-        if (!start) start = ts;
-        const prog = Math.min((ts - start) / 1400, 1);
-        const ease = 1 - Math.pow(1 - prog, 3);
-        setVal(Math.floor(ease * target));
-        if (prog < 1) requestAnimationFrame(step);
-      };
-      requestAnimationFrame(step);
-    }, { threshold: 0.4 });
-    if (ref.current) obs.observe(ref.current);
-    return () => obs.disconnect();
-  }, [target]);
-  return <span ref={ref}>{val}{suffix}</span>;
-}
+import { useState, useEffect } from "react";
 
 function FloatingBall({ style, size = 80, opacity = 0.06 }) {
   return (
@@ -105,6 +82,7 @@ function FeatureCard({ icon, title, desc, soon = false }) {
 export default function LandingPage() {
   const navigate = useNavigate();
   const [scrolled, setScrolled] = useState(false);
+  const [emailHovered, setEmailHovered] = useState(false);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 30);
@@ -138,20 +116,18 @@ export default function LandingPage() {
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Barlow+Condensed:wght@500;600;700;800;900&display=swap');
         @keyframes fadeUp { from { opacity:0; transform:translateY(24px); } to { opacity:1; transform:translateY(0); } }
         @keyframes spinSlow { from { transform:rotate(0deg); } to { transform:rotate(360deg); } }
-        @keyframes shimmer { 0%,100% { opacity:0.5; } 50% { opacity:1; } }
         .fade-up { animation: fadeUp 0.7s ease both; }
-        .fade-up-1 { animation-delay:0.05s; }
-        .fade-up-2 { animation-delay:0.15s; }
-        .fade-up-3 { animation-delay:0.25s; }
-        .fade-up-4 { animation-delay:0.35s; }
-        .fade-up-5 { animation-delay:0.45s; }
+        .fade-up-1 { animation-delay: 0.05s; }
+        .fade-up-2 { animation-delay: 0.15s; }
+        .fade-up-3 { animation-delay: 0.25s; }
+        .fade-up-4 { animation-delay: 0.35s; }
+        .fade-up-5 { animation-delay: 0.45s; }
         .spin-slow { animation: spinSlow 18s linear infinite; }
-        .shimmer { animation: shimmer 2.5s ease-in-out infinite; }
-        .divider { border:none; height:1px; background:linear-gradient(to right, transparent, rgba(255,255,255,0.07), transparent); margin:0; }
-        * { box-sizing:border-box; }
+        .divider { border: none; height: 1px; background: linear-gradient(to right, transparent, rgba(255,255,255,0.07), transparent); margin: 0; }
+        * { box-sizing: border-box; }
       `}</style>
 
-      {/* ── NAV ── */}
+      {/* NAV */}
       <nav style={{
         position: "sticky", top: 0, zIndex: 50,
         borderBottom: scrolled ? "1px solid rgba(255,255,255,0.06)" : "1px solid transparent",
@@ -182,12 +158,12 @@ export default function LandingPage() {
             }}
               onMouseEnter={e => { e.currentTarget.style.background = "#f97316"; e.currentTarget.style.color = "#0d1117"; }}
               onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#f97316"; }}
-            >Watch Live</button>
+            >Live Matches</button>
           </div>
         </div>
       </nav>
 
-      {/* ── HERO ── */}
+      {/* HERO */}
       <section style={{
         position: "relative", minHeight: "88vh", display: "flex", flexDirection: "column",
         alignItems: "center", justifyContent: "center", padding: "60px 20px 80px",
@@ -203,10 +179,8 @@ export default function LandingPage() {
           transform: "translate(-50%,-50%)", pointerEvents: "none",
         }} />
 
-        {/* Tag */}
         <div className="fade-up fade-up-1" style={{
-          display: "inline-flex", alignItems: "center", gap: 6,
-          padding: "5px 14px", borderRadius: 99,
+          display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 14px", borderRadius: 99,
           border: "1px solid rgba(249,115,22,0.3)", background: "rgba(249,115,22,0.08)", marginBottom: 24,
         }}>
           <span style={{ fontSize: 12 }}>🏏</span>
@@ -215,7 +189,6 @@ export default function LandingPage() {
           </span>
         </div>
 
-        {/* Headline */}
         <h1 className="fade-up fade-up-2" style={{
           fontFamily: "'Barlow Condensed', sans-serif",
           fontSize: "clamp(52px, 12vw, 100px)", fontWeight: 900,
@@ -232,12 +205,10 @@ export default function LandingPage() {
           <span style={{ color: "#475569" }}>Live scores. Player stats. Match history.</span>
         </p>
 
-        {/* ── ROLE CARDS ── */}
         <div className="fade-up fade-up-4" style={{ marginTop: 44, display: "flex", gap: 14, width: "100%", maxWidth: 500, justifyContent: "center" }}>
           {roles.map((r) => <RoleCard key={r.label} {...r} navigate={navigate} />)}
         </div>
 
-        {/* ── DUGOUT LINK — subtle, below the roles ── */}
         <div className="fade-up fade-up-5" style={{ marginTop: 20, display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{ width: 40, height: 1, background: "rgba(255,255,255,0.08)" }} />
           <button
@@ -245,10 +216,8 @@ export default function LandingPage() {
             style={{
               all: "unset", cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
               padding: "7px 16px", borderRadius: 99,
-              border: "1px solid rgba(255,255,255,0.07)",
-              background: "rgba(255,255,255,0.03)",
-              color: "#475569", fontSize: 12, fontWeight: 700,
-              transition: "all 0.15s",
+              border: "1px solid rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.03)",
+              color: "#475569", fontSize: 12, fontWeight: 700, transition: "all 0.15s",
             }}
             onMouseEnter={e => { e.currentTarget.style.color = "#94a3b8"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.15)"; }}
             onMouseLeave={e => { e.currentTarget.style.color = "#475569"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.07)"; }}
@@ -259,7 +228,6 @@ export default function LandingPage() {
           <div style={{ width: 40, height: 1, background: "rgba(255,255,255,0.08)" }} />
         </div>
 
-        {/* Scroll hint */}
         <div style={{ position: "absolute", bottom: 28, left: "50%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, opacity: 0.25 }}>
           <div style={{ width: 1, height: 32, background: "linear-gradient(to bottom, transparent, #f97316)" }} />
           <span style={{ fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase" }}>scroll</span>
@@ -268,25 +236,7 @@ export default function LandingPage() {
 
       <hr className="divider" />
 
-      {/* ── STATS STRIP ── */}
-      <section style={{ maxWidth: 960, margin: "0 auto", padding: "48px 20px", display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 2, textAlign: "center" }}>
-        {[
-          { val: 2, suffix: "", label: "Roles in the game" },
-          { val: 6, suffix: "", label: "Core Features" },
-          { val: 2, suffix: " soon", label: "Wild features coming" },
-        ].map(({ val, suffix, label }) => (
-          <div key={label} style={{ padding: "16px 8px" }}>
-            <p style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: "clamp(36px, 8vw, 56px)", fontWeight: 900, color: "#f97316", lineHeight: 1 }}>
-              <CountUp target={val} suffix={suffix} />
-            </p>
-            <p style={{ marginTop: 6, fontSize: 11, color: "#64748b", fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" }}>{label}</p>
-          </div>
-        ))}
-      </section>
-
-      <hr className="divider" />
-
-      {/* ── FEATURES ── */}
+      {/* FEATURES */}
       <section style={{ maxWidth: 960, margin: "0 auto", padding: "64px 20px" }}>
         <div style={{ textAlign: "center", marginBottom: 40 }}>
           <p style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.2em", textTransform: "uppercase", color: "#f97316", marginBottom: 10 }}>What's Inside</p>
@@ -304,7 +254,7 @@ export default function LandingPage() {
 
       <hr className="divider" />
 
-      {/* ── HOW IT WORKS ── */}
+      {/* HOW IT WORKS */}
       <section style={{ maxWidth: 960, margin: "0 auto", padding: "64px 20px" }}>
         <div style={{ textAlign: "center", marginBottom: 48 }}>
           <p style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.2em", textTransform: "uppercase", color: "#f97316", marginBottom: 10 }}>Dead Simple</p>
@@ -325,7 +275,7 @@ export default function LandingPage() {
 
       <hr className="divider" />
 
-      {/* ── COMING SOON ── */}
+      {/* COMING SOON */}
       <section style={{ maxWidth: 960, margin: "0 auto", padding: "64px 20px", textAlign: "center" }}>
         <div style={{
           background: "linear-gradient(135deg, rgba(249,115,22,0.07), rgba(249,115,22,0.03))",
@@ -357,8 +307,8 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── BOTTOM CTA ── */}
-      <section style={{ maxWidth: 960, margin: "0 auto", padding: "32px 20px 80px", textAlign: "center" }}>
+      {/* BOTTOM CTA */}
+      <section style={{ maxWidth: 960, margin: "0 auto", padding: "32px 20px 64px", textAlign: "center" }}>
         <h2 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: "clamp(36px, 7vw, 64px)", fontWeight: 900, textTransform: "uppercase", lineHeight: 1.05 }}>
           Ready to play?<br />
           <span style={{ background: "linear-gradient(135deg, #f97316, #fdba74)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Pick your role.</span>
@@ -386,7 +336,56 @@ export default function LandingPage() {
         >or browse the 🏟️ Dugout →</button>
       </section>
 
-      {/* ── FOOTER ── */}
+      <hr className="divider" />
+
+      {/* SUGGESTIONS */}
+      <section style={{ maxWidth: 960, margin: "0 auto", padding: "64px 20px", textAlign: "center" }}>
+        <div style={{
+          background: "rgba(255,255,255,0.02)",
+          border: "1px solid rgba(255,255,255,0.07)",
+          borderRadius: 24, padding: "48px 32px",
+          position: "relative", overflow: "hidden",
+        }}>
+          <div style={{
+            position: "absolute", inset: 0, borderRadius: 24,
+            background: "radial-gradient(ellipse at 50% 110%, rgba(99,102,241,0.06), transparent 65%)",
+            pointerEvents: "none",
+          }} />
+          <span style={{ fontSize: 40 }}>💡</span>
+          <h2 style={{
+            marginTop: 16, fontFamily: "'Barlow Condensed', sans-serif",
+            fontSize: "clamp(26px, 5vw, 40px)", fontWeight: 900,
+            textTransform: "uppercase", lineHeight: 1.1, color: "#e2e8f0",
+          }}>Got a suggestion?</h2>
+          <p style={{ marginTop: 12, fontSize: 14, color: "#64748b", maxWidth: 420, margin: "12px auto 0", lineHeight: 1.8 }}>
+            CricTrack is built for players like you. Have an idea, a feature request,
+            or just want to say what works and what doesn't?{" "}
+            <span style={{ color: "#94a3b8" }}>We'd love to hear from you.</span>
+          </p>
+          <a
+            href="mailto:devtry55@gmail.com"
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 8,
+              marginTop: 28, padding: "13px 26px", borderRadius: 12,
+              border: "1px solid rgba(249,115,22,0.35)",
+              background: emailHovered ? "#f97316" : "rgba(249,115,22,0.09)",
+              color: emailHovered ? "#0d1117" : "#f97316",
+              fontSize: 14, fontWeight: 700,
+              textDecoration: "none", transition: "all 0.15s",
+              fontFamily: "'DM Sans', sans-serif",
+            }}
+            onMouseEnter={() => setEmailHovered(true)}
+            onMouseLeave={() => setEmailHovered(false)}
+          >
+            ✉️ devtry55@gmail.com
+          </a>
+          <p style={{ marginTop: 12, fontSize: 11, color: "#2d3748", letterSpacing: "0.05em" }}>
+            Every message gets read. No spam, ever.
+          </p>
+        </div>
+      </section>
+
+      {/* FOOTER */}
       <footer style={{ borderTop: "1px solid rgba(255,255,255,0.05)", padding: "24px 20px", textAlign: "center" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 8 }}>
           <div style={{ width: 22, height: 22, borderRadius: "50%", background: "#f97316", display: "flex", alignItems: "center", justifyContent: "center" }}>
