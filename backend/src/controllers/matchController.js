@@ -54,6 +54,21 @@ function mapMatchSummary(match) {
     targetScore: match.targetScore,
     battingTeam: match.battingTeam,
     bowlingTeam: match.bowlingTeam,
+    currentStriker: match.currentStriker || null,
+    currentNonStriker: match.currentNonStriker || null,
+    currentBowler: match.currentBowler || null,
+    playerStats: (match.playerStats || []).map((player) => ({
+      name: player.name,
+      batting: {
+        runs: Number(player?.batting?.runs || 0),
+        balls: Number(player?.batting?.balls || 0),
+      },
+      bowling: {
+        wickets: Number(player?.bowling?.wickets || 0),
+        runs: Number(player?.bowling?.runs || 0),
+        balls: Number(player?.bowling?.balls || 0),
+      },
+    })),
     resultMessage: buildCompletedResultMessage(match),
     createdAt: match.createdAt,
     updatedAt: match.updatedAt,

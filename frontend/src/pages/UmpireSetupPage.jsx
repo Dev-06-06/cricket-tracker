@@ -10,7 +10,6 @@ import {
   getUpcomingMatches,
   startMatch,
 } from "../services/api";
-import { UMPIRE_AUTH_KEY } from "./UmpireLoginPage";
 
 /* ─── PlayerAvatar ──────────────────────────────────────────────────────────── */
 function PlayerAvatar({ player, size = "sm" }) {
@@ -112,13 +111,15 @@ function KanbanColumn({
           players.map((player) => (
             <div
               key={player._id}
-              className={`flex items-center gap-2 rounded-xl border px-2 py-2 ${borderClass} ${bgClass}`}
+              className={`flex flex-wrap items-center gap-2 rounded-xl border px-2 py-2 ${borderClass} ${bgClass}`}
             >
-              <PlayerAvatar player={player} size="sm" />
-              <p className="min-w-0 flex-1 truncate text-xs font-medium text-slate-300">
-                {player.name}
-              </p>
-              <div className="flex shrink-0 gap-1">
+              <div className="flex min-w-0 flex-1 items-center gap-2">
+                <PlayerAvatar player={player} size="sm" />
+                <p className="min-w-0 flex-1 truncate text-xs font-medium text-slate-300">
+                  {player.name}
+                </p>
+              </div>
+              <div className="flex w-full justify-end gap-1 sm:w-auto">
                 {showT1T2 && (
                   <>
                     <button
@@ -162,6 +163,10 @@ function KanbanColumn({
   );
 }
 
+function getLivePlayerStat(playerStats, name) {
+  return (playerStats || []).find((p) => p?.name === name) || null;
+}
+
 /* ─── MatchCard ─────────────────────────────────────────────────────────────── */
 function MatchCard({
   match,
@@ -176,6 +181,23 @@ function MatchCard({
   const t1Players = match.team1Players || [];
   const t2Players = match.team2Players || [];
   const allPlayers = [...t1Players, ...t2Players];
+  const strikerStat = getLivePlayerStat(
+    match.playerStats,
+    match.currentStriker,
+  );
+  const nonStrikerStat = getLivePlayerStat(
+    match.playerStats,
+    match.currentNonStriker,
+  );
+  const bowlerStat = getLivePlayerStat(match.playerStats, match.currentBowler);
+  const bowlerBalls = Number(bowlerStat?.bowling?.balls || 0);
+  const bowlerOvers = `${Math.floor(bowlerBalls / 6)}.${bowlerBalls % 6}`;
+  const target = (match.firstInningsScore || 0) + 1;
+  const runsNeeded = Math.max(0, target - (match.totalRuns || 0));
+  const ballsLeft = Math.max(
+    0,
+    (match.totalOvers || 0) * 6 - (match.ballsBowled || 0),
+  );
 
   return (
     <article
@@ -220,7 +242,8 @@ function MatchCard({
               </span>
               {match.ballsBowled != null && (
                 <span className="score-num text-base text-slate-500">
-                  ({Math.floor(match.ballsBowled / 6)}.{match.ballsBowled % 6})
+                  ({Math.floor(match.ballsBowled / 6)}.{match.ballsBowled % 6}/
+                  {match.totalOvers})
                 </span>
               )}
             </div>
@@ -231,6 +254,116 @@ function MatchCard({
                   {match.firstInningsScore + 1}
                 </span>
               </p>
+            )}
+
+            {(match.currentStriker || match.currentNonStriker) && (
+              <div className="mt-2 flex items-center gap-2 rounded-xl border border-white/5 bg-white/4 px-3 py-2">
+                <div className="grid grid-cols-2 w-full gap-2">
+                  <div className="flex items-stretch gap-2">
+                    <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="h-1.5 w-1.5 rounded-full bg-[#f97316] shrink-0" />
+                        <span className="text-[9px] font-black uppercase tracking-widest text-[#f97316]/60">
+                          STRIKER
+                        </span>
+                      </div>
+                      {match.currentStriker && (
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[12px] font-bold text-white truncate max-w-[88px]">
+                            {match.currentStriker}
+                          </span>
+                          <span className="text-[11px] text-slate-400 tabular-nums shrink-0">
+                            {strikerStat
+                              ? `${strikerStat?.batting?.runs ?? 0}(${strikerStat?.batting?.balls ?? 0})`
+                              : "0(0)"}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="w-px bg-slate-800 self-stretch shrink-0" />
+                  </div>
+
+                  <div className="flex flex-col gap-0.5 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="h-1.5 w-1.5 rounded-full bg-slate-500 shrink-0" />
+                      <span className="text-[9px] font-black uppercase tracking-widest text-slate-600">
+                        NON-STRIKER
+                      </span>
+                    </div>
+                    {match.currentNonStriker && (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[12px] font-semibold text-slate-300 truncate max-w-[88px]">
+                          {match.currentNonStriker}
+                        </span>
+                        <span className="text-[11px] text-slate-500 tabular-nums shrink-0">
+                          {nonStrikerStat
+                            ? `${nonStrikerStat?.batting?.runs ?? 0}(${nonStrikerStat?.batting?.balls ?? 0})`
+                            : "0(0)"}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {match.currentBowler && (
+              <div className="mt-2 flex items-center gap-2 rounded-xl border border-white/5 bg-white/4 px-3 py-2">
+                <div className="grid grid-cols-2 w-full gap-2">
+                  <div className="flex items-stretch gap-2">
+                    <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="h-1.5 w-1.5 rounded-full bg-indigo-400 shrink-0" />
+                        <span className="text-[9px] font-black uppercase tracking-widest text-indigo-400/60">
+                          BOWLING
+                        </span>
+                      </div>
+                      <span className="text-[12px] font-semibold text-slate-300 truncate max-w-[110px]">
+                        {match.currentBowler}
+                      </span>
+                    </div>
+                    <div className="w-px bg-slate-800 self-stretch shrink-0" />
+                  </div>
+
+                  <div className="flex flex-col gap-0.5 items-end">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-600">
+                      FIGURES
+                    </span>
+                    <span className="text-[12px] font-bold text-slate-300 tabular-nums">
+                      <span className="text-slate-300">{bowlerOvers}</span>
+                      <span className="text-slate-700"> · </span>
+                      <span className="text-slate-300">
+                        {bowlerStat?.bowling?.wickets ?? 0}/
+                        {bowlerStat?.bowling?.runs ?? 0}
+                      </span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {typeof match.firstInningsScore === "number" && (
+              <div className="mt-2 flex items-center justify-between rounded-xl border border-indigo-500/20 bg-indigo-500/8 px-3 py-2">
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-[9px] font-black uppercase tracking-widest text-indigo-400/70 self-center">
+                    NEED
+                  </span>
+                  <span className="score-num text-xl font-extrabold text-indigo-300 tabular-nums">
+                    {runsNeeded}
+                  </span>
+                  <span className="text-[9px] text-indigo-400/50 self-end mb-0.5">
+                    runs
+                  </span>
+                </div>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="score-num text-xl font-extrabold text-indigo-300 tabular-nums">
+                    {ballsLeft}
+                  </span>
+                  <span className="text-[9px] text-indigo-400/50 self-end mb-0.5">
+                    balls left
+                  </span>
+                </div>
+              </div>
             )}
           </div>
         )}
@@ -245,20 +378,22 @@ function MatchCard({
         )}
 
         {/* Player rosters (original logic preserved) */}
-        <div className="mt-3 space-y-0.5">
-          <p className="text-[11px] text-slate-600">
-            <span className="font-semibold text-slate-500">
-              {match.team1Name}:{" "}
-            </span>
-            {t1Players.map((p) => p.name).join(", ") || "—"}
-          </p>
-          <p className="text-[11px] text-slate-600">
-            <span className="font-semibold text-slate-500">
-              {match.team2Name}:{" "}
-            </span>
-            {t2Players.map((p) => p.name).join(", ") || "—"}
-          </p>
-        </div>
+        {!isLive && (
+          <div className="mt-3 space-y-0.5">
+            <p className="text-[11px] text-slate-600">
+              <span className="font-semibold text-slate-500">
+                {match.team1Name}:{" "}
+              </span>
+              {t1Players.map((p) => p.name).join(", ") || "—"}
+            </p>
+            <p className="text-[11px] text-slate-600">
+              <span className="font-semibold text-slate-500">
+                {match.team2Name}:{" "}
+              </span>
+              {t2Players.map((p) => p.name).join(", ") || "—"}
+            </p>
+          </div>
+        )}
 
         {/* Avatar strip */}
         {allPlayers.length > 0 && (
@@ -394,6 +529,7 @@ function UmpireSetupPage() {
   const [team1Players, setTeam1Players] = useState([]);
   const [team2Players, setTeam2Players] = useState([]);
   const [totalOvers, setTotalOvers] = useState(5);
+  const [oversInput, setOversInput] = useState(String(totalOvers));
   const [newPlayerName, setNewPlayerName] = useState("");
   const [newPlayerPhotoUrl, setNewPlayerPhotoUrl] = useState("");
   const [loading, setLoading] = useState(true);
@@ -500,6 +636,19 @@ function UmpireSetupPage() {
     setTeam1Players([]);
     setTeam2Players([]);
     setTotalOvers(5);
+    setOversInput("5");
+  };
+
+  const handleOversBlur = () => {
+    const parsed = Number.parseInt(oversInput, 10);
+    if (!Number.isFinite(parsed)) {
+      setTotalOvers(1);
+      setOversInput("1");
+      return;
+    }
+    const clamped = Math.min(50, Math.max(1, parsed));
+    setTotalOvers(clamped);
+    setOversInput(String(clamped));
   };
 
   const handleCreateUpcoming = async () => {
@@ -571,11 +720,6 @@ function UmpireSetupPage() {
     setDeleteCandidate(null);
   };
 
-  const handleExitUmpireMode = () => {
-    sessionStorage.removeItem(UMPIRE_AUTH_KEY);
-    navigate("/umpire/login", { replace: true });
-  };
-
   /* ── loading screen ── */
   if (loading)
     return (
@@ -615,7 +759,7 @@ function UmpireSetupPage() {
 
       {/* ══ STICKY HEADER ══ */}
       <header className="sticky top-0 z-20 border-b border-white/5 bg-[#0d1117]/95 backdrop-blur-md">
-        <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-3">
+        <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-y-2 px-4 py-3">
           {/* Brand */}
           <Link to="/" className="flex items-center gap-2">
             <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#f97316]">
@@ -625,18 +769,11 @@ function UmpireSetupPage() {
               CricTrack
             </span>
           </Link>
-          <span className="text-[11px] font-black uppercase tracking-widest text-[#f97316]">
+          <span className="order-3 w-full text-center text-[10px] font-black uppercase tracking-widest text-[#f97316] sm:order-none sm:w-auto sm:text-[11px]">
             Umpire Dashboard
           </span>
           {/* Nav */}
-          <div className="flex items-center gap-4">
-            <button
-              type="button"
-              onClick={handleExitUmpireMode}
-              className="btn-tap text-[11px] font-medium text-slate-600 hover:text-slate-300 transition-colors"
-            >
-              Exit Umpire Mode
-            </button>
+          <div className="flex items-center gap-3">
             <button
               type="button"
               onClick={() => navigate(-1)}
@@ -648,8 +785,8 @@ function UmpireSetupPage() {
         </div>
 
         {/* Tab bar */}
-        <div className="mx-auto max-w-4xl px-4">
-          <div className="flex">
+        <div className="mx-auto max-w-4xl px-4 overflow-x-auto">
+          <div className="flex min-w-max">
             {TABS.map((tab) => {
               const count =
                 tab.key === "live"
@@ -711,7 +848,7 @@ function UmpireSetupPage() {
               <p className="mb-4 text-[10px] font-black uppercase tracking-[0.18em] text-[#f97316]">
                 Match Setup
               </p>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div>
                   <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-widest text-slate-500">
                     Team 1 Name
@@ -739,13 +876,35 @@ function UmpireSetupPage() {
                     Overs
                   </label>
                   <input
-                    type="number"
+                    type="tel"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     min={1}
-                    value={totalOvers}
-                    onChange={(e) => setTotalOvers(Number(e.target.value) || 1)}
+                    value={oversInput}
+                    onChange={(e) => setOversInput(e.target.value)}
+                    onBlur={handleOversBlur}
                     placeholder="5"
                     className="w-full rounded-xl border border-white/8 bg-slate-800 px-3 py-2.5 text-sm text-white outline-none transition-all focus:ring-2 focus:ring-[#f97316]"
                   />
+                  <div className="flex gap-2 mt-2">
+                    {[5, 10, 15, 20].map((over) => (
+                      <button
+                        key={over}
+                        type="button"
+                        onClick={() => {
+                          setTotalOvers(over);
+                          setOversInput(String(over));
+                        }}
+                        className={`rounded-full border px-3 py-1 text-xs font-bold transition-all ${
+                          totalOvers === over
+                            ? "border-[#f97316]/50 bg-[#f97316]/10 text-[#f97316]"
+                            : "border-white/10 bg-white/5 text-slate-400 hover:border-[#f97316]/40 hover:text-[#f97316]"
+                        }`}
+                      >
+                        {over}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             </section>
@@ -755,7 +914,7 @@ function UmpireSetupPage() {
               <p className="mb-4 text-[10px] font-black uppercase tracking-[0.18em] text-[#f97316]">
                 Add Players to Pool
               </p>
-              <div className="flex gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row">
                 <input
                   value={newPlayerName}
                   onChange={(e) => setNewPlayerName(e.target.value)}
@@ -773,7 +932,7 @@ function UmpireSetupPage() {
                   type="button"
                   onClick={addPlayer}
                   disabled={!newPlayerName.trim()}
-                  className="btn-tap shrink-0 rounded-xl bg-[#f97316] px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-orange-500 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="btn-tap shrink-0 rounded-xl bg-[#f97316] px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-orange-500 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
                 >
                   + Add
                 </button>
@@ -786,7 +945,7 @@ function UmpireSetupPage() {
                 <p className="mb-4 text-[10px] font-black uppercase tracking-[0.18em] text-[#f97316]">
                   Assign Players to Teams
                 </p>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
                   <KanbanColumn
                     title="Unassigned"
                     accentClass="text-slate-500"

@@ -99,6 +99,26 @@ function SectionHeader({ label, accent, count, extra }) {
 /* ─── LiveMatchCard ──────────────────────────────────────────────────────────── */
 function LiveMatchCard({ match }) {
   const overs = calcOvers(match.ballsBowled);
+  function getPlayerStat(playerStats, name) {
+    return (playerStats || []).find((p) => p?.name === name) || null;
+  }
+
+  const strikerStat = getPlayerStat(match.playerStats, match.currentStriker);
+  const nonStrikerStat = getPlayerStat(
+    match.playerStats,
+    match.currentNonStriker,
+  );
+  const bowlerStat = getPlayerStat(match.playerStats, match.currentBowler);
+  const bowlerBalls = Number(bowlerStat?.bowling?.balls || 0);
+  const bowlerOvers = `${Math.floor(bowlerBalls / 6)}.${bowlerBalls % 6}`;
+
+  const target = match.firstInningsScore + 1;
+  const runsNeeded = Math.max(0, target - (match.totalRuns || 0));
+  const ballsLeft = Math.max(
+    0,
+    (match.totalOvers || 0) * 6 - (match.ballsBowled || 0),
+  );
+
   const hasScore =
     Number(match.totalRuns || 0) > 0 ||
     Number(match.wickets || 0) > 0 ||
@@ -109,10 +129,8 @@ function LiveMatchCard({ match }) {
       to={`/scoreboard/${match._id}?viewer=1`}
       className="block rounded-2xl border border-red-800/30 bg-gradient-to-br from-red-950/25 via-slate-900/60 to-slate-900/40 p-4 transition-all hover:border-red-700/50 hover:from-red-950/35 active:scale-[0.99]"
     >
-      {/* Top row */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          {/* Teams */}
           <p className="text-base font-extrabold leading-tight text-white">
             {match.team1Name}
             <span className="mx-2 text-slate-600 font-normal text-sm">vs</span>
@@ -125,54 +143,152 @@ function LiveMatchCard({ match }) {
         <LiveDot />
       </div>
 
-      {/* Score hero */}
-      <div className="mt-3 rounded-xl border border-white/5 bg-white/5 px-3 py-2.5">
-        <p className="text-[10px] font-black uppercase tracking-widest text-[#f97316]">
-          {match.battingTeam || match.team1Name}
-        </p>
-        <div className="mt-0.5 flex items-baseline gap-2">
-          <span
-            className="text-4xl font-extrabold leading-none text-white"
-            style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
-          >
-            {hasScore ? `${match.totalRuns || 0}/${match.wickets || 0}` : "0/0"}
-          </span>
-          {overs && (
-            <span
-              className="text-lg font-semibold text-slate-500"
-              style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
-            >
-              ({overs})
-            </span>
-          )}
+      <div className="mt-3 space-y-1.5">
+        <div className="flex items-stretch gap-3">
+          <div className="flex-1 rounded-xl border border-white/5 bg-white/5 px-3 py-2.5 flex flex-col justify-center">
+            <p className="text-[10px] font-black uppercase tracking-widest text-[#f97316]">
+              {match.battingTeam || match.team1Name}
+            </p>
+            <div className="mt-0.5 flex items-baseline gap-2">
+              <span
+                className="text-4xl font-extrabold leading-none text-white"
+                style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
+              >
+                {hasScore
+                  ? `${match.totalRuns || 0}/${match.wickets || 0}`
+                  : "0/0"}
+              </span>
+              {overs && (
+                <span
+                  className="text-lg font-semibold text-slate-500"
+                  style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
+                >
+                  ({overs}/{match.totalOvers})
+                </span>
+              )}
+            </div>
+            {typeof match.firstInningsScore === "number" && (
+              <p className="mt-0.5 text-[11px] text-slate-600">
+                Target:{" "}
+                <span className="font-bold text-slate-400">
+                  {match.firstInningsScore + 1}
+                </span>
+              </p>
+            )}
+          </div>
+
+          <div className="w-[54%] min-w-0 space-y-1.5">
+            {(match.currentStriker || match.currentNonStriker) && (
+              <div className="flex items-center gap-2 rounded-xl border border-white/5 bg-white/4 px-3 py-2">
+                <div className="grid grid-cols-2 w-full gap-2">
+                  <div className="flex items-stretch gap-2">
+                    <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="h-1.5 w-1.5 rounded-full bg-[#f97316] shrink-0" />
+                        <span className="text-[9px] font-black uppercase tracking-widest text-[#f97316]/60">
+                          STRIKER
+                        </span>
+                      </div>
+                      {match.currentStriker && (
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[12px] font-bold text-white truncate max-w-[88px]">
+                            {match.currentStriker}
+                          </span>
+                          <span className="text-[11px] text-slate-400 tabular-nums shrink-0">
+                            {strikerStat?.batting?.runs ?? 0}(
+                            {strikerStat?.batting?.balls ?? 0})
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="w-px bg-slate-800 self-stretch shrink-0" />
+                  </div>
+
+                  <div className="flex flex-col gap-0.5 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="h-1.5 w-1.5 rounded-full bg-slate-500 shrink-0" />
+                      <span className="text-[9px] font-black uppercase tracking-widest text-slate-600">
+                        NON-STRIKER
+                      </span>
+                    </div>
+                    {match.currentNonStriker && (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[12px] font-semibold text-slate-300 truncate max-w-[88px]">
+                          {match.currentNonStriker}
+                        </span>
+                        <span className="text-[11px] text-slate-500 tabular-nums shrink-0">
+                          {nonStrikerStat?.batting?.runs ?? 0}(
+                          {nonStrikerStat?.batting?.balls ?? 0})
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {match.currentBowler && (
+              <div className="flex items-center gap-2 rounded-xl border border-white/5 bg-white/4 px-3 py-2">
+                <div className="grid grid-cols-2 w-full gap-2">
+                  <div className="flex items-stretch gap-2">
+                    <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="h-1.5 w-1.5 rounded-full bg-indigo-400 shrink-0" />
+                        <span className="text-[9px] font-black uppercase tracking-widest text-indigo-400/60">
+                          BOWLING
+                        </span>
+                      </div>
+                      <span className="text-[12px] font-semibold text-slate-300 truncate max-w-[110px]">
+                        {match.currentBowler}
+                      </span>
+                    </div>
+                    <div className="w-px bg-slate-800 self-stretch shrink-0" />
+                  </div>
+
+                  <div className="flex flex-col gap-0.5 items-end">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-600">
+                      FIGURES
+                    </span>
+                    <span className="text-[12px] font-bold text-slate-300 tabular-nums">
+                      <span className="text-slate-300">{bowlerOvers}</span>
+                      <span className="text-slate-700"> · </span>
+                      <span className="text-slate-300">
+                        {bowlerStat?.bowling?.wickets ?? 0}/
+                        {bowlerStat?.bowling?.runs ?? 0}
+                      </span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
+
         {typeof match.firstInningsScore === "number" && (
-          <p className="mt-0.5 text-[11px] text-slate-600">
-            Target:{" "}
-            <span className="font-bold text-slate-400">
-              {match.firstInningsScore + 1}
-            </span>
-          </p>
+          <div className="mt-2 flex items-center justify-between rounded-xl border border-indigo-500/20 bg-indigo-500/8 px-3 py-2">
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-[9px] font-black uppercase tracking-widest text-indigo-400/70 self-center">
+                NEED
+              </span>
+              <span className="score-num text-xl font-extrabold text-indigo-300 tabular-nums">
+                {runsNeeded}
+              </span>
+              <span className="text-[9px] text-indigo-400/50 self-end mb-0.5">
+                runs
+              </span>
+            </div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="score-num text-xl font-extrabold text-indigo-300 tabular-nums">
+                {ballsLeft}
+              </span>
+              <span className="text-[9px] text-indigo-400/50 self-end mb-0.5">
+                balls left
+              </span>
+            </div>
+          </div>
         )}
       </div>
 
-      {/* Player stacks */}
-      <div className="mt-3 space-y-1.5">
-        <div className="flex items-center gap-2">
-          <span className="w-14 shrink-0 text-[10px] font-semibold text-slate-600 truncate">
-            {match.team1Name}
-          </span>
-          <PlayerAvatarStack players={match.team1Players || []} />
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="w-14 shrink-0 text-[10px] font-semibold text-slate-600 truncate">
-            {match.team2Name}
-          </span>
-          <PlayerAvatarStack players={match.team2Players || []} />
-        </div>
-      </div>
-
-      {/* CTA */}
       <div className="mt-3 flex items-center justify-end">
         <span className="rounded-full bg-[#f97316]/15 border border-[#f97316]/30 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-[#f97316]">
           Open Scoreboard →

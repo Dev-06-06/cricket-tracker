@@ -464,7 +464,8 @@ function ScorerPage() {
           {match.totalRuns}/{match.wickets}
         </p>
         <p className="mt-1 text-sm font-medium text-slate-700">
-          Over: {match.oversBowled}{" "}
+          Over: {Math.floor((match.ballsBowled || 0) / 6)}.
+          {(match.ballsBowled || 0) % 6}/{match.totalOvers}{" "}
           <span className="mx-2 text-slate-300">|</span> RR: {currentRunRate}
         </p>
         {targetScore && (

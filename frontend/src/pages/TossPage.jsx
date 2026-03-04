@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { createMatchSocket } from "../services/socket";
-import { UMPIRE_AUTH_KEY } from "./UmpireLoginPage";
 
 /* ═══════════════════════════════════════════════════════════════════════════════
    TossPage — correct cricket toss flow:
@@ -179,11 +178,6 @@ export default function TossPage() {
     });
   };
 
-  const handleExitUmpireMode = () => {
-    sessionStorage.removeItem(UMPIRE_AUTH_KEY);
-    navigate("/umpire/login", { replace: true });
-  };
-
   /* ── loading ── */
   if (!match)
     return (
@@ -288,13 +282,6 @@ export default function TossPage() {
             Toss
           </span>
           <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={handleExitUmpireMode}
-              className="btn-tap text-[11px] font-medium text-slate-600 hover:text-slate-300 transition-colors"
-            >
-              Exit Umpire Mode
-            </button>
             <button
               type="button"
               onClick={() => navigate(-1)}

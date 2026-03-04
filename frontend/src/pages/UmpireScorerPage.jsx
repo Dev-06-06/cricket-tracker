@@ -3,7 +3,6 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { createMatchSocket } from "../services/socket";
 import { getMatch } from "../services/api";
 import { checkMatchEnd } from "../utils/matchResult";
-import { UMPIRE_AUTH_KEY } from "./UmpireLoginPage";
 
 /* ─── constants ─────────────────────────────────────────────────────────────── */
 const RUN_OPTIONS = [0, 1, 2, 3, 4, 6];
@@ -420,11 +419,6 @@ export default function UmpireScorerPage() {
     setDismissedBatter("");
   }
 
-  function handleExitUmpireMode() {
-    sessionStorage.removeItem(UMPIRE_AUTH_KEY);
-    navigate("/umpire/login", { replace: true });
-  }
-
   /* ── loading ── */
   if (!match)
     return (
@@ -547,7 +541,7 @@ export default function UmpireScorerPage() {
 
   return (
     <main
-      className="h-[100dvh] w-full overflow-hidden bg-[#0d1117] text-white flex flex-col select-none"
+      className="min-h-[100dvh] w-full overflow-x-hidden bg-[#0d1117] text-white flex flex-col select-none md:h-[100dvh] md:overflow-hidden"
       style={{ fontFamily: "'DM Sans', sans-serif" }}
     >
       <style>{`
@@ -561,6 +555,8 @@ export default function UmpireScorerPage() {
           60% { transform: scale(0.9); opacity: 1; }
           100%{ transform: scale(1); opacity: 1; }
         }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>
 
       {/* ═══ MODALS ═══ */}
@@ -674,21 +670,14 @@ export default function UmpireScorerPage() {
       {/* ═══════════════════════════════════════
           ZONE 1 — TOP NAV  (fixed 36px)
       ═══════════════════════════════════════ */}
-      <div className="shrink-0 flex items-center justify-between px-4 h-9 border-b border-white/5 bg-[#0d1117]">
-        <div className="flex items-center gap-4">
+      <div className="shrink-0 flex items-center justify-between gap-2 px-3 sm:px-4 h-9 border-b border-white/5 bg-[#0d1117]">
+        <div className="flex min-w-0 flex-1 items-center gap-3 overflow-x-auto whitespace-nowrap pr-1 scrollbar-hide">
           <Link
             to="/"
             className="text-[11px] font-black uppercase tracking-[0.15em] text-white hover:text-[#f97316] transition-colors"
           >
             CricTrack
           </Link>
-          <button
-            type="button"
-            onClick={handleExitUmpireMode}
-            className="text-[11px] font-medium text-slate-600 hover:text-slate-300 transition-colors btn-tap"
-          >
-            ← Exit Umpire Mode
-          </button>
           <button
             type="button"
             onClick={() => navigate(-1)}
@@ -703,7 +692,7 @@ export default function UmpireScorerPage() {
             Scoreboard
           </Link>
         </div>
-        <span className="text-[11px] font-black uppercase tracking-[0.2em] text-[#f97316]">
+        <span className="hidden sm:inline text-[11px] font-black uppercase tracking-[0.2em] text-[#f97316]">
           Umpire
         </span>
         <button
@@ -738,7 +727,7 @@ export default function UmpireScorerPage() {
                 {totalRuns}/{wickets}
               </span>
               <span className="score-num text-xl font-semibold text-slate-500">
-                ({oversBowled}.{ballsInOver})
+                ({oversBowled}.{ballsInOver}/{match.totalOvers})
               </span>
             </div>
             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
@@ -800,7 +789,7 @@ export default function UmpireScorerPage() {
         </div>
 
         {/* Batters + Bowler row */}
-        <div className="mt-2 grid grid-cols-3 gap-1.5">
+        <div className="mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-3">
           {/* Striker */}
           <div className="flex items-center gap-2 rounded-xl bg-[#f97316]/8 border border-[#f97316]/20 px-2 py-1.5">
             <PlayerAvatar
@@ -813,10 +802,10 @@ export default function UmpireScorerPage() {
               <p className="text-[11px] font-bold text-white truncate leading-tight">
                 {striker || "—"} <span className="text-[#f97316]">*</span>
               </p>
-              <p className="text-[10px] text-slate-500 tabular-nums leading-tight">
+              <p className="text-[11px] sm:text-[10px] text-slate-500 tabular-nums leading-tight">
                 {strikerStats.runs}({strikerStats.balls})
               </p>
-              <p className="text-[10px] text-slate-600 leading-tight">
+              <p className="text-[11px] sm:text-[10px] text-slate-600 leading-tight">
                 {strikerStats.fours}×4 {strikerStats.sixes}×6
               </p>
             </div>
@@ -833,10 +822,10 @@ export default function UmpireScorerPage() {
               <p className="text-[11px] font-semibold text-slate-300 truncate leading-tight">
                 {nonStriker || "—"}
               </p>
-              <p className="text-[10px] text-slate-500 tabular-nums leading-tight">
+              <p className="text-[11px] sm:text-[10px] text-slate-500 tabular-nums leading-tight">
                 {nonStrikerStats.runs}({nonStrikerStats.balls})
               </p>
-              <p className="text-[10px] text-slate-600 leading-tight">
+              <p className="text-[11px] sm:text-[10px] text-slate-600 leading-tight">
                 {nonStrikerStats.fours}×4 {nonStrikerStats.sixes}×6
               </p>
             </div>
@@ -850,13 +839,13 @@ export default function UmpireScorerPage() {
               size="md"
             />
             <div className="min-w-0 flex-1">
-              <p className="text-[10px] font-black uppercase tracking-wide text-slate-600 leading-tight">
+              <p className="text-[11px] sm:text-[10px] font-black uppercase tracking-wide text-slate-600 leading-tight">
                 Bowling
               </p>
               <p className="text-[11px] font-semibold text-slate-300 truncate leading-tight">
                 {match.currentBowler || "—"}
               </p>
-              <p className="text-[10px] text-slate-500 tabular-nums leading-tight">
+              <p className="text-[11px] sm:text-[10px] text-slate-500 tabular-nums leading-tight">
                 {calcOvers(bowlerStat.balls)} · {bowlerStat.wickets}/
                 {bowlerStat.runs}
                 {bowlerStat.balls > 0 && (
@@ -895,7 +884,7 @@ export default function UmpireScorerPage() {
       ═══════════════════════════════════════ */}
       <div className="flex-1 flex flex-col px-3 pt-2 pb-2 gap-2 min-h-0">
         {/* ── Toggle row: Wide | No Ball | Wicket ── */}
-        <div className="shrink-0 grid grid-cols-3 gap-2">
+        <div className="shrink-0 grid grid-cols-1 gap-2 sm:grid-cols-3">
           {[
             {
               key: "wide",
@@ -949,7 +938,7 @@ export default function UmpireScorerPage() {
 
         {/* ── Wicket detail (inline, collapses when not needed) ── */}
         {isWicket && (
-          <div className="shrink-0 grid grid-cols-2 gap-2">
+          <div className="shrink-0 grid grid-cols-1 gap-2 sm:grid-cols-2">
             <select
               value={wicketType}
               onChange={(e) => setWicketType(e.target.value)}
