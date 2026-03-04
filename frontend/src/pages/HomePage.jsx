@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   getCompletedMatches,
   getLiveMatches,
@@ -292,6 +292,7 @@ function EmptyState({ icon, label }) {
    MAIN COMPONENT
 ═══════════════════════════════════════════════════════════════════════════════ */
 function HomePage() {
+  const navigate = useNavigate();
   const [upcomingMatches, setUpcomingMatches] = useState([]);
   const [liveMatches, setLiveMatches] = useState([]);
   const [completedMatches, setCompletedMatches] = useState([]);
@@ -380,23 +381,24 @@ function HomePage() {
       {/* ══ STICKY HEADER ══ */}
       <header className="sticky top-0 z-20 border-b border-white/5 bg-[#0d1117]/95 backdrop-blur-md">
         <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-2">
+          <Link to="/" className="flex items-center gap-2">
             <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#f97316]">
               <span className="text-[10px] font-black text-white">C</span>
             </div>
             <span className="text-sm font-black uppercase tracking-[0.15em] text-white">
               CricTrack
             </span>
-          </div>
+          </Link>
           <span className="text-[11px] font-black uppercase tracking-widest text-[#f97316]">
             Viewer Mode
           </span>
-          <Link
-            to="/"
+          <button
+            type="button"
+            onClick={() => navigate(-1)}
             className="btn-tap text-[11px] font-medium text-slate-600 hover:text-slate-300 transition-colors"
           >
-            ← Home
-          </Link>
+            ← Back
+          </button>
         </div>
       </header>
 

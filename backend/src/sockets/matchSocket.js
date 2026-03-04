@@ -484,8 +484,8 @@ async function handleMaxOversTransition(match, matchId, io, totalValidBalls) {
 
 async function emitMatchState(target, matchId) {
   const match = await Match.findById(matchId)
-    .populate("team1Players", "name")
-    .populate("team2Players", "name");
+    .populate("team1Players", "name photoUrl")
+    .populate("team2Players", "name photoUrl");
   if (!match) return;
 
   const storedStats = {};
@@ -535,6 +535,7 @@ async function emitMatchState(target, matchId) {
     ...match.team1Players.map((p) => ({
       _id: p._id,
       name: p.name,
+      photoUrl: p.photoUrl || "",
       team: match.team1Name,
       ...(storedStats[String(p._id)] || {}),
       bowling: bowlingByName[p.name] || { balls: 0, runs: 0, wickets: 0 },
@@ -542,6 +543,7 @@ async function emitMatchState(target, matchId) {
     ...match.team2Players.map((p) => ({
       _id: p._id,
       name: p.name,
+      photoUrl: p.photoUrl || "",
       team: match.team2Name,
       ...(storedStats[String(p._id)] || {}),
       bowling: bowlingByName[p.name] || { balls: 0, runs: 0, wickets: 0 },

@@ -82,23 +82,27 @@ function UmpireLoginPage() {
       {/* ══ TOP NAV ══ */}
       <header className="sticky top-0 z-20 border-b border-white/5 bg-[#0d1117]/95 backdrop-blur-md">
         <div className="mx-auto flex max-w-sm items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => navigate("/")}
+            className="flex items-center gap-2"
+          >
             <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#f97316]">
               <span className="text-[10px] font-black text-white">C</span>
             </div>
             <span className="text-sm font-black uppercase tracking-[0.15em] text-white">
               CricTrack
             </span>
-          </div>
+          </button>
           <span className="text-[11px] font-black uppercase tracking-widest text-[#f97316]">
             Umpire Mode
           </span>
           <button
             type="button"
-            onClick={() => navigate("/")}
+            onClick={() => navigate(-1)}
             className="btn-tap text-[11px] font-medium text-slate-600 hover:text-slate-300 transition-colors"
           >
-            ← Home
+            ← Back
           </button>
         </div>
       </header>
@@ -106,7 +110,6 @@ function UmpireLoginPage() {
       {/* ══ BODY ══ */}
       <main className="flex flex-1 flex-col items-center justify-center px-4 py-10">
         <div className="w-full max-w-xs space-y-7">
-
           {/* ── Icon + Title ── */}
           <div className="flex flex-col items-center gap-3">
             <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-[#f97316]/30 bg-[#f97316]/10 shadow-lg shadow-orange-900/20">
@@ -123,7 +126,9 @@ function UmpireLoginPage() {
           </div>
 
           {/* ── PIN dots ── */}
-          <div className={`flex justify-center gap-3 ${shaking ? "shake" : ""}`}>
+          <div
+            className={`flex justify-center gap-3 ${shaking ? "shake" : ""}`}
+          >
             {Array.from({ length: 5 }).map((_, i) => (
               <span
                 key={i}
@@ -186,7 +191,9 @@ function UmpireLoginPage() {
               disabled={pin.length !== 5}
               className="btn-tap mt-4 w-full rounded-2xl bg-[#f97316] py-4 text-sm font-black uppercase tracking-widest text-white shadow-lg shadow-orange-900/30 transition-all hover:bg-orange-500 disabled:cursor-not-allowed disabled:opacity-35"
             >
-              {pin.length === 5 ? "🔓 Enter Umpire Mode" : `${5 - pin.length} digit${5 - pin.length !== 1 ? "s" : ""} remaining`}
+              {pin.length === 5
+                ? "🔓 Enter Umpire Mode"
+                : `${5 - pin.length} digit${5 - pin.length !== 1 ? "s" : ""} remaining`}
             </button>
           </form>
 

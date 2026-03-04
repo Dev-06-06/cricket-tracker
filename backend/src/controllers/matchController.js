@@ -60,10 +60,12 @@ function mapMatchSummary(match) {
     team1Players: (match.team1Players || []).map((player) => ({
       _id: player._id,
       name: player.name,
+      photoUrl: player.photoUrl || "",
     })),
     team2Players: (match.team2Players || []).map((player) => ({
       _id: player._id,
       name: player.name,
+      photoUrl: player.photoUrl || "",
     })),
   };
 }
@@ -107,10 +109,10 @@ const createUpcomingMatch = async (req, res) => {
 
     const t1Players = await Player.find({
       _id: { $in: team1PlayerIds || [] },
-    }).select("name");
+    }).select("name photoUrl");
     const t2Players = await Player.find({
       _id: { $in: team2PlayerIds || [] },
-    }).select("name");
+    }).select("name photoUrl");
 
     const playerStats = [];
     t1Players.forEach((player) => {
@@ -145,8 +147,8 @@ const createUpcomingMatch = async (req, res) => {
     });
 
     const populatedMatch = await Match.findById(match._id)
-      .populate("team1Players", "name")
-      .populate("team2Players", "name");
+      .populate("team1Players", "name photoUrl")
+      .populate("team2Players", "name photoUrl");
 
     res
       .status(201)
@@ -160,8 +162,8 @@ const getMatch = async (req, res) => {
   try {
     const { id } = req.params;
     const match = await Match.findById(id)
-      .populate("team1Players", "name")
-      .populate("team2Players", "name");
+      .populate("team1Players", "name photoUrl")
+      .populate("team2Players", "name photoUrl");
 
     if (!match) {
       return res
@@ -178,8 +180,8 @@ const getMatch = async (req, res) => {
 const listUpcomingMatches = async (_req, res) => {
   try {
     const matches = await Match.find({ status: "upcoming" })
-      .populate("team1Players", "name")
-      .populate("team2Players", "name")
+      .populate("team1Players", "name photoUrl")
+      .populate("team2Players", "name photoUrl")
       .sort({ createdAt: -1 });
 
     res.status(200).json({
@@ -196,8 +198,8 @@ const listLiveMatches = async (_req, res) => {
     const matches = await Match.find({
       status: { $in: ["toss", "innings", "live", "innings_complete"] },
     })
-      .populate("team1Players", "name")
-      .populate("team2Players", "name")
+      .populate("team1Players", "name photoUrl")
+      .populate("team2Players", "name photoUrl")
       .sort({ updatedAt: -1 });
 
     res.status(200).json({
@@ -212,8 +214,8 @@ const listLiveMatches = async (_req, res) => {
 const listCompletedMatches = async (_req, res) => {
   try {
     const matches = await Match.find({ status: "completed" })
-      .populate("team1Players", "name")
-      .populate("team2Players", "name")
+      .populate("team1Players", "name photoUrl")
+      .populate("team2Players", "name photoUrl")
       .sort({ updatedAt: -1 });
 
     res.status(200).json({

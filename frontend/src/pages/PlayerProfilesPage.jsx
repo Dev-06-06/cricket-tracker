@@ -1,6 +1,32 @@
 import { useEffect, useMemo, useState, useRef } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { getPlayers } from "../services/api";
+
+const BATTING_FILTER_OPTIONS = [
+  { value: "runs", label: "Runs" },
+  { value: "matches", label: "Matches" },
+  { value: "innings", label: "Innings" },
+  { value: "average", label: "Average" },
+  { value: "fours", label: "4s" },
+  { value: "sixes", label: "6s" },
+  { value: "hundreds", label: "100s" },
+  { value: "fifties", label: "50s" },
+  { value: "thirties", label: "30s" },
+  { value: "strikeRate", label: "Strike Rate" },
+];
+
+const BOWLING_FILTER_OPTIONS = [
+  { value: "wickets", label: "Wickets" },
+  { value: "economy", label: "Economy" },
+  { value: "overs", label: "Overs" },
+  { value: "balls", label: "Balls" },
+  { value: "runs", label: "Runs" },
+  { value: "matches", label: "Matches" },
+  { value: "average", label: "Average" },
+  { value: "threeWickets", label: "3fers" },
+  { value: "fourWickets", label: "4fers" },
+  { value: "fiveWickets", label: "5fers" },
+];
 
 /* ─── helpers ────────────────────────────────────────────────────────────────── */
 function formatNum(value, digits = 2) {
@@ -390,11 +416,13 @@ function PlayerRow({ player, onClick, index }) {
    MAIN PAGE
 ═══════════════════════════════════════════════════════════════════════════════ */
 export default function PlayerProfilesPage() {
+  const navigate = useNavigate();
   const [players, setPlayers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [activePlayer, setActivePlayer] = useState(null); // index into sortedPlayers
   const [search, setSearch] = useState("");
+  const [filterBy, setFilterBy] = useState("runs");
   const [activeTab, setActiveTab] = useState("batting"); // "batting" | "bowling"
 
   useEffect(() => {
@@ -427,22 +455,101 @@ export default function PlayerProfilesPage() {
     [sortedPlayers, search],
   );
 
+  useEffect(() => {
+    const validOptions =
+      activeTab === "batting" ? BATTING_FILTER_OPTIONS : BOWLING_FILTER_OPTIONS;
+    const isValid = validOptions.some((option) => option.value === filterBy);
+    if (!isValid) {
+      setFilterBy(activeTab === "batting" ? "runs" : "wickets");
+    }
+  }, [activeTab, filterBy]);
+
+  const currentFilterLabel =
+    (activeTab === "batting"
+      ? BATTING_FILTER_OPTIONS
+      : BOWLING_FILTER_OPTIONS
+    ).find((option) => option.value === filterBy)?.label || "Runs";
+
+  const asNumber = (value) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
+  const battingSortValue = (player) => {
+    const battingData = player.batting || {};
+    const computedBatting = player.computedStats?.batting || {};
+    switch (filterBy) {
+      case "matches":
+        return asNumber(battingData.matches);
+      case "innings":
+        return asNumber(battingData.innings);
+      case "average":
+        return asNumber(computedBatting.average);
+      case "fours":
+        return asNumber(battingData.fours);
+      case "sixes":
+        return asNumber(battingData.sixes);
+      case "hundreds":
+        return asNumber(battingData.hundreds);
+      case "fifties":
+        return asNumber(battingData.fifties);
+      case "thirties":
+        return asNumber(battingData.thirties);
+      case "strikeRate":
+        return asNumber(computedBatting.strikeRate);
+      case "runs":
+      default:
+        return asNumber(battingData.runs);
+    }
+  };
+
+  const bowlingSortValue = (player) => {
+    const bowlingData = player.bowling || {};
+    const computedBowling = player.computedStats?.bowling || {};
+    switch (filterBy) {
+      case "economy": {
+        const economy = asNumber(computedBowling.economy);
+        return economy > 0 ? economy : Number.MAX_SAFE_INTEGER;
+      }
+      case "overs":
+        return asNumber(bowlingData.overs);
+      case "balls":
+        return asNumber(bowlingData.balls);
+      case "runs":
+        return asNumber(bowlingData.runs);
+      case "matches":
+        return asNumber(bowlingData.matches);
+      case "average":
+        return asNumber(computedBowling.average);
+      case "threeWickets":
+        return asNumber(bowlingData.threeWickets);
+      case "fourWickets":
+        return asNumber(bowlingData.fourWickets);
+      case "fiveWickets":
+        return asNumber(bowlingData.fiveWickets);
+      case "wickets":
+      default:
+        return asNumber(bowlingData.wickets);
+    }
+  };
+
   const battingSorted = useMemo(
     () =>
       [...filteredPlayers].sort(
-        (a, b) =>
-          (Number(b.batting?.runs) || 0) - (Number(a.batting?.runs) || 0),
+        (a, b) => battingSortValue(b) - battingSortValue(a),
       ),
-    [filteredPlayers],
+    [filteredPlayers, filterBy],
   );
 
   const bowlingSorted = useMemo(
     () =>
-      [...filteredPlayers].sort(
-        (a, b) =>
-          (Number(b.bowling?.wickets) || 0) - (Number(a.bowling?.wickets) || 0),
-      ),
-    [filteredPlayers],
+      [...filteredPlayers].sort((a, b) => {
+        if (filterBy === "economy") {
+          return bowlingSortValue(a) - bowlingSortValue(b);
+        }
+        return bowlingSortValue(b) - bowlingSortValue(a);
+      }),
+    [filteredPlayers, filterBy],
   );
 
   const displayList = activeTab === "batting" ? battingSorted : bowlingSorted;
@@ -476,23 +583,24 @@ export default function PlayerProfilesPage() {
       {/* ══ STICKY HEADER ══ */}
       <header className="sticky top-0 z-20 border-b border-white/5 bg-[#0d1117]/95 backdrop-blur-md">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-2">
+          <Link to="/" className="flex items-center gap-2">
             <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#f97316]">
               <span className="text-[10px] font-black text-white">C</span>
             </div>
             <span className="text-sm font-black uppercase tracking-[0.15em] text-white">
               CricTrack
             </span>
-          </div>
+          </Link>
           <span className="text-[11px] font-black uppercase tracking-widest text-[#f97316]">
             Dugout
           </span>
-          <Link
-            to="/"
+          <button
+            type="button"
+            onClick={() => navigate(-1)}
             className="btn-tap text-[11px] font-medium text-slate-600 hover:text-slate-300 transition-colors"
           >
-            ← Home
-          </Link>
+            ← Back
+          </button>
         </div>
       </header>
 
@@ -536,7 +644,10 @@ export default function PlayerProfilesPage() {
               <button
                 key={key}
                 type="button"
-                onClick={() => setActiveTab(key)}
+                onClick={() => {
+                  setActiveTab(key);
+                  setFilterBy(key === "batting" ? "runs" : "wickets");
+                }}
                 className={`btn-tap rounded-lg px-4 py-1.5 text-[11px] font-black uppercase tracking-widest transition-all ${
                   activeTab === key
                     ? "bg-[#f97316] text-white shadow-md shadow-orange-900/30"
@@ -546,6 +657,26 @@ export default function PlayerProfilesPage() {
                 {label}
               </button>
             ))}
+          </div>
+
+          <div className="flex items-center gap-2 rounded-xl border border-white/8 bg-white/4 px-3 py-2">
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-600">
+              Filter by
+            </span>
+            <select
+              value={filterBy}
+              onChange={(e) => setFilterBy(e.target.value)}
+              className="rounded-lg border border-white/10 bg-slate-900 px-2 py-1 text-[11px] font-bold text-slate-200 outline-none focus:ring-2 focus:ring-[#f97316]"
+            >
+              {(activeTab === "batting"
+                ? BATTING_FILTER_OPTIONS
+                : BOWLING_FILTER_OPTIONS
+              ).map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
@@ -578,10 +709,8 @@ export default function PlayerProfilesPage() {
             {/* Hint */}
             <div className="border-b border-white/5 px-4 py-2.5 flex items-center justify-between">
               <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-600">
-                {activeTab === "batting"
-                  ? "Sorted by runs"
-                  : "Sorted by wickets"}{" "}
-                · {displayList.length} players
+                Sorted by {currentFilterLabel.toLowerCase()} ·{" "}
+                {displayList.length} players
               </p>
               <span className="text-[10px] text-slate-700">
                 Click a player to view full card
@@ -794,11 +923,11 @@ export default function PlayerProfilesPage() {
         {!loading &&
           !error &&
           sortedPlayers.length > 0 &&
-          filteredPlayers.length === 0 && (
+          displayList.length === 0 && (
             <div className="flex flex-col items-center gap-3 py-16 text-center">
               <span className="text-3xl">🔍</span>
               <p className="text-sm text-slate-600">
-                No players match "{search}"
+                No players match this filter
               </p>
             </div>
           )}

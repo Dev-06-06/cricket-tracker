@@ -15,14 +15,26 @@ import { UMPIRE_AUTH_KEY } from "./UmpireLoginPage";
 
 function PlayerAvatar({ player, size = "sm" }) {
   const [err, setErr] = useState(false);
-  const sz = { sm: "h-8 w-8 text-xs", md: "h-10 w-10 text-sm" }[size] ?? "h-8 w-8 text-xs";
+  const sz =
+    { sm: "h-8 w-8 text-xs", md: "h-10 w-10 text-sm" }[size] ??
+    "h-8 w-8 text-xs";
   const initial = (player?.name || "?").trim().charAt(0).toUpperCase();
   return (
-    <span className={`inline-flex shrink-0 ${sz} rounded-full overflow-hidden ring-2 ring-white/10`}>
-      {player?.photoUrl && !err
-        ? <img src={player.photoUrl} alt={player.name} className="h-full w-full object-cover" onError={() => setErr(true)} />
-        : <span className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-600 to-slate-800 font-bold text-slate-200">{initial}</span>
-      }
+    <span
+      className={`inline-flex shrink-0 ${sz} rounded-full overflow-hidden ring-2 ring-white/10`}
+    >
+      {player?.photoUrl && !err ? (
+        <img
+          src={player.photoUrl}
+          alt={player.name}
+          className="h-full w-full object-cover"
+          onError={() => setErr(true)}
+        />
+      ) : (
+        <span className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-600 to-slate-800 font-bold text-slate-200">
+          {initial}
+        </span>
+      )}
     </span>
   );
 }
@@ -31,7 +43,9 @@ function TeamAvatarStack({ players = [] }) {
   const shown = players.slice(0, 3);
   return (
     <div className="flex -space-x-2">
-      {shown.map((p, i) => <PlayerAvatar key={i} player={p} size="sm" />)}
+      {shown.map((p, i) => (
+        <PlayerAvatar key={i} player={p} size="sm" />
+      ))}
       {players.length > 3 && (
         <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-slate-800 text-[10px] font-bold text-slate-500 ring-2 ring-[#0d1117]">
           +{players.length - 3}
@@ -62,25 +76,41 @@ export default function TossPage() {
      callingTeamSide: "HEADS" | "TAILS" | "" — what that team called
      flipResult: "HEADS" | "TAILS" | ""    — what the coin actually landed on
   ── */
-  const [callingTeam, setCallingTeam] = useState("");       // umpire picks this
+  const [callingTeam, setCallingTeam] = useState(""); // umpire picks this
   const [callingTeamSide, setCallingTeamSide] = useState(""); // calling team picks this
   const [flipResult, setFlipResult] = useState("");
 
   /* ── derived ── */
   // The other team automatically gets the opposite side
-  const otherTeamSide = callingTeamSide === "HEADS" ? "TAILS" : callingTeamSide === "TAILS" ? "HEADS" : "";
-  const callingTeamName = callingTeam === "team1" ? match?.team1Name : callingTeam === "team2" ? match?.team2Name : "";
-  const otherTeamName   = callingTeam === "team1" ? match?.team2Name : callingTeam === "team2" ? match?.team1Name : "";
+  const otherTeamSide =
+    callingTeamSide === "HEADS"
+      ? "TAILS"
+      : callingTeamSide === "TAILS"
+        ? "HEADS"
+        : "";
+  const callingTeamName =
+    callingTeam === "team1"
+      ? match?.team1Name
+      : callingTeam === "team2"
+        ? match?.team2Name
+        : "";
+  const otherTeamName =
+    callingTeam === "team1"
+      ? match?.team2Name
+      : callingTeam === "team2"
+        ? match?.team1Name
+        : "";
 
   /* ── sub-step within Step 1 ──
      "pick-team"  → umpire hasn't chosen calling team yet
      "pick-side"  → calling team chosen, now pick HEADS/TAILS
      "ready"      → both sides assigned, ready to flip
   ── */
-  const subStep =
-    !callingTeam ? "pick-team" :
-    !callingTeamSide ? "pick-side" :
-    "ready";
+  const subStep = !callingTeam
+    ? "pick-team"
+    : !callingTeamSide
+      ? "pick-side"
+      : "ready";
 
   /* ── original socket (unchanged) ── */
   useEffect(() => {
@@ -116,7 +146,8 @@ export default function TossPage() {
     setTimeout(() => {
       setCoinTransform(result === "HEADS" ? HEADS_ROTATION : TAILS_ROTATION);
       setFlipResult(result);
-      const winner = result === callingTeamSide ? callingTeamName : otherTeamName;
+      const winner =
+        result === callingTeamSide ? callingTeamName : otherTeamName;
       socketRef.current?.emit("toss_flip_result", { matchId, result, winner });
       setTossWinner(winner);
       setFlipState("done");
@@ -124,7 +155,10 @@ export default function TossPage() {
   };
 
   /* ── reset calling team / side ── */
-  const resetCallingTeam = () => { setCallingTeam(""); setCallingTeamSide(""); };
+  const resetCallingTeam = () => {
+    setCallingTeam("");
+    setCallingTeamSide("");
+  };
   const resetCallingTeamSide = () => setCallingTeamSide("");
 
   /* ── original handlers (unchanged) ── */
@@ -137,7 +171,12 @@ export default function TossPage() {
   const confirmOpeners = () => {
     if (!striker || !nonStriker || !bowler || !socketRef.current) return;
     if (striker === nonStriker) return;
-    socketRef.current.emit("setOpeners", { matchId, striker, nonStriker, bowler });
+    socketRef.current.emit("setOpeners", {
+      matchId,
+      striker,
+      nonStriker,
+      bowler,
+    });
   };
 
   const handleExitUmpireMode = () => {
@@ -146,27 +185,35 @@ export default function TossPage() {
   };
 
   /* ── loading ── */
-  if (!match) return (
-    <main className="flex h-screen items-center justify-center bg-[#0d1117]"
-      style={{ fontFamily: "'DM Sans', sans-serif" }}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Barlow+Condensed:wght@600;700;800&display=swap');`}</style>
-      <div className="flex flex-col items-center gap-3">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#f97316] border-t-transparent" />
-        <p className="text-sm text-slate-500">Loading match…</p>
-      </div>
-    </main>
-  );
+  if (!match)
+    return (
+      <main
+        className="flex h-screen items-center justify-center bg-[#0d1117]"
+        style={{ fontFamily: "'DM Sans', sans-serif" }}
+      >
+        <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Barlow+Condensed:wght@600;700;800&display=swap');`}</style>
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#f97316] border-t-transparent" />
+          <p className="text-sm text-slate-500">Loading match…</p>
+        </div>
+      </main>
+    );
 
   /* ── original computed (unchanged) ── */
-  const battingPlayers  = match.playerStats?.filter((p) => p.team === match.battingTeam) ?? [];
-  const bowlingPlayers  = match.playerStats?.filter((p) => p.team === match.bowlingTeam) ?? [];
-  const strikerOptions    = battingPlayers.filter((p) => p.name !== nonStriker);
+  const battingPlayers =
+    match.playerStats?.filter((p) => p.team === match.battingTeam) ?? [];
+  const bowlingPlayers =
+    match.playerStats?.filter((p) => p.team === match.bowlingTeam) ?? [];
+  const strikerOptions = battingPlayers.filter((p) => p.name !== nonStriker);
   const nonStrikerOptions = battingPlayers.filter((p) => p.name !== striker);
 
   const stepNum = tossConfirmed ? 3 : flipState === "done" ? 2 : 1;
 
   return (
-    <div className="min-h-screen bg-[#0d1117] text-white" style={{ fontFamily: "'DM Sans', sans-serif" }}>
+    <div
+      className="min-h-screen bg-[#0d1117] text-white"
+      style={{ fontFamily: "'DM Sans', sans-serif" }}
+    >
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Barlow+Condensed:wght@600;700;800&display=swap');
         .score-num { font-family: 'Barlow Condensed', sans-serif; }
@@ -229,42 +276,78 @@ export default function TossPage() {
       {/* ══ STICKY HEADER ══ */}
       <header className="sticky top-0 z-20 border-b border-white/5 bg-[#0d1117]/95 backdrop-blur-md">
         <div className="mx-auto flex max-w-lg items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-2">
+          <Link to="/" className="flex items-center gap-2">
             <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#f97316]">
               <span className="text-[10px] font-black text-white">C</span>
             </div>
-            <span className="text-sm font-black uppercase tracking-[0.15em] text-white">CricTrack</span>
-          </div>
-          <span className="text-[11px] font-black uppercase tracking-widest text-[#f97316]">Toss</span>
+            <span className="text-sm font-black uppercase tracking-[0.15em] text-white">
+              CricTrack
+            </span>
+          </Link>
+          <span className="text-[11px] font-black uppercase tracking-widest text-[#f97316]">
+            Toss
+          </span>
           <div className="flex items-center gap-3">
-            <button type="button" onClick={handleExitUmpireMode}
-              className="btn-tap text-[11px] font-medium text-slate-600 hover:text-slate-300 transition-colors">
-              Exit
+            <button
+              type="button"
+              onClick={handleExitUmpireMode}
+              className="btn-tap text-[11px] font-medium text-slate-600 hover:text-slate-300 transition-colors"
+            >
+              Exit Umpire Mode
             </button>
-            <Link to="/" className="btn-tap text-[11px] text-slate-600 hover:text-slate-300 transition-colors">
-              Home
-            </Link>
+            <button
+              type="button"
+              onClick={() => navigate(-1)}
+              className="btn-tap text-[11px] text-slate-600 hover:text-slate-300 transition-colors"
+            >
+              Back
+            </button>
           </div>
         </div>
       </header>
 
       <main className="mx-auto max-w-lg px-4 py-6 pb-16">
-
         {/* ══ STEP PROGRESS ══ */}
         <div className="mb-7 flex items-center">
-          {[{ n: 1, label: "Call" }, { n: 2, label: "Result" }, { n: 3, label: "Openers" }].map(({ n, label }) => (
-            <div key={n} className="flex items-center" style={{ flex: n < 3 ? "1" : "none" }}>
+          {[
+            { n: 1, label: "Call" },
+            { n: 2, label: "Result" },
+            { n: 3, label: "Openers" },
+          ].map(({ n, label }) => (
+            <div
+              key={n}
+              className="flex items-center"
+              style={{ flex: n < 3 ? "1" : "none" }}
+            >
               <div className="flex flex-col items-center gap-1">
-                <div className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-black transition-all duration-300 ${
-                  n < stepNum  ? "bg-[#f97316] text-white shadow-md shadow-orange-900/40"
-                  : n === stepNum ? "border-2 border-[#f97316] bg-[#f97316]/15 text-[#f97316]"
-                  : "border border-slate-700 bg-slate-800/80 text-slate-600"
-                }`}>{n < stepNum ? "✓" : n}</div>
-                <span className={`text-[9px] font-black uppercase tracking-widest ${
-                  n === stepNum ? "text-[#f97316]" : n < stepNum ? "text-slate-500" : "text-slate-700"
-                }`}>{label}</span>
+                <div
+                  className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-black transition-all duration-300 ${
+                    n < stepNum
+                      ? "bg-[#f97316] text-white shadow-md shadow-orange-900/40"
+                      : n === stepNum
+                        ? "border-2 border-[#f97316] bg-[#f97316]/15 text-[#f97316]"
+                        : "border border-slate-700 bg-slate-800/80 text-slate-600"
+                  }`}
+                >
+                  {n < stepNum ? "✓" : n}
+                </div>
+                <span
+                  className={`text-[9px] font-black uppercase tracking-widest ${
+                    n === stepNum
+                      ? "text-[#f97316]"
+                      : n < stepNum
+                        ? "text-slate-500"
+                        : "text-slate-700"
+                  }`}
+                >
+                  {label}
+                </span>
               </div>
-              {n < 3 && <div className={`mb-4 mx-2 h-0.5 flex-1 rounded-full transition-all duration-500 ${n < stepNum ? "bg-[#f97316]" : "bg-slate-800"}`} />}
+              {n < 3 && (
+                <div
+                  className={`mb-4 mx-2 h-0.5 flex-1 rounded-full transition-all duration-500 ${n < stepNum ? "bg-[#f97316]" : "bg-slate-800"}`}
+                />
+              )}
             </div>
           ))}
         </div>
@@ -275,13 +358,16 @@ export default function TossPage() {
         ══════════════════════════════════════ */}
         {!tossConfirmed && flipState !== "done" && (
           <div className="space-y-5 slide-up">
-
             <div>
-              <h1 className="score-num text-4xl font-extrabold leading-none text-white">Call the Toss</h1>
+              <h1 className="score-num text-4xl font-extrabold leading-none text-white">
+                Call the Toss
+              </h1>
               <p className="mt-1.5 text-sm text-slate-500">
-                {subStep === "pick-team" && "Umpire: choose which team calls the coin."}
-                {subStep === "pick-side" && `${callingTeamName} captain: call your side.`}
-                {subStep === "ready"     && "Both sides set. Ready to flip!"}
+                {subStep === "pick-team" &&
+                  "Umpire: choose which team calls the coin."}
+                {subStep === "pick-side" &&
+                  `${callingTeamName} captain: call your side.`}
+                {subStep === "ready" && "Both sides set. Ready to flip!"}
                 {flipState === "flipping" && "Coin in the air…"}
               </p>
             </div>
@@ -294,16 +380,28 @@ export default function TossPage() {
                 </p>
                 <div className="grid grid-cols-2 gap-3">
                   {[
-                    { key: "team1", name: match.team1Name, players: match.team1Players || [] },
-                    { key: "team2", name: match.team2Name, players: match.team2Players || [] },
+                    {
+                      key: "team1",
+                      name: match.team1Name,
+                      players: match.team1Players || [],
+                    },
+                    {
+                      key: "team2",
+                      name: match.team2Name,
+                      players: match.team2Players || [],
+                    },
                   ].map(({ key, name, players }) => (
-                    <button key={key} type="button"
+                    <button
+                      key={key}
+                      type="button"
                       onClick={() => setCallingTeam(key)}
                       className="btn-tap group flex flex-col items-center gap-3 rounded-2xl border border-white/10 bg-slate-900/60 py-7 transition-all hover:border-[#f97316]/40 hover:bg-[#f97316]/5"
                     >
                       <TeamAvatarStack players={players} />
                       <div className="text-center">
-                        <p className="score-num text-xl font-extrabold text-white group-hover:text-[#f97316] transition-colors">{name}</p>
+                        <p className="score-num text-xl font-extrabold text-white group-hover:text-[#f97316] transition-colors">
+                          {name}
+                        </p>
                         <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-slate-600 group-hover:text-slate-400">
                           Calls the toss
                         </p>
@@ -319,13 +417,26 @@ export default function TossPage() {
               <div className="space-y-3 pop-in">
                 {/* Calling team badge */}
                 <div className="flex items-center gap-3 rounded-xl border border-[#f97316]/25 bg-[#f97316]/8 px-4 py-2.5">
-                  <TeamAvatarStack players={callingTeam === "team1" ? (match.team1Players || []) : (match.team2Players || [])} />
+                  <TeamAvatarStack
+                    players={
+                      callingTeam === "team1"
+                        ? match.team1Players || []
+                        : match.team2Players || []
+                    }
+                  />
                   <div>
-                    <p className="text-xs font-black text-[#f97316]">{callingTeamName}</p>
-                    <p className="text-[10px] text-slate-500">is calling the toss</p>
+                    <p className="text-xs font-black text-[#f97316]">
+                      {callingTeamName}
+                    </p>
+                    <p className="text-[10px] text-slate-500">
+                      is calling the toss
+                    </p>
                   </div>
-                  <button type="button" onClick={resetCallingTeam}
-                    className="btn-tap ml-auto text-[11px] text-slate-600 hover:text-slate-400 transition-colors">
+                  <button
+                    type="button"
+                    onClick={resetCallingTeam}
+                    className="btn-tap ml-auto text-[11px] text-slate-600 hover:text-slate-400 transition-colors"
+                  >
                     ← Change
                   </button>
                 </div>
@@ -335,14 +446,22 @@ export default function TossPage() {
                 </p>
                 <div className="grid grid-cols-2 gap-3">
                   {["HEADS", "TAILS"].map((side) => (
-                    <button key={side} type="button"
+                    <button
+                      key={side}
+                      type="button"
                       onClick={() => setCallingTeamSide(side)}
                       className="btn-tap group flex flex-col items-center gap-3 rounded-2xl border border-white/10 bg-slate-900/60 py-8 transition-all hover:border-amber-500/40 hover:bg-amber-500/5"
                     >
-                      <span className="text-5xl">{side === "HEADS" ? "🟡" : "🔶"}</span>
+                      <span className="text-5xl">
+                        {side === "HEADS" ? "🟡" : "🔶"}
+                      </span>
                       <div className="text-center">
-                        <p className="score-num text-2xl font-extrabold text-white group-hover:text-amber-300 transition-colors">{side}</p>
-                        <p className="text-[10px] text-slate-600 mt-0.5">Tap to call</p>
+                        <p className="score-num text-2xl font-extrabold text-white group-hover:text-amber-300 transition-colors">
+                          {side}
+                        </p>
+                        <p className="text-[10px] text-slate-600 mt-0.5">
+                          Tap to call
+                        </p>
                       </div>
                     </button>
                   ))}
@@ -357,28 +476,58 @@ export default function TossPage() {
                 <div className="grid grid-cols-2 gap-3">
                   {/* Calling team */}
                   <div className="flex flex-col items-center gap-2 rounded-2xl border border-amber-500/30 bg-amber-500/8 px-3 py-4 text-center">
-                    <TeamAvatarStack players={callingTeam === "team1" ? (match.team1Players || []) : (match.team2Players || [])} />
-                    <p className="text-[10px] font-black uppercase tracking-widest text-amber-500/70">{callingTeamName}</p>
-                    <p className="score-num text-2xl font-extrabold text-amber-300">{callingTeamSide}</p>
-                    <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[9px] font-black text-amber-400">Called ✓</span>
+                    <TeamAvatarStack
+                      players={
+                        callingTeam === "team1"
+                          ? match.team1Players || []
+                          : match.team2Players || []
+                      }
+                    />
+                    <p className="text-[10px] font-black uppercase tracking-widest text-amber-500/70">
+                      {callingTeamName}
+                    </p>
+                    <p className="score-num text-2xl font-extrabold text-amber-300">
+                      {callingTeamSide}
+                    </p>
+                    <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[9px] font-black text-amber-400">
+                      Called ✓
+                    </span>
                   </div>
                   {/* Other team */}
                   <div className="flex flex-col items-center gap-2 rounded-2xl border border-slate-700/60 bg-slate-800/40 px-3 py-4 text-center">
-                    <TeamAvatarStack players={callingTeam === "team1" ? (match.team2Players || []) : (match.team1Players || [])} />
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{otherTeamName}</p>
-                    <p className="score-num text-2xl font-extrabold text-slate-400">{otherTeamSide}</p>
-                    <span className="rounded-full bg-slate-700/50 px-2 py-0.5 text-[9px] font-black text-slate-500">Auto-assigned</span>
+                    <TeamAvatarStack
+                      players={
+                        callingTeam === "team1"
+                          ? match.team2Players || []
+                          : match.team1Players || []
+                      }
+                    />
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                      {otherTeamName}
+                    </p>
+                    <p className="score-num text-2xl font-extrabold text-slate-400">
+                      {otherTeamSide}
+                    </p>
+                    <span className="rounded-full bg-slate-700/50 px-2 py-0.5 text-[9px] font-black text-slate-500">
+                      Auto-assigned
+                    </span>
                   </div>
                 </div>
 
                 {/* Change mind links */}
                 <div className="flex gap-3">
-                  <button type="button" onClick={resetCallingTeam}
-                    className="btn-tap flex-1 rounded-xl border border-white/5 py-2 text-[11px] font-bold text-slate-600 hover:text-slate-400 transition-colors">
+                  <button
+                    type="button"
+                    onClick={resetCallingTeam}
+                    className="btn-tap flex-1 rounded-xl border border-white/5 py-2 text-[11px] font-bold text-slate-600 hover:text-slate-400 transition-colors"
+                  >
                     ← Change team
                   </button>
-                  <button type="button" onClick={resetCallingTeamSide}
-                    className="btn-tap flex-1 rounded-xl border border-white/5 py-2 text-[11px] font-bold text-slate-600 hover:text-slate-400 transition-colors">
+                  <button
+                    type="button"
+                    onClick={resetCallingTeamSide}
+                    className="btn-tap flex-1 rounded-xl border border-white/5 py-2 text-[11px] font-bold text-slate-600 hover:text-slate-400 transition-colors"
+                  >
                     ← Change call
                   </button>
                 </div>
@@ -394,8 +543,11 @@ export default function TossPage() {
                 </div>
 
                 {/* FLIP button */}
-                <button type="button" onClick={handleCoinFlip}
-                  className="btn-tap w-full rounded-2xl bg-[#f97316] py-5 text-sm font-black uppercase tracking-widest text-white shadow-lg shadow-orange-900/40 hover:bg-orange-500 transition-all">
+                <button
+                  type="button"
+                  onClick={handleCoinFlip}
+                  className="btn-tap w-full rounded-2xl bg-[#f97316] py-5 text-sm font-black uppercase tracking-widest text-white shadow-lg shadow-orange-900/40 hover:bg-orange-500 transition-all"
+                >
                   🪙 Flip the Coin
                 </button>
               </div>
@@ -414,7 +566,9 @@ export default function TossPage() {
                 </div>
                 <div className="flex items-center justify-center gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 py-4">
                   <div className="h-5 w-5 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" />
-                  <p className="text-sm font-black uppercase tracking-wider text-amber-400">Coin in the air…</p>
+                  <p className="text-sm font-black uppercase tracking-wider text-amber-400">
+                    Coin in the air…
+                  </p>
                 </div>
               </div>
             )}
@@ -426,7 +580,9 @@ export default function TossPage() {
         ══════════════════════════════════════ */}
         {!tossConfirmed && flipState === "done" && (
           <div className="space-y-5 slide-up">
-            <h1 className="score-num text-4xl font-extrabold leading-none text-white">Toss Result</h1>
+            <h1 className="score-num text-4xl font-extrabold leading-none text-white">
+              Toss Result
+            </h1>
 
             {/* Result hero */}
             <div className="pop-in rounded-2xl border border-white/8 bg-gradient-to-b from-slate-900 to-[#0d1117] p-6 text-center">
@@ -439,32 +595,57 @@ export default function TossPage() {
               </div>
 
               {/* Result pill */}
-              <span className={`mb-4 inline-block rounded-full border px-4 py-1 text-xs font-black uppercase tracking-widest ${
-                flipResult === "HEADS"
-                  ? "border-amber-500/40 bg-amber-500/15 text-amber-300"
-                  : "border-indigo-500/40 bg-indigo-500/15 text-indigo-300"
-              }`}>
+              <span
+                className={`mb-4 inline-block rounded-full border px-4 py-1 text-xs font-black uppercase tracking-widest ${
+                  flipResult === "HEADS"
+                    ? "border-amber-500/40 bg-amber-500/15 text-amber-300"
+                    : "border-indigo-500/40 bg-indigo-500/15 text-indigo-300"
+                }`}
+              >
                 Coin landed on {flipResult}
               </span>
 
               {/* Winner */}
-              <p className="score-num text-5xl font-extrabold leading-tight text-white">{tossWinner}</p>
-              <p className="mt-1 text-sm font-semibold text-slate-400">won the toss</p>
+              <p className="score-num text-5xl font-extrabold leading-tight text-white">
+                {tossWinner}
+              </p>
+              <p className="mt-1 text-sm font-semibold text-slate-400">
+                won the toss
+              </p>
 
               {/* Both teams' call outcome */}
               <div className="mt-5 flex justify-center gap-4">
                 {[
-                  { name: callingTeamName, side: callingTeamSide, won: callingTeamSide === flipResult },
-                  { name: otherTeamName,   side: otherTeamSide,   won: otherTeamSide === flipResult   },
+                  {
+                    name: callingTeamName,
+                    side: callingTeamSide,
+                    won: callingTeamSide === flipResult,
+                  },
+                  {
+                    name: otherTeamName,
+                    side: otherTeamSide,
+                    won: otherTeamSide === flipResult,
+                  },
                 ].map(({ name, side, won }) => (
-                  <div key={name} className={`flex flex-col items-center gap-1 rounded-xl border px-4 py-2.5 ${
-                    won ? "border-emerald-500/30 bg-emerald-500/8" : "border-red-900/30 bg-red-950/20"
-                  }`}>
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">{name}</span>
-                    <span className={`text-lg font-black ${won ? "text-emerald-400" : "text-red-500"}`}>
+                  <div
+                    key={name}
+                    className={`flex flex-col items-center gap-1 rounded-xl border px-4 py-2.5 ${
+                      won
+                        ? "border-emerald-500/30 bg-emerald-500/8"
+                        : "border-red-900/30 bg-red-950/20"
+                    }`}
+                  >
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                      {name}
+                    </span>
+                    <span
+                      className={`text-lg font-black ${won ? "text-emerald-400" : "text-red-500"}`}
+                    >
                       {won ? "✓" : "✗"} {side}
                     </span>
-                    <span className={`text-[10px] font-bold ${won ? "text-emerald-500" : "text-red-700"}`}>
+                    <span
+                      className={`text-[10px] font-bold ${won ? "text-emerald-500" : "text-red-700"}`}
+                    >
                       {won ? "Won!" : "Lost"}
                     </span>
                   </div>
@@ -479,7 +660,10 @@ export default function TossPage() {
               </p>
               <div className="grid grid-cols-2 gap-3">
                 {["BAT", "BOWL"].map((choice) => (
-                  <button key={choice} type="button" onClick={() => setTossChoice(choice)}
+                  <button
+                    key={choice}
+                    type="button"
+                    onClick={() => setTossChoice(choice)}
                     className={`btn-tap flex flex-col items-center gap-2.5 rounded-2xl border py-6 transition-all ${
                       tossChoice === choice
                         ? choice === "BAT"
@@ -488,8 +672,12 @@ export default function TossPage() {
                         : "border-white/8 bg-white/3 text-slate-500 hover:border-white/15 hover:text-slate-300"
                     }`}
                   >
-                    <span className="text-4xl">{choice === "BAT" ? "🏏" : "⚾"}</span>
-                    <span className="score-num text-2xl font-extrabold tracking-widest">{choice}</span>
+                    <span className="text-4xl">
+                      {choice === "BAT" ? "🏏" : "⚾"}
+                    </span>
+                    <span className="score-num text-2xl font-extrabold tracking-widest">
+                      {choice}
+                    </span>
                     {tossChoice === choice && (
                       <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-widest">
                         Selected ✓
@@ -500,8 +688,12 @@ export default function TossPage() {
               </div>
             </div>
 
-            <button type="button" onClick={confirmToss} disabled={!tossChoice}
-              className="btn-tap w-full rounded-2xl bg-[#f97316] py-4 text-sm font-black uppercase tracking-widest text-white shadow-lg shadow-orange-900/30 hover:bg-orange-500 disabled:cursor-not-allowed disabled:opacity-40 transition-all">
+            <button
+              type="button"
+              onClick={confirmToss}
+              disabled={!tossChoice}
+              className="btn-tap w-full rounded-2xl bg-[#f97316] py-4 text-sm font-black uppercase tracking-widest text-white shadow-lg shadow-orange-900/30 hover:bg-orange-500 disabled:cursor-not-allowed disabled:opacity-40 transition-all"
+            >
               Confirm Toss →
             </button>
           </div>
@@ -513,16 +705,25 @@ export default function TossPage() {
         {tossConfirmed && (
           <div className="space-y-5 slide-up">
             <div>
-              <h1 className="score-num text-4xl font-extrabold leading-none text-white">Set Openers</h1>
-              <p className="mt-1.5 text-sm text-slate-500">Choose the opening batters and first bowler.</p>
+              <h1 className="score-num text-4xl font-extrabold leading-none text-white">
+                Set Openers
+              </h1>
+              <p className="mt-1.5 text-sm text-slate-500">
+                Choose the opening batters and first bowler.
+              </p>
             </div>
 
             {/* Toss summary */}
             <div className="flex items-center gap-3 rounded-xl border border-white/5 bg-white/4 px-4 py-3">
               <span className="text-xl">🏆</span>
               <p className="text-xs text-slate-400">
-                <span className="font-black text-white">{tossWinner}</span> won the toss &amp; elected to{" "}
-                <span className={`font-black ${tossChoice === "BAT" ? "text-[#f97316]" : "text-indigo-400"}`}>{tossChoice}</span>
+                <span className="font-black text-white">{tossWinner}</span> won
+                the toss &amp; elected to{" "}
+                <span
+                  className={`font-black ${tossChoice === "BAT" ? "text-[#f97316]" : "text-indigo-400"}`}
+                >
+                  {tossChoice}
+                </span>
               </p>
             </div>
 
@@ -539,38 +740,74 @@ export default function TossPage() {
                   <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-widest text-slate-500">
                     Striker <span className="text-[#f97316]">*</span>
                   </label>
-                  <select value={striker}
-                    onChange={(e) => { const v = e.target.value; setStriker(v); if (v && v === nonStriker) setNonStriker(""); }}
+                  <select
+                    value={striker}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setStriker(v);
+                      if (v && v === nonStriker) setNonStriker("");
+                    }}
                     className="w-full rounded-xl border border-white/8 bg-slate-800 px-3 py-2.5 text-sm text-white outline-none focus:ring-2 focus:ring-[#f97316] transition-all"
                   >
                     <option value="">— Select —</option>
-                    {strikerOptions.map((p) => <option key={p._id || p.name} value={p.name}>{p.name}</option>)}
+                    {strikerOptions.map((p) => (
+                      <option key={p._id || p.name} value={p.name}>
+                        {p.name}
+                      </option>
+                    ))}
                   </select>
                   {striker && (
                     <div className="mt-2 flex items-center gap-2 pop-in">
-                      <PlayerAvatar player={battingPlayers.find(p => p.name === striker)} size="sm" />
+                      <PlayerAvatar
+                        player={battingPlayers.find((p) => p.name === striker)}
+                        size="sm"
+                      />
                       <div>
-                        <p className="text-xs font-bold text-white">{striker}</p>
-                        <p className="text-[10px] font-black text-[#f97316]">★ Striker</p>
+                        <p className="text-xs font-bold text-white">
+                          {striker}
+                        </p>
+                        <p className="text-[10px] font-black text-[#f97316]">
+                          ★ Striker
+                        </p>
                       </div>
                     </div>
                   )}
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-widest text-slate-500">Non-Striker</label>
-                  <select value={nonStriker}
-                    onChange={(e) => { const v = e.target.value; setNonStriker(v); if (v && v === striker) setStriker(""); }}
+                  <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                    Non-Striker
+                  </label>
+                  <select
+                    value={nonStriker}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setNonStriker(v);
+                      if (v && v === striker) setStriker("");
+                    }}
                     className="w-full rounded-xl border border-white/8 bg-slate-800 px-3 py-2.5 text-sm text-white outline-none focus:ring-2 focus:ring-[#f97316] transition-all"
                   >
                     <option value="">— Select —</option>
-                    {nonStrikerOptions.map((p) => <option key={p._id || p.name} value={p.name}>{p.name}</option>)}
+                    {nonStrikerOptions.map((p) => (
+                      <option key={p._id || p.name} value={p.name}>
+                        {p.name}
+                      </option>
+                    ))}
                   </select>
                   {nonStriker && (
                     <div className="mt-2 flex items-center gap-2 pop-in">
-                      <PlayerAvatar player={battingPlayers.find(p => p.name === nonStriker)} size="sm" />
+                      <PlayerAvatar
+                        player={battingPlayers.find(
+                          (p) => p.name === nonStriker,
+                        )}
+                        size="sm"
+                      />
                       <div>
-                        <p className="text-xs font-bold text-white">{nonStriker}</p>
-                        <p className="text-[10px] font-bold text-slate-500">Non-Striker</p>
+                        <p className="text-xs font-bold text-white">
+                          {nonStriker}
+                        </p>
+                        <p className="text-[10px] font-bold text-slate-500">
+                          Non-Striker
+                        </p>
                       </div>
                     </div>
                   )}
@@ -587,19 +824,32 @@ export default function TossPage() {
                 </p>
               </div>
               <div>
-                <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-widest text-slate-500">Opening Bowler</label>
-                <select value={bowler} onChange={(e) => setBowler(e.target.value)}
+                <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                  Opening Bowler
+                </label>
+                <select
+                  value={bowler}
+                  onChange={(e) => setBowler(e.target.value)}
                   className="w-full rounded-xl border border-white/8 bg-slate-800 px-3 py-2.5 text-sm text-white outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
                 >
                   <option value="">— Select —</option>
-                  {bowlingPlayers.map((p) => <option key={p._id || p.name} value={p.name}>{p.name}</option>)}
+                  {bowlingPlayers.map((p) => (
+                    <option key={p._id || p.name} value={p.name}>
+                      {p.name}
+                    </option>
+                  ))}
                 </select>
                 {bowler && (
                   <div className="mt-2 flex items-center gap-2 pop-in">
-                    <PlayerAvatar player={bowlingPlayers.find(p => p.name === bowler)} size="sm" />
+                    <PlayerAvatar
+                      player={bowlingPlayers.find((p) => p.name === bowler)}
+                      size="sm"
+                    />
                     <div>
                       <p className="text-xs font-bold text-white">{bowler}</p>
-                      <p className="text-[10px] font-black text-indigo-400">Opening Bowler</p>
+                      <p className="text-[10px] font-black text-indigo-400">
+                        Opening Bowler
+                      </p>
                     </div>
                   </div>
                 )}
@@ -614,22 +864,30 @@ export default function TossPage() {
                     <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
                     <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
                   </span>
-                  <p className="text-xs font-black text-emerald-400">Ready to start!</p>
+                  <p className="text-xs font-black text-emerald-400">
+                    Ready to start!
+                  </p>
                 </div>
                 <p className="text-[11px] text-slate-500">
-                  {striker}<span className="mx-0.5 text-[#f97316]">*</span>&amp; {nonStriker} vs {bowler}
+                  {striker}
+                  <span className="mx-0.5 text-[#f97316]">*</span>&amp;{" "}
+                  {nonStriker} vs {bowler}
                 </p>
               </div>
             )}
 
-            <button type="button" onClick={confirmOpeners}
-              disabled={!striker || !nonStriker || !bowler || striker === nonStriker}
-              className="btn-tap w-full rounded-2xl bg-[#f97316] py-4 text-sm font-black uppercase tracking-widest text-white shadow-lg shadow-orange-900/30 hover:bg-orange-500 disabled:cursor-not-allowed disabled:opacity-40 transition-all">
+            <button
+              type="button"
+              onClick={confirmOpeners}
+              disabled={
+                !striker || !nonStriker || !bowler || striker === nonStriker
+              }
+              className="btn-tap w-full rounded-2xl bg-[#f97316] py-4 text-sm font-black uppercase tracking-widest text-white shadow-lg shadow-orange-900/30 hover:bg-orange-500 disabled:cursor-not-allowed disabled:opacity-40 transition-all"
+            >
               🏏 Start the Match
             </button>
           </div>
         )}
-
       </main>
     </div>
   );
