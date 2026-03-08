@@ -12,6 +12,11 @@ const playerSchema = new mongoose.Schema(
       default: "",
       trim: true,
     },
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
     batting: {
       matches: { type: Number, default: 0 },
       innings: { type: Number, default: 0 },

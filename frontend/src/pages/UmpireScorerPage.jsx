@@ -680,7 +680,7 @@ export default function UmpireScorerPage() {
           </Link>
           <button
             type="button"
-            onClick={() => navigate(-1)}
+            onClick={() => navigate("/umpire")}
             className="text-[11px] text-slate-600 hover:text-slate-300 transition-colors btn-tap"
           >
             Back

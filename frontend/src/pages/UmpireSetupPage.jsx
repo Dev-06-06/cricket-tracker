@@ -1,13 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import BottomNav from "../components/BottomNav";
+import GroupChip from "../components/GroupChip";
+import ProfileToolbarButton from "../components/ProfileToolbarButton";
+import { useAuth } from "../context/AuthContext";
+import { useActiveGroup } from "../context/ActiveGroupContext";
+import usePageCache from "../hooks/usePageCache";
 import {
   API_BASE_URL,
+  addGroupPlayer,
   createUpcomingMatch,
   deleteMatch,
   getCompletedMatches,
+  getGroupPlayers,
   getLiveMatches,
-  getPlayers,
+  getMyGroups,
   getUpcomingMatches,
+  removeGroupPlayer,
   startMatch,
 } from "../services/api";
 
@@ -83,6 +92,7 @@ function KanbanColumn({
   countBg,
   players,
   onAssign,
+  onRemove,
   showT1T2,
   isTeamColumn,
 }) {
@@ -149,8 +159,9 @@ function KanbanColumn({
                 )}
                 <button
                   type="button"
-                  onClick={() => onAssign(player._id, "pool")}
+                  onClick={() => onRemove?.(player)}
                   className="rounded-lg border border-red-700/20 bg-red-900/15 px-1.5 py-0.5 text-[9px] font-bold text-red-700 hover:bg-red-900/30 transition-colors"
+                  title="Remove from group"
                 >
                   ✕
                 </button>
@@ -506,6 +517,54 @@ function DeleteMatchConfirmModal({ match, deleting, onCancel, onConfirm }) {
   );
 }
 
+function RemovePlayerConfirmModal({ player, removing, onCancel, onConfirm }) {
+  if (!player) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center px-2 pb-2 sm:items-center sm:px-4 sm:pb-0">
+      <button
+        type="button"
+        aria-label="Close"
+        onClick={onCancel}
+        className="absolute inset-0 bg-black/65 backdrop-blur-sm"
+      />
+      <div className="relative w-full max-w-sm rounded-2xl border border-white/10 bg-[#101722] p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl shadow-black/40 sm:p-5 sm:pb-5">
+        <div className="mb-2 inline-flex items-center rounded-full border border-red-500/30 bg-red-500/15 px-2 py-1 text-[10px] font-black uppercase tracking-widest text-red-400">
+          Remove Player
+        </div>
+        <h3 className="text-base font-extrabold text-white">
+          Remove from this group?
+        </h3>
+        <p className="mt-2 text-sm text-slate-400">
+          <span className="font-bold text-slate-200">{player.name}</span> will
+          be removed from the group's player pool. Their career stats are
+          unaffected.
+        </p>
+        <p className="mt-3 text-xs text-slate-600">
+          You can add them back at any time.
+        </p>
+        <div className="mt-5 flex flex-col-reverse items-stretch gap-2 sm:flex-row sm:items-center sm:justify-end">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={removing}
+            className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-300 transition-all hover:border-white/20 hover:text-white disabled:opacity-40 sm:w-auto sm:py-2"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={removing}
+            className="w-full rounded-xl border border-red-500/40 bg-red-600/20 px-4 py-3 text-xs font-black uppercase tracking-widest text-red-300 transition-all hover:border-red-400/60 hover:bg-red-600/30 hover:text-red-200 disabled:opacity-40 sm:w-auto sm:py-2"
+          >
+            {removing ? "Removing…" : "Remove"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════════
    MAIN COMPONENT
 ═══════════════════════════════════════════════════════════════════════════════ */
@@ -518,6 +577,15 @@ const TABS = [
 
 function UmpireSetupPage() {
   const navigate = useNavigate();
+  const { token } = useAuth();
+  const {
+    activeGroupId: selectedGroupId,
+    switchGroup: setSelectedGroupFromContext,
+  } = useActiveGroup();
+
+  /* ── group state ── */
+  const [groups, setGroups] = useState([]);
+  const [loadingGroups, setLoadingGroups] = useState(true);
 
   /* ── all original state (unchanged) ── */
   const [players, setPlayers] = useState([]);
@@ -537,30 +605,134 @@ function UmpireSetupPage() {
   const [error, setError] = useState("");
   const [deleteCandidate, setDeleteCandidate] = useState(null);
   const [deletingMatchId, setDeletingMatchId] = useState("");
+  const [removePlayerCandidate, setRemovePlayerCandidate] = useState(null);
+  const [removingPlayer, setRemovingPlayer] = useState(false);
+
+  const groupsCache = usePageCache("umpire_groups", 120);
+  const playersCache = usePageCache("umpire_players_" + selectedGroupId, 120);
+  const matchesCache = usePageCache("umpire_matches_" + selectedGroupId, 60);
 
   /* ── UI-only state ── */
   const [activeTab, setActiveTab] = useState("create");
 
-  /* ── original loadDashboard (unchanged) ── */
+  /* ── load groups on mount ── */
+  useEffect(() => {
+    if (!token) return;
+
+    const cachedGroups = groupsCache.get();
+    if (cachedGroups) {
+      setGroups(cachedGroups);
+      setLoadingGroups(false);
+      if (!selectedGroupId && cachedGroups.length > 0) {
+        setSelectedGroupFromContext(
+          cachedGroups[0]._id,
+          cachedGroups[0].name || "",
+        );
+      }
+
+      getMyGroups(token)
+        .then((r) => {
+          const fresh = r.groups || [];
+          setGroups(fresh);
+          groupsCache.set(fresh);
+        })
+        .catch(() => {});
+      return;
+    }
+
+    setLoadingGroups(true);
+    getMyGroups(token)
+      .then((r) => {
+        const g = r.groups || [];
+        setGroups(g);
+        groupsCache.set(g);
+        if (!selectedGroupId && g.length > 0) {
+          setSelectedGroupFromContext(g[0]._id, g[0].name || "");
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoadingGroups(false));
+  }, [token]);
+
+  /* ── load group player pool when group changes ── */
+  useEffect(() => {
+    if (!selectedGroupId || !token) {
+      setPlayers([]);
+      return;
+    }
+    setTeam1Players([]);
+    setTeam2Players([]);
+
+    const cachedPlayers = playersCache.get();
+    if (cachedPlayers) {
+      setPlayers(cachedPlayers);
+      getGroupPlayers(selectedGroupId, token)
+        .then((r) => {
+          const fresh = r.players || [];
+          setPlayers(fresh);
+          playersCache.set(fresh);
+        })
+        .catch(() => {});
+      return;
+    }
+
+    getGroupPlayers(selectedGroupId, token)
+      .then((r) => {
+        const fresh = r.players || [];
+        setPlayers(fresh);
+        playersCache.set(fresh);
+      })
+      .catch(() => setPlayers([]));
+  }, [selectedGroupId, token]);
+
+  /* ── load match lists ── */
   const loadDashboard = async () => {
-    const [playersResponse, upcomingResponse, liveResponse, completedResponse] =
+    const [upcomingResponse, liveResponse, completedResponse] =
       await Promise.all([
-        getPlayers(),
-        getUpcomingMatches(),
-        getLiveMatches(),
-        getCompletedMatches(),
+        getUpcomingMatches(selectedGroupId, token),
+        getLiveMatches(selectedGroupId, token),
+        getCompletedMatches(selectedGroupId, token),
       ]);
-    setPlayers(playersResponse.players || []);
-    setUpcomingMatches(upcomingResponse.matches || []);
-    setLiveMatches(liveResponse.matches || []);
-    setCompletedMatches(completedResponse.matches || []);
+    const freshMatches = {
+      upcoming: upcomingResponse.matches || [],
+      live: liveResponse.matches || [],
+      completed: completedResponse.matches || [],
+    };
+    setUpcomingMatches(freshMatches.upcoming);
+    setLiveMatches(freshMatches.live);
+    setCompletedMatches(freshMatches.completed);
+    return freshMatches;
   };
 
   useEffect(() => {
     let isMounted = true;
     const init = async () => {
+      const cachedMatches = matchesCache.get();
+      if (cachedMatches) {
+        if (isMounted) {
+          setUpcomingMatches(cachedMatches.upcoming || []);
+          setLiveMatches(cachedMatches.live || []);
+          setCompletedMatches(cachedMatches.completed || []);
+          setLoading(false);
+        }
+
+        loadDashboard()
+          .then((freshMatches) => {
+            if (isMounted) matchesCache.set(freshMatches);
+          })
+          .catch((requestError) => {
+            if (isMounted)
+              setError(
+                requestError.message || "Unable to load umpire dashboard",
+              );
+          });
+        return;
+      }
+
       try {
-        await loadDashboard();
+        if (isMounted) setLoading(true);
+        const freshMatches = await loadDashboard();
+        if (isMounted) matchesCache.set(freshMatches);
       } catch (requestError) {
         if (isMounted)
           setError(requestError.message || "Unable to load umpire dashboard");
@@ -572,7 +744,7 @@ function UmpireSetupPage() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [selectedGroupId]);
 
   /* ── original computed (unchanged) ── */
   const playerById = useMemo(() => {
@@ -612,8 +784,13 @@ function UmpireSetupPage() {
   const addPlayer = async () => {
     const name = newPlayerName.trim();
     if (!name) return;
+    if (!selectedGroupId) {
+      setError("Select a group first before adding players");
+      return;
+    }
     try {
       setError("");
+      // 1. Create player globally
       const response = await fetch(`${API_BASE_URL}/api/players`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -622,7 +799,11 @@ function UmpireSetupPage() {
       const data = await response.json();
       if (!response.ok || !data?.success)
         throw new Error(data?.message || "Unable to add player");
-      setPlayers((prev) => [...prev, data.player]);
+      // 2. Add player to this group's pool
+      await addGroupPlayer(selectedGroupId, data.player._id, token);
+      // 3. Refresh player list from group
+      const poolRes = await getGroupPlayers(selectedGroupId, token);
+      setPlayers(poolRes.players || []);
       setNewPlayerName("");
       setNewPlayerPhotoUrl("");
     } catch (requestError) {
@@ -652,6 +833,10 @@ function UmpireSetupPage() {
   };
 
   const handleCreateUpcoming = async () => {
+    if (!selectedGroupId) {
+      setError("Select a group before creating a match");
+      return;
+    }
     if (!team1Name.trim() || !team2Name.trim()) {
       setError("Both team names are required");
       return;
@@ -659,13 +844,17 @@ function UmpireSetupPage() {
     setSubmitting(true);
     setError("");
     try {
-      await createUpcomingMatch({
-        team1Name: team1Name.trim(),
-        team2Name: team2Name.trim(),
-        team1PlayerIds: team1Players,
-        team2PlayerIds: team2Players,
-        totalOvers,
-      });
+      await createUpcomingMatch(
+        {
+          groupId: selectedGroupId,
+          team1Name: team1Name.trim(),
+          team2Name: team2Name.trim(),
+          team1PlayerIds: team1Players,
+          team2PlayerIds: team2Players,
+          totalOvers,
+        },
+        token,
+      );
       await loadDashboard();
       resetForm();
       setActiveTab("upcoming");
@@ -679,7 +868,7 @@ function UmpireSetupPage() {
   const handleStartMatch = async (matchId) => {
     try {
       setError("");
-      await startMatch(matchId);
+      await startMatch(matchId, token);
       await loadDashboard();
       navigate(`/umpire/toss/${matchId}`);
     } catch (requestError) {
@@ -718,6 +907,32 @@ function UmpireSetupPage() {
   const closeDeleteConfirm = () => {
     if (deletingMatchId) return;
     setDeleteCandidate(null);
+  };
+
+  const handleRemovePlayer = async () => {
+    if (!removePlayerCandidate?._id || !selectedGroupId) return;
+    try {
+      setRemovingPlayer(true);
+      setError("");
+      await removeGroupPlayer(
+        selectedGroupId,
+        removePlayerCandidate._id,
+        token,
+      );
+      setTeam1Players((prev) =>
+        prev.filter((id) => id !== removePlayerCandidate._id),
+      );
+      setTeam2Players((prev) =>
+        prev.filter((id) => id !== removePlayerCandidate._id),
+      );
+      const poolRes = await getGroupPlayers(selectedGroupId, token);
+      setPlayers(poolRes.players || []);
+      setRemovePlayerCandidate(null);
+    } catch (err) {
+      setError(err.message || "Unable to remove player");
+    } finally {
+      setRemovingPlayer(false);
+    }
   };
 
   /* ── loading screen ── */
@@ -773,7 +988,9 @@ function UmpireSetupPage() {
             Umpire Dashboard
           </span>
           {/* Nav */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <GroupChip />
+            <ProfileToolbarButton className="btn-tap" />
             <button
               type="button"
               onClick={() => navigate(-1)}
@@ -839,11 +1056,64 @@ function UmpireSetupPage() {
       )}
 
       {/* ══ MAIN ══ */}
-      <main className="mx-auto max-w-4xl px-4 py-5 pb-16">
+      <main className="mx-auto max-w-4xl px-4 py-5 pb-20">
         {/* ─── CREATE TAB ─── */}
         {activeTab === "create" && (
           <div className="space-y-4">
-            {/* Match config */}
+            {/* ── Group Selector ── */}
+            <section className="rounded-2xl border border-[#f97316]/25 bg-[#f97316]/5 p-5">
+              <p className="mb-3 text-[10px] font-black uppercase tracking-[0.18em] text-[#f97316]">
+                Playing For Group
+              </p>
+              {loadingGroups ? (
+                <div className="flex items-center gap-2 text-sm text-slate-400">
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#f97316] border-t-transparent" />
+                  Loading groups…
+                </div>
+              ) : groups.length === 0 ? (
+                <p className="text-sm text-slate-500">
+                  You have no groups.{" "}
+                  <Link to="/groups" className="text-[#f97316] underline">
+                    Create or join a group
+                  </Link>{" "}
+                  to get started.
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {groups.map((g) => {
+                    const isSel = g._id === selectedGroupId;
+                    return (
+                      <button
+                        key={g._id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedGroupFromContext(g._id, g.name || "");
+                        }}
+                        className={`rounded-xl border px-4 py-2 text-sm font-black uppercase tracking-widest transition-all ${
+                          isSel
+                            ? "border-[#f97316]/60 bg-[#f97316] text-[#0d1117]"
+                            : "border-white/10 bg-white/5 text-slate-400 hover:border-[#f97316]/40 hover:text-[#f97316]"
+                        }`}
+                      >
+                        {g.name}
+                        {isSel && <span className="ml-1.5">✓</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              {selectedGroupId && (
+                <p className="mt-2.5 text-[11px] text-slate-600">
+                  Player pool shows only players in this group ·{" "}
+                  <Link
+                    to="/groups"
+                    className="text-slate-500 underline hover:text-slate-300"
+                  >
+                    Manage groups
+                  </Link>
+                </p>
+              )}
+            </section>
             <section className="rounded-2xl border border-white/8 bg-slate-900/60 p-5">
               <p className="mb-4 text-[10px] font-black uppercase tracking-[0.18em] text-[#f97316]">
                 Match Setup
@@ -939,8 +1209,12 @@ function UmpireSetupPage() {
               </div>
             </section>
 
-            {/* Player kanban — only show if there are players */}
-            {players.length > 0 && (
+            {/* Player kanban */}
+            {!selectedGroupId ? (
+              <div className="rounded-2xl border border-dashed border-white/8 py-10 text-center text-sm text-slate-600">
+                Select a group above to see its player pool
+              </div>
+            ) : players.length > 0 ? (
               <section className="rounded-2xl border border-white/8 bg-slate-900/60 p-5">
                 <p className="mb-4 text-[10px] font-black uppercase tracking-[0.18em] text-[#f97316]">
                   Assign Players to Teams
@@ -956,6 +1230,7 @@ function UmpireSetupPage() {
                     countBg="bg-slate-800 text-slate-500"
                     players={unassignedPlayers}
                     onAssign={movePlayerTo}
+                    onRemove={(player) => setRemovePlayerCandidate(player)}
                     showT1T2
                   />
                   <KanbanColumn
@@ -968,6 +1243,7 @@ function UmpireSetupPage() {
                     countBg="bg-indigo-900/40 text-indigo-400"
                     players={team1PlayerObjects}
                     onAssign={movePlayerTo}
+                    onRemove={(player) => setRemovePlayerCandidate(player)}
                     isTeamColumn
                   />
                   <KanbanColumn
@@ -980,20 +1256,34 @@ function UmpireSetupPage() {
                     countBg="bg-cyan-900/40 text-cyan-400"
                     players={team2PlayerObjects}
                     onAssign={movePlayerTo}
+                    onRemove={(player) => setRemovePlayerCandidate(player)}
                     isTeamColumn
                   />
                 </div>
               </section>
+            ) : (
+              <div className="rounded-2xl border border-dashed border-white/8 py-10 text-center text-sm text-slate-600">
+                No players in this group yet — add some above
+              </div>
             )}
 
             {/* Create button */}
             <button
               type="button"
               onClick={handleCreateUpcoming}
-              disabled={submitting || !team1Name.trim() || !team2Name.trim()}
+              disabled={
+                submitting ||
+                !team1Name.trim() ||
+                !team2Name.trim() ||
+                !selectedGroupId
+              }
               className="btn-tap w-full rounded-2xl bg-[#f97316] py-4 text-sm font-black uppercase tracking-widest text-white shadow-lg shadow-orange-900/30 transition-all hover:bg-orange-500 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {submitting ? "Creating…" : "🏏  Create Upcoming Match"}
+              {submitting
+                ? "Creating…"
+                : !selectedGroupId
+                  ? "Select a group first"
+                  : "🏏  Create Upcoming Match"}
             </button>
           </div>
         )}
@@ -1067,6 +1357,17 @@ function UmpireSetupPage() {
         onCancel={closeDeleteConfirm}
         onConfirm={handleDeleteMatch}
       />
+
+      <RemovePlayerConfirmModal
+        player={removePlayerCandidate}
+        removing={removingPlayer}
+        onCancel={() => {
+          if (!removingPlayer) setRemovePlayerCandidate(null);
+        }}
+        onConfirm={handleRemovePlayer}
+      />
+
+      <BottomNav />
     </div>
   );
 }

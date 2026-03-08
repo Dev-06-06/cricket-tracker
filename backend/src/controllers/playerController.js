@@ -1,4 +1,6 @@
 const Player = require("../models/Player");
+const Group = require("../models/Group");
+const mongoose = require("mongoose");
 
 const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -86,6 +88,48 @@ const getPlayers = async (req, res) => {
   }
 };
 
+const getGroupPlayersWithStats = async (req, res) => {
+  try {
+    const { groupId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(groupId)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid groupId" });
+    }
+
+    // Verify the requesting user is a member of this group
+    const group = await Group.findOne({
+      _id: groupId,
+      "members.user": req.user._id,
+    }).select("playerPool");
+
+    if (!group) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not a member of this group",
+      });
+    }
+
+    // Fetch only the players in this group's pool
+    const players = await Player.find({
+      _id: { $in: group.playerPool },
+    }).sort({ name: 1 });
+
+    const playersWithComputedStats = players.map((playerDoc) => {
+      const player = playerDoc.toObject();
+      return {
+        ...player,
+        computedStats: calculateComputedStats(player),
+      };
+    });
+
+    res.json({ success: true, players: playersWithComputedStats });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 const createPlayer = async (req, res) => {
   try {
     const { name, photoUrl } = req.body;
@@ -117,4 +161,4 @@ const createPlayer = async (req, res) => {
   }
 };
 
-module.exports = { getPlayers, createPlayer };
+module.exports = { getPlayers, createPlayer, getGroupPlayersWithStats };

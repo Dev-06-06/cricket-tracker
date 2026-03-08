@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { getPlayers } from "../services/api";
+import BottomNav from "../components/BottomNav";
+import GroupChip from "../components/GroupChip";
+import ProfileToolbarButton from "../components/ProfileToolbarButton";
+import { getGroupPlayersWithStats } from "../services/api";
+import { useAuth } from "../context/AuthContext";
+import { useActiveGroup } from "../context/ActiveGroupContext";
+import usePageCache from "../hooks/usePageCache";
 
 const BATTING_FILTER_OPTIONS = [
   { value: "runs", label: "Runs" },
@@ -417,6 +423,9 @@ function PlayerRow({ player, onClick, index }) {
 ═══════════════════════════════════════════════════════════════════════════════ */
 export default function PlayerProfilesPage() {
   const navigate = useNavigate();
+  const { token } = useAuth();
+  const { activeGroupId, activeGroupName } = useActiveGroup();
+  const cache = usePageCache("dugout_" + activeGroupId);
   const [players, setPlayers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -427,20 +436,41 @@ export default function PlayerProfilesPage() {
 
   useEffect(() => {
     let mounted = true;
-    getPlayers()
-      .then((res) => {
-        if (mounted) setPlayers(res.players || []);
-      })
-      .catch((err) => {
-        if (mounted) setError(err.message || "Unable to load players");
-      })
-      .finally(() => {
+
+    if (!activeGroupId || !token) {
+      setLoading(false);
+      return () => {
+        mounted = false;
+      };
+    }
+    setError("");
+
+    const fetchFresh = () =>
+      getGroupPlayersWithStats(activeGroupId, token)
+        .then((res) => {
+          if (!mounted) return;
+          setPlayers(res.players || []);
+          cache.set(res);
+        })
+        .catch((err) => {
+          if (mounted) setError(err.message || "Unable to load players");
+        });
+
+    const cached = cache.get();
+    if (cached !== null) {
+      setPlayers(cached.players || cached || []);
+      setLoading(false);
+      fetchFresh();
+    } else {
+      setLoading(true);
+      fetchFresh().finally(() => {
         if (mounted) setLoading(false);
       });
+    }
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [activeGroupId, token]);
 
   const sortedPlayers = useMemo(
     () => [...players].sort((a, b) => a.name.localeCompare(b.name)),
@@ -594,17 +624,21 @@ export default function PlayerProfilesPage() {
           <span className="text-[11px] font-black uppercase tracking-widest text-[#f97316]">
             Dugout
           </span>
-          <button
-            type="button"
-            onClick={() => navigate(-1)}
-            className="btn-tap text-[11px] font-medium text-slate-600 hover:text-slate-300 transition-colors"
-          >
-            ← Back
-          </button>
+          <div className="flex items-center gap-2">
+            <ProfileToolbarButton />
+            <GroupChip />
+            <button
+              type="button"
+              onClick={() => navigate("/")}
+              className="btn-tap text-[11px] font-medium text-slate-600 hover:text-slate-300 transition-colors"
+            >
+              ← Back
+            </button>
+          </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl px-4 py-6 pb-16">
+      <main className="mx-auto max-w-5xl px-4 py-6 pb-20">
         {/* ── Hero ── */}
         <div className="mb-7">
           <div className="flex flex-col items-start gap-1">
@@ -615,7 +649,16 @@ export default function PlayerProfilesPage() {
               The Dugout
             </h1>
             <p className="mt-1 text-sm text-slate-500">
-              Career stats for every player on CricTrack
+              {activeGroupName ? (
+                <>
+                  Career stats for{" "}
+                  <span className="font-bold text-slate-300">
+                    {activeGroupName}
+                  </span>
+                </>
+              ) : (
+                "Career stats for your active group"
+              )}
             </p>
           </div>
         </div>
@@ -694,11 +737,28 @@ export default function PlayerProfilesPage() {
           </div>
         )}
 
-        {!loading && !error && sortedPlayers.length === 0 && (
+        {!loading && !error && !activeGroupId && (
           <div className="flex flex-col items-center gap-3 py-20 text-center">
             <span className="text-4xl">🏏</span>
             <p className="text-sm text-slate-600">
-              No players yet. Add players from umpire mode first.
+              No active group selected.{" "}
+              <Link to="/groups" className="text-[#f97316] underline">
+                Join or create a group
+              </Link>{" "}
+              to see player stats.
+            </p>
+          </div>
+        )}
+
+        {!loading && !error && activeGroupId && sortedPlayers.length === 0 && (
+          <div className="flex flex-col items-center gap-3 py-20 text-center">
+            <span className="text-4xl">🏏</span>
+            <p className="text-sm text-slate-600">
+              No players in{" "}
+              <span className="font-bold text-slate-400">
+                {activeGroupName || "this group"}
+              </span>{" "}
+              yet. Add players from umpire mode first.
             </p>
           </div>
         )}
@@ -948,6 +1008,8 @@ export default function PlayerProfilesPage() {
           hasNext={displayList.length > 1}
         />
       )}
+
+      <BottomNav />
     </div>
   );
 }

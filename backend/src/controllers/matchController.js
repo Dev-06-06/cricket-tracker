@@ -1,5 +1,16 @@
 ﻿const Match = require("../models/Match");
 const Player = require("../models/Player");
+const Group = require("../models/Group");
+const mongoose = require("mongoose");
+
+const ensureUserIsGroupMember = async (groupId, userId) => {
+  const group = await Group.findOne({
+    _id: groupId,
+    "members.user": userId,
+  }).select("_id");
+
+  return Boolean(group);
+};
 
 function buildCompletedResultMessage(match) {
   if (!match || match.status !== "completed") {
@@ -41,6 +52,7 @@ function buildCompletedResultMessage(match) {
 function mapMatchSummary(match) {
   return {
     _id: match._id,
+    groupId: match.groupId,
     team1Name: match.team1Name,
     team2Name: match.team2Name,
     totalOvers: match.totalOvers,
@@ -88,6 +100,7 @@ function mapMatchSummary(match) {
 const createMatch = async (req, res) => {
   try {
     const {
+      groupId,
       battingTeam,
       bowlingTeam,
       currentStriker,
@@ -95,7 +108,22 @@ const createMatch = async (req, res) => {
       currentBowler,
     } = req.body;
 
+    if (!groupId || !mongoose.Types.ObjectId.isValid(groupId)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Valid groupId is required" });
+    }
+
+    const canAccessGroup = await ensureUserIsGroupMember(groupId, req.user._id);
+    if (!canAccessGroup) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not a member of this group",
+      });
+    }
+
     const match = new Match({
+      groupId,
       battingTeam,
       bowlingTeam,
       currentStriker,
@@ -112,8 +140,28 @@ const createMatch = async (req, res) => {
 
 const createUpcomingMatch = async (req, res) => {
   try {
-    const { team1Name, team2Name, team1PlayerIds, team2PlayerIds, totalOvers } =
-      req.body;
+    const {
+      groupId,
+      team1Name,
+      team2Name,
+      team1PlayerIds,
+      team2PlayerIds,
+      totalOvers,
+    } = req.body;
+
+    if (!groupId || !mongoose.Types.ObjectId.isValid(groupId)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Valid groupId is required" });
+    }
+
+    const canAccessGroup = await ensureUserIsGroupMember(groupId, req.user._id);
+    if (!canAccessGroup) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not a member of this group",
+      });
+    }
 
     if (!team1Name?.trim() || !team2Name?.trim()) {
       return res.status(400).json({
@@ -149,6 +197,7 @@ const createUpcomingMatch = async (req, res) => {
       });
     });
     const match = await Match.create({
+      groupId,
       team1Name: team1Name.trim(),
       team2Name: team2Name.trim(),
       team1Players: team1PlayerIds || [],
@@ -192,9 +241,30 @@ const getMatch = async (req, res) => {
   }
 };
 
-const listUpcomingMatches = async (_req, res) => {
+const listUpcomingMatches = async (req, res) => {
   try {
-    const matches = await Match.find({ status: "upcoming" })
+    const filter = { status: "upcoming" };
+    const { groupId } = req.query;
+
+    if (groupId !== undefined) {
+      if (!mongoose.Types.ObjectId.isValid(groupId)) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Invalid groupId query parameter" });
+      }
+
+      const isMember = await ensureUserIsGroupMember(groupId, req.user._id);
+      if (!isMember) {
+        return res.status(403).json({
+          success: false,
+          message: "You are not a member of this group",
+        });
+      }
+
+      filter.groupId = groupId;
+    }
+
+    const matches = await Match.find(filter)
       .populate("team1Players", "name photoUrl")
       .populate("team2Players", "name photoUrl")
       .sort({ createdAt: -1 });
@@ -208,11 +278,32 @@ const listUpcomingMatches = async (_req, res) => {
   }
 };
 
-const listLiveMatches = async (_req, res) => {
+const listLiveMatches = async (req, res) => {
   try {
-    const matches = await Match.find({
+    const filter = {
       status: { $in: ["toss", "innings", "live", "innings_complete"] },
-    })
+    };
+    const { groupId } = req.query;
+
+    if (groupId !== undefined) {
+      if (!mongoose.Types.ObjectId.isValid(groupId)) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Invalid groupId query parameter" });
+      }
+
+      const isMember = await ensureUserIsGroupMember(groupId, req.user._id);
+      if (!isMember) {
+        return res.status(403).json({
+          success: false,
+          message: "You are not a member of this group",
+        });
+      }
+
+      filter.groupId = groupId;
+    }
+
+    const matches = await Match.find(filter)
       .populate("team1Players", "name photoUrl")
       .populate("team2Players", "name photoUrl")
       .sort({ updatedAt: -1 });
@@ -226,9 +317,30 @@ const listLiveMatches = async (_req, res) => {
   }
 };
 
-const listCompletedMatches = async (_req, res) => {
+const listCompletedMatches = async (req, res) => {
   try {
-    const matches = await Match.find({ status: "completed" })
+    const filter = { status: "completed" };
+    const { groupId } = req.query;
+
+    if (groupId !== undefined) {
+      if (!mongoose.Types.ObjectId.isValid(groupId)) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Invalid groupId query parameter" });
+      }
+
+      const isMember = await ensureUserIsGroupMember(groupId, req.user._id);
+      if (!isMember) {
+        return res.status(403).json({
+          success: false,
+          message: "You are not a member of this group",
+        });
+      }
+
+      filter.groupId = groupId;
+    }
+
+    const matches = await Match.find(filter)
       .populate("team1Players", "name photoUrl")
       .populate("team2Players", "name photoUrl")
       .sort({ updatedAt: -1 });
@@ -251,6 +363,17 @@ const startMatch = async (req, res) => {
       return res
         .status(404)
         .json({ success: false, message: "Match not found" });
+    }
+
+    const canAccessGroup = await ensureUserIsGroupMember(
+      match.groupId,
+      req.user._id,
+    );
+    if (!canAccessGroup) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not a member of this group",
+      });
     }
 
     if (match.status === "completed") {
@@ -298,13 +421,26 @@ const getOngoingMatch = async (_req, res) => {
 const deleteMatch = async (req, res) => {
   try {
     const { id } = req.params;
-    const match = await Match.findByIdAndDelete(id);
+    const match = await Match.findById(id);
 
     if (!match) {
       return res
         .status(404)
         .json({ success: false, message: "Match not found" });
     }
+
+    const canAccessGroup = await ensureUserIsGroupMember(
+      match.groupId,
+      req.user._id,
+    );
+    if (!canAccessGroup) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not a member of this group",
+      });
+    }
+
+    await Match.findByIdAndDelete(id);
 
     res.status(200).json({ success: true });
   } catch (error) {

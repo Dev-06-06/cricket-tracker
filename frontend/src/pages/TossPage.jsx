@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import GroupChip from "../components/GroupChip";
+import ProfileToolbarButton from "../components/ProfileToolbarButton";
 import { createMatchSocket } from "../services/socket";
 
 /* ═══════════════════════════════════════════════════════════════════════════════
@@ -281,10 +283,12 @@ export default function TossPage() {
           <span className="text-[11px] font-black uppercase tracking-widest text-[#f97316]">
             Toss
           </span>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <ProfileToolbarButton />
+            <GroupChip />
             <button
               type="button"
-              onClick={() => navigate(-1)}
+              onClick={() => navigate("/umpire")}
               className="btn-tap text-[11px] text-slate-600 hover:text-slate-300 transition-colors"
             >
               Back

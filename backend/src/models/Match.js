@@ -2,6 +2,11 @@ const mongoose = require("mongoose");
 
 const matchSchema = new mongoose.Schema(
   {
+    groupId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Group",
+      required: true,
+    },
     battingTeam: {
       type: String,
       required: true,

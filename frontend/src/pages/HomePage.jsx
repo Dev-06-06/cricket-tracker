@@ -1,10 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import { useActiveGroup } from "../context/ActiveGroupContext";
+import BottomNav from "../components/BottomNav";
+import ProfileToolbarButton from "../components/ProfileToolbarButton";
 import {
   getCompletedMatches,
   getLiveMatches,
+  getMyGroups,
   getUpcomingMatches,
+  startMatch,
 } from "../services/api";
+import usePageCache from "../hooks/usePageCache";
 
 /* ─── helpers ────────────────────────────────────────────────────────────────── */
 function calcOvers(ballsBowled) {
@@ -97,11 +104,23 @@ function SectionHeader({ label, accent, count, extra }) {
 }
 
 /* ─── LiveMatchCard ──────────────────────────────────────────────────────────── */
-function LiveMatchCard({ match }) {
+function LiveMatchCard({ match, onUmpireMode }) {
+  const [openingUmpire, setOpeningUmpire] = useState(false);
   const overs = calcOvers(match.ballsBowled);
   function getPlayerStat(playerStats, name) {
     return (playerStats || []).find((p) => p?.name === name) || null;
   }
+
+  const handleUmpire = async (event) => {
+    event.preventDefault();
+    if (openingUmpire) return;
+    setOpeningUmpire(true);
+    try {
+      await onUmpireMode(match);
+    } finally {
+      setOpeningUmpire(false);
+    }
+  };
 
   const strikerStat = getPlayerStat(match.playerStats, match.currentStriker);
   const nonStrikerStat = getPlayerStat(
@@ -125,10 +144,7 @@ function LiveMatchCard({ match }) {
     Number(match.ballsBowled || 0) > 0;
 
   return (
-    <Link
-      to={`/scoreboard/${match._id}?viewer=1`}
-      className="block rounded-2xl border border-red-800/30 bg-gradient-to-br from-red-950/25 via-slate-900/60 to-slate-900/40 p-4 transition-all hover:border-red-700/50 hover:from-red-950/35 active:scale-[0.99]"
-    >
+    <div className="rounded-2xl border border-red-800/30 bg-gradient-to-br from-red-950/25 via-slate-900/60 to-slate-900/40 p-4 transition-all hover:border-red-700/50 hover:from-red-950/35">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-base font-extrabold leading-tight text-white">
@@ -289,54 +305,120 @@ function LiveMatchCard({ match }) {
         )}
       </div>
 
-      <div className="mt-3 flex items-center justify-end">
-        <span className="rounded-full bg-[#f97316]/15 border border-[#f97316]/30 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-[#f97316]">
-          Open Scoreboard →
-        </span>
+      <div className="mt-3 flex items-center gap-2 border-t border-white/5 pt-3">
+        <button
+          type="button"
+          onClick={handleUmpire}
+          disabled={openingUmpire}
+          className="flex-1 rounded-xl bg-[#f97316] py-2 text-xs font-black uppercase tracking-widest text-white transition-all hover:bg-orange-500 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {openingUmpire ? "Opening..." : "🏏 Umpire Mode"}
+        </button>
+        <Link
+          to={`/scoreboard/${match._id}?viewer=1`}
+          className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-xs font-bold text-slate-400 transition-all hover:border-white/20 hover:text-slate-200"
+        >
+          View
+        </Link>
       </div>
-    </Link>
+    </div>
   );
 }
 
 /* ─── UpcomingMatchCard ──────────────────────────────────────────────────────── */
-function UpcomingMatchCard({ match }) {
-  return (
-    <Link
-      to={`/scoreboard/${match._id}?viewer=1`}
-      className="flex items-center gap-3 rounded-2xl border border-white/6 bg-slate-900/50 px-4 py-3 transition-all hover:border-white/12 hover:bg-slate-900/80 active:scale-[0.99]"
-    >
-      {/* Icon */}
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-sky-500/20 bg-sky-500/10">
-        <span className="text-lg">🏏</span>
-      </div>
+function UpcomingMatchCard({ match, onUmpireMode }) {
+  const [starting, setStarting] = useState(false);
 
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-bold text-slate-200">
-          {match.team1Name}
-          <span className="mx-1.5 text-slate-600 font-normal">vs</span>
-          {match.team2Name}
-        </p>
-        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-          <span className="text-[10px] text-slate-600">
-            {match.totalOvers} overs
-          </span>
-          <span className="text-slate-800 text-[10px]">·</span>
-          <div className="flex items-center gap-1">
-            <PlayerAvatarStack
-              players={[
-                ...(match.team1Players || []),
-                ...(match.team2Players || []),
-              ]}
-              max={5}
-            />
+  const t1Players = match.team1Players || [];
+  const t2Players = match.team2Players || [];
+
+  const handleUmpire = async (e) => {
+    e.preventDefault();
+    if (starting) return;
+    setStarting(true);
+    try {
+      await onUmpireMode(match._id);
+    } finally {
+      setStarting(false);
+    }
+  };
+
+  return (
+    <div className="rounded-2xl border border-white/6 bg-slate-900/50 transition-all hover:border-white/12 hover:bg-slate-900/80">
+      {/* Main body */}
+      <div className="px-4 pt-4 pb-3">
+        {/* Teams */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-base font-extrabold leading-tight text-white">
+              {match.team1Name}
+              <span className="mx-1.5 font-normal text-slate-600 text-sm">
+                vs
+              </span>
+              {match.team2Name}
+            </p>
+            <p className="mt-0.5 text-[11px] text-slate-600">
+              {match.totalOvers} overs
+            </p>
           </div>
+          <span className="inline-flex shrink-0 items-center rounded-full border border-sky-500/25 bg-sky-500/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-sky-400">
+            Soon
+          </span>
+        </div>
+
+        {/* Player rosters */}
+        <div className="mt-3 space-y-1.5">
+          {t1Players.length > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="min-w-[52px] text-[10px] font-bold text-slate-600 truncate">
+                {match.team1Name}
+              </span>
+              <PlayerAvatarStack players={t1Players} max={6} />
+              <span className="text-[10px] text-slate-700">
+                {t1Players.map((p) => p.name).join(", ")}
+              </span>
+            </div>
+          )}
+          {t2Players.length > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="min-w-[52px] text-[10px] font-bold text-slate-600 truncate">
+                {match.team2Name}
+              </span>
+              <PlayerAvatarStack players={t2Players} max={6} />
+              <span className="text-[10px] text-slate-700">
+                {t2Players.map((p) => p.name).join(", ")}
+              </span>
+            </div>
+          )}
+          {t1Players.length === 0 && t2Players.length === 0 && (
+            <p className="text-[11px] text-slate-700">
+              No players assigned yet
+            </p>
+          )}
         </div>
       </div>
 
-      <span className="inline-flex items-center rounded-full border border-sky-500/25 bg-sky-500/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-sky-400 shrink-0">
-        Soon
-      </span>
-    </Link>
+      {/* Footer actions */}
+      <div className="flex items-center gap-2 border-t border-white/5 px-4 py-3">
+        {/* Umpire Mode - starts match */}
+        <button
+          type="button"
+          onClick={handleUmpire}
+          disabled={starting}
+          className="flex-1 rounded-xl bg-[#f97316] py-2 text-xs font-black uppercase tracking-widest text-white transition-all hover:bg-orange-500 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {starting ? "Starting…" : "🏏 Umpire Mode"}
+        </button>
+
+        {/* View scoreboard */}
+        <Link
+          to={`/scoreboard/${match._id}?viewer=1`}
+          className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-xs font-bold text-slate-400 transition-all hover:border-white/20 hover:text-slate-200"
+        >
+          View
+        </Link>
+      </div>
+    </div>
   );
 }
 
@@ -409,6 +491,11 @@ function EmptyState({ icon, label }) {
 ═══════════════════════════════════════════════════════════════════════════════ */
 function HomePage() {
   const navigate = useNavigate();
+  const { token } = useAuth();
+  const { activeGroupId, activeGroupName, switchGroup } = useActiveGroup();
+  const cache = usePageCache("home_" + activeGroupId);
+  const [groups, setGroups] = useState([]);
+  const [showGroupDropdown, setShowGroupDropdown] = useState(false);
   const [upcomingMatches, setUpcomingMatches] = useState([]);
   const [liveMatches, setLiveMatches] = useState([]);
   const [completedMatches, setCompletedMatches] = useState([]);
@@ -420,24 +507,59 @@ function HomePage() {
   const upcomingSectionRef = useRef(null);
   const completedSectionRef = useRef(null);
 
+  const handleStartMatch = async (matchId) => {
+    try {
+      setError("");
+      await startMatch(matchId, token);
+      navigate(`/umpire/toss/${matchId}`);
+    } catch (requestError) {
+      setError(requestError.message || "Unable to start match");
+    }
+  };
+
+  const handleOpenLiveUmpire = async (match) => {
+    try {
+      setError("");
+      if (match?.status === "toss") {
+        navigate(`/umpire/toss/${match._id}`);
+        return;
+      }
+
+      navigate(`/umpire/scorer/${match._id}`);
+    } catch (requestError) {
+      setError(requestError.message || "Unable to open umpire mode");
+    }
+  };
+
   useEffect(() => {
     let isMounted = true;
     let pollTimer = null;
 
     const loadMatches = async () => {
+      const cached = cache.get();
+      if (cached !== null) {
+        setLiveMatches(cached[0]?.matches || []);
+        setUpcomingMatches(cached[1]?.matches || []);
+        setCompletedMatches(cached[2]?.matches || []);
+        setLoading(false);
+      } else {
+        setLoading(true);
+      }
+
       try {
-        const [upcomingResponse, liveResponse, completedResponse] =
+        const [liveResponse, upcomingResponse, completedResponse] =
           await Promise.all([
-            getUpcomingMatches(),
-            getLiveMatches(),
-            getCompletedMatches(),
+            getLiveMatches(activeGroupId, token),
+            getUpcomingMatches(activeGroupId, token),
+            getCompletedMatches(activeGroupId, token),
           ]);
 
         if (!isMounted) return;
 
-        setUpcomingMatches(upcomingResponse.matches || []);
         setLiveMatches(liveResponse.matches || []);
+        setUpcomingMatches(upcomingResponse.matches || []);
         setCompletedMatches(completedResponse.matches || []);
+        cache.set([liveResponse, upcomingResponse, completedResponse]);
         setLastRefresh(new Date());
         setError("");
       } catch (requestError) {
@@ -457,7 +579,26 @@ function HomePage() {
       isMounted = false;
       if (pollTimer) clearTimeout(pollTimer);
     };
-  }, []);
+  }, [activeGroupId]);
+
+  // Load user's groups for dropdown
+  useEffect(() => {
+    if (!token) return;
+    getMyGroups(token)
+      .then((r) => setGroups(r.groups || []))
+      .catch(() => {});
+  }, [token]);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!showGroupDropdown) return;
+    const close = (e) => {
+      if (!e.target.closest("[data-group-switcher]"))
+        setShowGroupDropdown(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [showGroupDropdown]);
 
   useEffect(() => {
     const onScroll = () => {
@@ -508,17 +649,109 @@ function HomePage() {
           <span className="text-[11px] font-black uppercase tracking-widest text-[#f97316]">
             Viewer Mode
           </span>
-          <button
-            type="button"
-            onClick={() => navigate(-1)}
-            className="btn-tap text-[11px] font-medium text-slate-600 hover:text-slate-300 transition-colors"
-          >
-            ← Back
-          </button>
+          <div className="flex items-center gap-2">
+            <ProfileToolbarButton className="btn-tap" />
+            <button
+              type="button"
+              onClick={() => navigate(-1)}
+              className="btn-tap text-[11px] font-medium text-slate-600 hover:text-slate-300 transition-colors"
+            >
+              ← Back
+            </button>
+          </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-2xl px-4 py-5 pb-16">
+      <main className="mx-auto max-w-2xl px-4 py-5 pb-20">
+        {/* ── Group Switcher ── */}
+        <div className="relative mb-4" data-group-switcher>
+          <button
+            type="button"
+            onClick={() => setShowGroupDropdown((v) => !v)}
+            className="w-full flex items-center justify-between rounded-xl border border-[#f97316]/35 bg-[#f97316]/10 px-3 py-2.5 transition-all hover:border-[#f97316]/50 hover:bg-[#f97316]/15"
+          >
+            <div className="text-left">
+              <p className="text-[10px] font-black uppercase tracking-widest text-[#f97316]">
+                Active Group
+              </p>
+              <p className="score-num text-xl font-extrabold uppercase tracking-wide text-white">
+                {activeGroupName || "No group selected"}
+              </p>
+            </div>
+            <span className="text-[11px] font-black text-[#f97316]">
+              {showGroupDropdown ? "▲" : "▼"}
+            </span>
+          </button>
+
+          {showGroupDropdown && (
+            <div className="absolute left-0 right-0 top-full z-40 mt-1 overflow-hidden rounded-xl border border-white/10 bg-[#0d1117] shadow-2xl shadow-black/60">
+              {groups.length === 0 ? (
+                <div className="px-4 py-3 text-sm text-slate-500">
+                  No groups yet.{" "}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowGroupDropdown(false);
+                      navigate("/groups");
+                    }}
+                    className="text-[#f97316] underline"
+                  >
+                    Create one
+                  </button>
+                </div>
+              ) : (
+                groups.map((g) => {
+                  const isActive = g._id === activeGroupId;
+                  return (
+                    <button
+                      key={g._id}
+                      type="button"
+                      onClick={() => {
+                        switchGroup(g._id, g.name);
+                        setShowGroupDropdown(false);
+                      }}
+                      className={`w-full flex items-center justify-between border-b border-white/5 px-4 py-3 text-left last:border-0 transition-colors ${
+                        isActive
+                          ? "bg-[#f97316]/10 text-white"
+                          : "text-slate-400 hover:bg-white/5 hover:text-white"
+                      }`}
+                    >
+                      <div>
+                        <p className="score-num text-base font-bold uppercase tracking-wide">
+                          {g.name}
+                        </p>
+                        <p className="text-[11px] text-slate-600">
+                          {g.members?.length || 0} members · code{" "}
+                          <span className="font-mono tracking-widest">
+                            {g.inviteCode}
+                          </span>
+                        </p>
+                      </div>
+                      {isActive && (
+                        <span className="text-[10px] font-black uppercase tracking-widest text-[#f97316]">
+                          ✓
+                        </span>
+                      )}
+                    </button>
+                  );
+                })
+              )}
+              <div className="border-t border-white/5 px-3 py-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowGroupDropdown(false);
+                    navigate("/groups");
+                  }}
+                  className="w-full rounded-lg py-1.5 text-[11px] font-black uppercase tracking-widest text-[#f97316] hover:bg-[#f97316]/10 transition-colors"
+                >
+                  + Manage Groups
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* ── Hero greeting ── */}
         <div className="mb-6 flex items-end justify-between">
           <div>
@@ -633,7 +866,11 @@ function HomePage() {
               ) : (
                 <div className="space-y-3">
                   {liveMatches.map((match) => (
-                    <LiveMatchCard key={match._id} match={match} />
+                    <LiveMatchCard
+                      key={match._id}
+                      match={match}
+                      onUmpireMode={handleOpenLiveUmpire}
+                    />
                   ))}
                 </div>
               )}
@@ -651,7 +888,11 @@ function HomePage() {
               ) : (
                 <div className="space-y-2.5">
                   {upcomingMatches.map((match) => (
-                    <UpcomingMatchCard key={match._id} match={match} />
+                    <UpcomingMatchCard
+                      key={match._id}
+                      match={match}
+                      onUmpireMode={handleStartMatch}
+                    />
                   ))}
                 </div>
               )}
@@ -677,6 +918,8 @@ function HomePage() {
           </div>
         )}
       </main>
+
+      <BottomNav />
     </div>
   );
 }

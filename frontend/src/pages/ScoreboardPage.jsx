@@ -5,6 +5,8 @@ import {
   useParams,
   useSearchParams,
 } from "react-router-dom";
+import BottomNav from "../components/BottomNav";
+import ProfileToolbarButton from "../components/ProfileToolbarButton";
 import { createMatchSocket } from "../services/socket";
 import { getMatch } from "../services/api";
 import { checkMatchEnd } from "../utils/matchResult";
@@ -599,7 +601,7 @@ function MatchSummaryView({ match }) {
         <div className="mx-auto flex h-14 max-w-3xl items-center justify-between px-4">
           <button
             type="button"
-            onClick={() => navigate(-1)}
+            onClick={() => navigate("/view")}
             className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:bg-slate-800"
           >
             Back
@@ -612,12 +614,7 @@ function MatchSummaryView({ match }) {
             CricTrack
           </Link>
 
-          <Link
-            to="/view"
-            className="text-xs font-semibold uppercase tracking-wider text-[#f97316]"
-          >
-            All Matches
-          </Link>
+          <ProfileToolbarButton />
         </div>
       </header>
 
@@ -1425,7 +1422,7 @@ function ScoreboardPage() {
       }));
     return (
       <main
-        className="min-h-screen bg-[#0d1117] px-4 py-6 text-slate-100"
+        className="min-h-screen bg-[#0d1117] px-4 py-6 pb-20 text-slate-100"
         style={{ fontFamily: "'DM Sans', sans-serif" }}
       >
         <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Barlow+Condensed:wght@600;700;800&display=swap');`}</style>
@@ -1489,6 +1486,8 @@ function ScoreboardPage() {
             ))}
           </div>
         </div>
+
+        <BottomNav />
       </main>
     );
   }
@@ -1497,7 +1496,7 @@ function ScoreboardPage() {
 
   return (
     <main
-      className="min-h-screen bg-[#0d1117] text-slate-100 pb-12"
+      className="min-h-screen bg-[#0d1117] text-slate-100 pb-20"
       style={{ fontFamily: "'DM Sans', sans-serif" }}
     >
       <style>{`
@@ -2162,6 +2161,8 @@ function ScoreboardPage() {
           )}
         </div>
       </div>
+
+      <BottomNav />
     </main>
   );
 }
@@ -2173,7 +2174,7 @@ function TopBar({ matchId, isViewerMode }) {
     <div className="flex items-center justify-between">
       <button
         type="button"
-        onClick={() => navigate(-1)}
+        onClick={() => navigate("/view")}
         className="text-xs text-slate-500 hover:text-slate-300 transition-colors flex items-center gap-1"
       >
         <svg
