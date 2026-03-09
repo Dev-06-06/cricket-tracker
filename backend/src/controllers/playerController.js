@@ -1,108 +1,68 @@
+const mongoose = require("mongoose");
 const Player = require("../models/Player");
 const Group = require("../models/Group");
-const mongoose = require("mongoose");
+const GroupPlayerStats = require("../models/GroupPlayerStats");
 
-const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const escapeRegExp = (v) => v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-const toNum = (value) => {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
+const roundTo = (n, d) => Math.round(n * 10 ** d) / 10 ** d;
+
+const parseOversToBalls = (overs) => {
+  if (!overs) return 0;
+  const parts = String(overs).split(".");
+  return parseInt(parts[0], 10) * 6 + (parseInt(parts[1], 10) || 0);
 };
 
-const roundTo = (value, digits = 2) => {
-  if (!Number.isFinite(value)) return null;
-  const factor = 10 ** digits;
-  return Math.round(value * factor) / factor;
-};
-
-const parseOversToBalls = (oversValue) => {
-  if (oversValue === null || oversValue === undefined || oversValue === "") {
-    return 0;
-  }
-
-  const parsed = Number(oversValue);
-  if (!Number.isFinite(parsed) || parsed < 0) return 0;
-
-  const wholeOvers = Math.floor(parsed);
-  const ballsPart = Math.round((parsed - wholeOvers) * 10);
-  if (ballsPart < 0 || ballsPart > 5) return 0;
-
-  return wholeOvers * 6 + ballsPart;
-};
-
-const calculateComputedStats = (playerDoc) => {
-  const batting = playerDoc?.batting || {};
-  const bowling = playerDoc?.bowling || {};
-
-  const battingRuns = toNum(batting.runs);
-  const battingBalls = toNum(batting.balls);
-  const battingInnings = toNum(batting.innings);
-  const battingNotOuts = toNum(batting.notOuts);
-  const dismissals = Math.max(0, battingInnings - battingNotOuts);
-
+// Computed stats are derived — never stored — to keep the DB lean
+const calculateComputedStats = (batting, bowling) => {
+  const dismissals = (batting.innings || 0) - (batting.notOuts || 0);
   const battingAverage =
-    dismissals > 0 ? roundTo(battingRuns / dismissals, 2) : null;
+    dismissals > 0 ? roundTo(batting.runs / dismissals, 2) : null;
   const battingStrikeRate =
-    battingBalls > 0 ? roundTo((battingRuns * 100) / battingBalls, 2) : null;
+    batting.balls > 0
+      ? roundTo((batting.runs * 100) / batting.balls, 2)
+      : null;
 
-  const bowlingRuns = toNum(bowling.runs);
-  const bowlingWickets = toNum(bowling.wickets);
-  const legalBallsFromBalls = toNum(bowling.balls);
-  const legalBallsFromOvers = parseOversToBalls(bowling.overs);
   const legalBalls =
-    legalBallsFromBalls > 0 ? legalBallsFromBalls : legalBallsFromOvers;
-
+    bowling.balls > 0 ? bowling.balls : parseOversToBalls(bowling.overs);
   const bowlingAverage =
-    bowlingWickets > 0 ? roundTo(bowlingRuns / bowlingWickets, 2) : null;
+    bowling.wickets > 0 ? roundTo(bowling.runs / bowling.wickets, 2) : null;
   const bowlingEconomy =
-    legalBalls > 0 ? roundTo((bowlingRuns * 6) / legalBalls, 2) : null;
+    legalBalls > 0 ? roundTo((bowling.runs * 6) / legalBalls, 2) : null;
 
   return {
-    batting: {
-      average: battingAverage,
-      strikeRate: battingStrikeRate,
-      dismissals,
-    },
-    bowling: {
-      average: bowlingAverage,
-      economy: bowlingEconomy,
-      legalBalls,
-    },
+    batting: { average: battingAverage, strikeRate: battingStrikeRate, dismissals },
+    bowling: { average: bowlingAverage, economy: bowlingEconomy, legalBalls },
   };
 };
 
-const getPlayers = async (req, res) => {
+// ─── getPlayers (global list, no stats) ──────────────────────────────────────
+const getPlayers = async (_req, res) => {
   try {
-    const players = await Player.find({}).sort({ name: 1 });
-    const playersWithComputedStats = players.map((playerDoc) => {
-      const player = playerDoc.toObject();
-      return {
-        ...player,
-        computedStats: calculateComputedStats(player),
-      };
-    });
-
-    res.json({ success: true, players: playersWithComputedStats });
+    // ✅ Player docs are now tiny (name, photoUrl, userId only) — very fast
+    const players = await Player.find({}).sort({ name: 1 }).lean();
+    res.json({ success: true, players });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
+// ─── getGroupPlayersWithStats ─────────────────────────────────────────────────
+// OLD: Group.findById → Player.find({ _id: $in pool }) = 2 queries
+// NEW: GroupPlayerStats.find({ groupId }).populate("playerId") = 1 query
 const getGroupPlayersWithStats = async (req, res) => {
   try {
     const { groupId } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(groupId)) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid groupId" });
+      return res.status(400).json({ success: false, message: "Invalid groupId" });
     }
 
-    // Verify the requesting user is a member of this group
+    // Auth check — user must be a member of this group
     const group = await Group.findOne({
       _id: groupId,
       "members.user": req.user._id,
-    }).select("playerPool");
+    }).select("_id").lean();
 
     if (!group) {
       return res.status(403).json({
@@ -111,40 +71,53 @@ const getGroupPlayersWithStats = async (req, res) => {
       });
     }
 
-    // Fetch only the players in this group's pool
-    const players = await Player.find({
-      _id: { $in: group.playerPool },
-    }).sort({ name: 1 });
+    // ✅ Single query — hits { groupId: 1 } index
+    const statsRecords = await GroupPlayerStats.find({ groupId })
+      .populate("playerId", "name photoUrl userId")
+      .lean();
 
-    const playersWithComputedStats = players.map((playerDoc) => {
-      const player = playerDoc.toObject();
-      return {
-        ...player,
-        computedStats: calculateComputedStats(player),
-      };
-    });
+    const players = statsRecords
+      .filter((s) => s.playerId)
+      .map((s) => {
+        const totalBalls = s.bowling?.balls || 0;
+        // ✅ Compute overs from balls on read — never trust stored overs value
+        const computedOvers = Math.floor(totalBalls / 6) + (totalBalls % 6) / 10;
+        const bowling = { ...s.bowling, overs: computedOvers };
+        return {
+          _id: s.playerId._id,
+          name: s.playerId.name,
+          photoUrl: s.playerId.photoUrl || "",
+          userId: s.playerId.userId || null,
+          batting: s.batting,
+          bowling,
+          computedStats: calculateComputedStats(s.batting, bowling),
+        };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
 
-    res.json({ success: true, players: playersWithComputedStats });
+    res.json({ success: true, players });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
+// ─── createPlayer ─────────────────────────────────────────────────────────────
 const createPlayer = async (req, res) => {
   try {
     const { name, photoUrl } = req.body;
-    if (!name || !name.trim()) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Name is required" });
+
+    if (!name?.trim()) {
+      return res.status(400).json({ success: false, message: "Name is required" });
     }
 
     const trimmedName = name.trim();
-    const existingPlayer = await Player.findOne({
+
+    // ✅ Hits { name: 1 } index
+    const existing = await Player.findOne({
       name: { $regex: `^${escapeRegExp(trimmedName)}$`, $options: "i" },
     });
 
-    if (existingPlayer) {
+    if (existing) {
       return res.status(409).json({
         success: false,
         message: "Player with this name already exists",
@@ -155,6 +128,7 @@ const createPlayer = async (req, res) => {
       name: trimmedName,
       photoUrl: typeof photoUrl === "string" ? photoUrl.trim() : "",
     });
+
     res.status(201).json({ success: true, player });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

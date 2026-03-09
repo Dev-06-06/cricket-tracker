@@ -1,4 +1,4 @@
-const Player = require("../models/Player");
+const GroupPlayerStats = require("../models/GroupPlayerStats");
 
 const isValidBallType = (extraType) =>
   extraType === "none" || extraType === "bye" || extraType === "leg-bye";
@@ -8,60 +8,56 @@ function calculateOversFromBalls(totalBalls) {
   return Math.floor(balls / 6) + (balls % 6) / 10;
 }
 
-function hasBowlingContribution(bowlingStats) {
-  const balls = Number(bowlingStats?.balls) || 0;
-  const runs = Number(bowlingStats?.runs) || 0;
-  const wickets = Number(bowlingStats?.wickets) || 0;
-  return balls > 0 || runs > 0 || wickets > 0;
-}
-
+// Build a map of { playerName -> { balls, runs, wickets, wides, noBalls } }
+// from the match timeline (both innings combined via innings1 summary + current timeline)
 function buildBowlingByName(match) {
   const bowlingByName = {};
 
+  // Include first innings bowling rows if stored in innings1 summary
   const firstInningsBowlingRows =
-    match?.firstInningsSummary &&
-    Array.isArray(match.firstInningsSummary.bowlingRows)
-      ? match.firstInningsSummary.bowlingRows
+    match?.innings1?.bowlingRows && Array.isArray(match.innings1.bowlingRows)
+      ? match.innings1.bowlingRows
       : [];
 
   firstInningsBowlingRows.forEach((row) => {
     const bowler = row?.name;
     if (!bowler) return;
-
     if (!bowlingByName[bowler]) {
-      bowlingByName[bowler] = { balls: 0, runs: 0, wickets: 0 };
+      bowlingByName[bowler] = { balls: 0, runs: 0, wickets: 0, wides: 0, noBalls: 0 };
     }
-
-    bowlingByName[bowler].balls += Number(row.balls) || 0;
-    bowlingByName[bowler].runs += Number(row.runs) || 0;
+    bowlingByName[bowler].balls   += Number(row.balls)   || 0;
+    bowlingByName[bowler].runs    += Number(row.runs)    || 0;
     bowlingByName[bowler].wickets += Number(row.wickets) || 0;
   });
 
+  // Current innings timeline
   (match.timeline || []).forEach((delivery) => {
     const bowler = delivery.bowler;
     if (!bowler) return;
-
     if (!bowlingByName[bowler]) {
-      bowlingByName[bowler] = { balls: 0, runs: 0, wickets: 0 };
+      bowlingByName[bowler] = { balls: 0, runs: 0, wickets: 0, wides: 0, noBalls: 0 };
     }
 
     if (isValidBallType(delivery.extraType)) {
       bowlingByName[bowler].balls += 1;
     }
 
-    const extraType = delivery.extraType || "none";
+    const extraType  = delivery.extraType  || "none";
     const runsOffBat = Number(delivery.runsOffBat) || 0;
-    const extraRuns = Number(delivery.extraRuns) || 0;
-    const isByeLike = extraType === "bye" || extraType === "leg-bye";
+    const extraRuns  = Number(delivery.extraRuns)  || 0;
+    const isByeLike  = extraType === "bye" || extraType === "leg-bye";
 
     if (!isByeLike) {
       bowlingByName[bowler].runs += runsOffBat;
     }
-
-    if (extraType === "wide" || extraType === "no-ball") {
-      bowlingByName[bowler].runs += extraRuns;
+    if (extraType === "wide") {
+      bowlingByName[bowler].runs   += extraRuns;
+      bowlingByName[bowler].wides  += 1;
     }
-
+    if (extraType === "no-ball") {
+      bowlingByName[bowler].runs    += extraRuns;
+      bowlingByName[bowler].noBalls += 1;
+    }
     if (delivery.isWicket && delivery.wicketType !== "run-out") {
       bowlingByName[bowler].wickets += 1;
     }
@@ -71,87 +67,79 @@ function buildBowlingByName(match) {
 }
 
 /**
- * Updates career statistics for all players in a completed match.
- * @param {Object} match - Match object containing playerStats array
- * @param {{ session?: import('mongoose').ClientSession }} [options]
+ * Applies match stats to GroupPlayerStats (per-group career stats).
+ * Called once when a match completes (guarded by match.statsApplied flag).
+ *
+ * Uses bulkWrite for a single round-trip instead of one save per player.
  */
 async function updateCareerStats(match, options = {}) {
-  if (!match || !Array.isArray(match.playerStats)) {
-    return;
-  }
+  if (!match || !Array.isArray(match.playerStats)) return;
 
-  const { session } = options;
-
+  const groupId = match.groupId;
   const bowlingByName = buildBowlingByName(match);
+  const ops = [];
 
   for (const ps of match.playerStats) {
-    const player = await Player.findById(ps.playerId).session(session || null);
-    if (!player) continue;
+    if (!ps.playerId) continue;
 
-    const battingStats = ps.batting || {};
-    const bowlingStats = bowlingByName[ps.name] || {
-      balls: 0,
-      runs: 0,
-      wickets: 0,
-    };
+    const batting      = ps.batting  || {};
+    const bowlingStats = bowlingByName[ps.name] || { balls: 0, runs: 0, wickets: 0, wides: 0, noBalls: 0 };
+    const didBat  = Boolean(ps.didBat);
+    const didBowl = Boolean(ps.didBowl) || bowlingStats.balls > 0;
+    const battingRuns = Number(batting.runs) || 0;
 
-    const didBat = Boolean(ps.didBat);
-    const didBowl = Boolean(ps.didBowl);
+    const inc = {};
+    const max = {};
 
     if (didBat) {
-      player.batting.matches += 1;
-      player.batting.innings += 1;
-      player.batting.runs += Number(battingStats.runs) || 0;
-      player.batting.balls += Number(battingStats.balls) || 0;
-      player.batting.fours += Number(battingStats.fours) || 0;
-      player.batting.sixes += Number(battingStats.sixes) || 0;
+      inc["batting.matches"]  = 1;
+      inc["batting.innings"]  = 1;
+      inc["batting.runs"]     = battingRuns;
+      inc["batting.balls"]    = Number(batting.balls)  || 0;
+      inc["batting.fours"]    = Number(batting.fours)  || 0;
+      inc["batting.sixes"]    = Number(batting.sixes)  || 0;
 
-      if (!ps.isOut) {
-        player.batting.notOuts += 1;
-      }
+      if (!ps.isOut)          inc["batting.notOuts"]  = 1;
+      if (battingRuns >= 100) inc["batting.hundreds"] = 1;
+      else if (battingRuns >= 50) inc["batting.fifties"]  = 1;
+      else if (battingRuns >= 30) inc["batting.thirties"] = 1;
 
-      if ((Number(battingStats.runs) || 0) > player.batting.highestScore) {
-        player.batting.highestScore = Number(battingStats.runs) || 0;
-      }
-
-      if ((Number(battingStats.runs) || 0) >= 100) {
-        player.batting.hundreds += 1;
-      } else if ((Number(battingStats.runs) || 0) >= 50) {
-        player.batting.fifties += 1;
-      } else if ((Number(battingStats.runs) || 0) >= 30) {
-        player.batting.thirties += 1;
-      }
+      max["batting.highestScore"] = battingRuns;
     }
 
-    if (didBowl && hasBowlingContribution(bowlingStats)) {
-      player.bowling.matches += 1;
-      player.bowling.innings += 1;
-      player.bowling.balls += bowlingStats.balls;
-      player.bowling.runs += bowlingStats.runs;
-      player.bowling.wickets += bowlingStats.wickets;
-      player.bowling.overs = calculateOversFromBalls(player.bowling.balls);
+    if (didBowl && (bowlingStats.balls > 0 || bowlingStats.runs > 0 || bowlingStats.wickets > 0)) {
+      inc["bowling.matches"]  = 1;
+      inc["bowling.innings"]  = 1;
+      inc["bowling.balls"]    = bowlingStats.balls;
+      inc["bowling.runs"]     = bowlingStats.runs;
+      inc["bowling.wickets"]  = bowlingStats.wickets;
+      inc["bowling.wides"]    = bowlingStats.wides   || 0;
+      inc["bowling.noBalls"]  = bowlingStats.noBalls || 0;
 
-      const isBetter =
-        bowlingStats.wickets > player.bowling.bestFiguresWickets ||
-        (bowlingStats.wickets === player.bowling.bestFiguresWickets &&
-          bowlingStats.runs < player.bowling.bestFiguresRuns);
-
-      if (isBetter) {
-        player.bowling.bestFiguresWickets = bowlingStats.wickets;
-        player.bowling.bestFiguresRuns = bowlingStats.runs;
-      }
-
-      if (bowlingStats.wickets >= 5) {
-        player.bowling.fiveWickets += 1;
-      } else if (bowlingStats.wickets === 4) {
-        player.bowling.fourWickets += 1;
-      } else if (bowlingStats.wickets === 3) {
-        player.bowling.threeWickets += 1;
-      }
+      if (bowlingStats.wickets >= 5)      inc["bowling.fiveWickets"]  = 1;
+      else if (bowlingStats.wickets === 4) inc["bowling.fourWickets"]  = 1;
+      else if (bowlingStats.wickets === 3) inc["bowling.threeWickets"] = 1;
     }
 
-    await player.save(session ? { session } : undefined);
+    if (Object.keys(inc).length === 0 && Object.keys(max).length === 0) continue;
+
+    const update = {};
+    if (Object.keys(inc).length > 0) update.$inc = inc;
+    if (Object.keys(max).length > 0) update.$max = max;
+
+    ops.push({
+      updateOne: {
+        filter: { playerId: ps.playerId, groupId },
+        update,
+        upsert: true,
+      },
+    });
+  }
+
+  if (ops.length > 0) {
+    // ✅ Single round-trip to MongoDB for all player stat updates
+    await GroupPlayerStats.bulkWrite(ops, options.session ? { session: options.session } : {});
   }
 }
 
-module.exports = { updateCareerStats };
+module.exports = { updateCareerStats, isValidBallType, buildBowlingByName };

@@ -303,6 +303,40 @@ function MatchSummaryView({ match }) {
     { key: "top-performers", label: "Top Performers" },
   ];
 
+  function calcMOTMScore(player, allPlayers) {
+    const runs = Number(player?.batting?.runs ?? 0);
+    const balls = Number(player?.batting?.balls ?? 0);
+    const fours = Number(player?.batting?.fours ?? 0);
+    const sixes = Number(player?.batting?.sixes ?? 0);
+    const wickets = Number(player?.bowling?.wickets ?? 0);
+    const bowlBalls = Number(player?.bowling?.balls ?? 0);
+    const bowlRuns = Number(player?.bowling?.runs ?? 0);
+
+    const sr = balls > 0 ? (runs / balls) * 100 : 0;
+    const economy = bowlBalls > 0 ? bowlRuns / (bowlBalls / 6) : 99;
+
+    let score = 0;
+
+    // Batting points
+    score += runs * 1;
+    score += fours * 1;
+    score += sixes * 2;
+    if (runs >= 30) score += 10;
+    if (runs >= 50) score += 15;
+    if (runs >= 100) score += 25;
+    if (balls > 0 && sr >= 150) score += 10;
+    if (balls > 0 && sr >= 200) score += 10;
+
+    // Bowling points
+    score += wickets * 25;
+    if (wickets >= 3) score += 15;
+    if (wickets >= 5) score += 20;
+    if (bowlBalls >= 6 && economy <= 6) score += 10;
+    if (bowlBalls >= 6 && economy <= 4) score += 10;
+
+    return score;
+  }
+
   const getBatRuns = (row) => Number(row?.batting?.runs ?? row?.runs ?? 0);
   const getBatBalls = (row) => Number(row?.batting?.balls ?? row?.balls ?? 0);
   const getBatFours = (row) =>
@@ -536,59 +570,84 @@ function MatchSummaryView({ match }) {
     return "Match Complete";
   })();
 
-  const allPlayers = match?.playerStats || [];
-  const getPlayerRuns = (player) => Number(player?.batting?.runs ?? 0);
-  const getPlayerBallsFaced = (player) => Number(player?.batting?.balls ?? 0);
-  const getPlayerFours = (player) => Number(player?.batting?.fours ?? 0);
-  const getPlayerSixes = (player) => Number(player?.batting?.sixes ?? 0);
-  const getPlayerWickets = (player) => Number(player?.bowling?.wickets ?? 0);
-  const getPlayerBowlBalls = (player) => Number(player?.bowling?.balls ?? 0);
-  const getPlayerRunsConceded = (player) =>
-    Number(player?.bowling?.runsConceded ?? 0);
+  const allMatchPlayers = [
+    ...(firstInnings?.battingRows || []).map((r) => ({
+      name: r.name,
+      batting: { runs: r.runs, balls: r.balls, fours: r.fours, sixes: r.sixes },
+      bowling: { wickets: 0, balls: 0, runs: 0 },
+    })),
+    ...(match?.playerStats || []),
+  ].reduce((acc, p) => {
+    // merge by name — playerStats has bowling, battingRows has batting
+    const existing = acc.find((x) => x.name === p.name);
+    if (existing) {
+      // merge batting from battingRows into playerStats entry if better
+      if (!existing.batting?.balls && p.batting?.balls)
+        existing.batting = p.batting;
+      if (!existing.bowling?.balls && p.bowling?.balls)
+        existing.bowling = p.bowling;
+    } else {
+      acc.push({ ...p });
+    }
+    return acc;
+  }, []);
 
-  const getStrikeRateValue = (player) => {
-    const computed = Number(player?.computedStats?.batting?.strikeRate);
-    if (Number.isFinite(computed)) return computed;
-    const runs = getPlayerRuns(player);
-    const balls = getPlayerBallsFaced(player);
-    return balls > 0 ? (runs / balls) * 100 : null;
-  };
+  const motmPlayer = [...allMatchPlayers]
+    .map((p) => ({ ...p, motmScore: calcMOTMScore(p, allMatchPlayers) }))
+    .sort((a, b) => b.motmScore - a.motmScore)[0];
 
-  const getEconomyValue = (player) => {
-    const computed = Number(
-      player?.computedStats?.bowling?.economy ??
-        player?.computedStats?.bowling?.economyRate,
-    );
-    if (Number.isFinite(computed)) return computed;
-    const runs = getPlayerRunsConceded(player);
-    const balls = getPlayerBowlBalls(player);
-    return balls > 0 ? runs / (balls / 6) : null;
-  };
+  // Top scorer across both innings from playerStats (has batting for 2nd innings)
+  // + battingRows for 1st innings
+  const topBatter = [...allMatchPlayers]
+    .filter((p) => Number(p?.batting?.balls ?? 0) > 0)
+    .sort(
+      (a, b) => Number(b?.batting?.runs ?? 0) - Number(a?.batting?.runs ?? 0),
+    )[0];
 
-  const topRunScorer = [...allPlayers].sort(
-    (a, b) => getPlayerRuns(b) - getPlayerRuns(a),
+  // Top wicket taker — combine both innings
+  const bowlingMap = {};
+  (match?.playerStats || []).forEach((p) => {
+    if (!p?.bowling?.balls && !p?.bowling?.wickets) return;
+    bowlingMap[p.name] = {
+      name: p.name,
+      wickets: Number(p?.bowling?.wickets ?? 0),
+      balls: Number(p?.bowling?.balls ?? 0),
+      runs: Number(p?.bowling?.runs ?? 0),
+    };
+  });
+  (firstInnings?.bowlingRows || []).forEach((r) => {
+    const existing = bowlingMap[r.name];
+    const w = Number(r?.wickets ?? r?._wickets ?? r?.bowling?.wickets ?? 0);
+    const b = Number(r?.balls ?? r?._balls ?? r?.bowling?.balls ?? 0);
+    const ru = Number(r?.runs ?? r?._runs ?? r?.bowling?.runs ?? 0);
+    if (existing) {
+      existing.wickets += w;
+      existing.balls += b;
+      existing.runs += ru;
+    } else {
+      bowlingMap[r.name] = { name: r.name, wickets: w, balls: b, runs: ru };
+    }
+  });
+  const allBowlers = Object.values(bowlingMap);
+  const topBowler = [...allBowlers].sort(
+    (a, b) => b.wickets - a.wickets || a.runs - b.runs,
   )[0];
-  const topWicketTaker = [...allPlayers].sort(
-    (a, b) => getPlayerWickets(b) - getPlayerWickets(a),
-  )[0];
-  const bestEconomyPlayer = [...allPlayers]
-    .filter((player) => getPlayerBowlBalls(player) >= 12)
-    .sort((a, b) => {
-      const ae = getEconomyValue(a);
-      const be = getEconomyValue(b);
-      if (ae === null) return 1;
-      if (be === null) return -1;
-      return ae - be;
-    })[0];
-  const bestStrikeRatePlayer = [...allPlayers]
-    .filter((player) => getPlayerBallsFaced(player) >= 10)
-    .sort((a, b) => {
-      const asr = getStrikeRateValue(a);
-      const bsr = getStrikeRateValue(b);
-      if (asr === null) return 1;
-      if (bsr === null) return -1;
-      return bsr - asr;
-    })[0];
+
+  // Best economy — minimum 1 over (6 balls), lower threshold for short format
+  const bestEcon = [...allBowlers]
+    .filter((p) => p.balls >= 6)
+    .map((p) => ({ ...p, econ: p.balls > 0 ? p.runs / (p.balls / 6) : 99 }))
+    .sort((a, b) => a.econ - b.econ)[0];
+
+  // Best strike rate — minimum 4 balls faced (short format friendly)
+  const bestSR = [...allMatchPlayers]
+    .filter((p) => Number(p?.batting?.balls ?? 0) >= 4)
+    .map((p) => {
+      const r = Number(p?.batting?.runs ?? 0);
+      const b = Number(p?.batting?.balls ?? 0);
+      return { ...p, sr: b > 0 ? (r / b) * 100 : 0 };
+    })
+    .sort((a, b) => b.sr - a.sr)[0];
 
   return (
     <main
@@ -1091,91 +1150,146 @@ function MatchSummaryView({ match }) {
           )}
 
           {summaryTab === "top-performers" && (
-            <div className="grid grid-cols-2 gap-3">
-              <div className="h-full rounded-2xl border border-[#f97316]/20 bg-[#f97316]/5 p-4 flex flex-col justify-between">
-                <p className="text-[10px] font-black text-[#f97316]">
-                  TOP SCORER
-                </p>
-                <div className="mt-2 flex items-center gap-3">
-                  <PlayerAvatar
-                    name={topRunScorer?.name || "N/A"}
-                    photoUrl={
-                      topRunScorer?.photoUrl ||
-                      topRunScorer?.photoURL ||
-                      topRunScorer?.avatarUrl ||
-                      topRunScorer?.imageUrl
-                    }
-                    size="lg"
-                  />
-                  <p className="text-white font-bold truncate">
-                    {topRunScorer?.name || "N/A"}
+            <div className="space-y-4">
+              {/* ── Man of the Match ── */}
+              {motmPlayer && (
+                <div className="rounded-2xl border border-yellow-500/30 bg-gradient-to-br from-yellow-500/10 to-orange-500/5 p-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-yellow-400 mb-3">
+                    🏆 Man of the Match
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <div className="h-14 w-14 rounded-full bg-yellow-500/20 border-2 border-yellow-500/40 flex items-center justify-center text-xl font-black text-yellow-300">
+                      {(motmPlayer.name || "?").charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-lg font-black text-white truncate">
+                        {motmPlayer.name}
+                      </p>
+                      <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
+                        {Number(motmPlayer?.batting?.runs ?? 0) > 0 && (
+                          <span className="text-xs text-slate-400">
+                            🏏{" "}
+                            <span className="text-white font-bold">
+                              {motmPlayer.batting.runs}
+                            </span>{" "}
+                            ({motmPlayer.batting.balls}b)
+                            {motmPlayer.batting.fours > 0 &&
+                              ` · ${motmPlayer.batting.fours}×4`}
+                            {motmPlayer.batting.sixes > 0 &&
+                              ` · ${motmPlayer.batting.sixes}×6`}
+                          </span>
+                        )}
+                        {Number(
+                          motmPlayer?.bowling?.wickets ??
+                            bowlingMap[motmPlayer.name]?.wickets ??
+                            0,
+                        ) > 0 && (
+                          <span className="text-xs text-slate-400">
+                            🎯{" "}
+                            <span className="text-white font-bold">
+                              {bowlingMap[motmPlayer.name]?.wickets ??
+                                motmPlayer?.bowling?.wickets ??
+                                0}
+                            </span>{" "}
+                            wkts
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-[10px] text-slate-500 uppercase tracking-wide">
+                        Score
+                      </p>
+                      <p className="score-num text-2xl font-black text-yellow-400">
+                        {Math.round(motmPlayer.motmScore)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Stat cards grid ── */}
+              <div className="grid grid-cols-2 gap-3">
+                {/* Top scorer */}
+                <div className="rounded-2xl border border-orange-500/20 bg-orange-500/5 p-3 flex flex-col gap-1">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-orange-400">
+                    Top Scorer
+                  </p>
+                  <p className="text-sm font-bold text-white truncate">
+                    {topBatter?.name || "—"}
+                  </p>
+                  <p className="score-num text-3xl font-black text-orange-400">
+                    {Number(topBatter?.batting?.runs ?? 0)}
+                  </p>
+                  <p className="text-[10px] text-slate-500">
+                    {Number(topBatter?.batting?.balls ?? 0)}b
+                    {Number(topBatter?.batting?.balls ?? 0) > 0 &&
+                      ` · SR ${((Number(topBatter.batting.runs) / Number(topBatter.batting.balls)) * 100).toFixed(0)}`}
+                    {Number(topBatter?.batting?.fours ?? 0) > 0 &&
+                      ` · ${topBatter.batting.fours}×4`}
+                    {Number(topBatter?.batting?.sixes ?? 0) > 0 &&
+                      ` · ${topBatter.batting.sixes}×6`}
                   </p>
                 </div>
-                <p className="score-num mt-3 text-4xl text-[#f97316]">
-                  {topRunScorer ? getPlayerRuns(topRunScorer) : "N/A"}
-                </p>
-                <p className="mt-2 text-xs text-slate-500">
-                  {topRunScorer
-                    ? `${getPlayerBallsFaced(topRunScorer)}b • SR ${(getStrikeRateValue(topRunScorer) ?? 0).toFixed(1)} • 4s ${getPlayerFours(topRunScorer)} • 6s ${getPlayerSixes(topRunScorer)}`
-                    : "N/A"}
-                </p>
-              </div>
 
-              <div className="h-full rounded-2xl border border-sky-500/20 bg-sky-500/5 p-4 flex flex-col justify-between">
-                <p className="text-[10px] font-black text-sky-400">
-                  TOP WICKET TAKER
-                </p>
-                <p className="mt-2 text-white font-bold truncate">
-                  {topWicketTaker?.name || "N/A"}
-                </p>
-                <p className="score-num mt-3 text-4xl text-sky-400">
-                  {topWicketTaker
-                    ? `${getPlayerWickets(topWicketTaker)}/${getPlayerRunsConceded(topWicketTaker)}`
-                    : "N/A"}
-                </p>
-                <p className="mt-2 text-xs text-slate-500">
-                  {topWicketTaker
-                    ? `${calcOvers(getPlayerBowlBalls(topWicketTaker))} Ov • Eco ${(getEconomyValue(topWicketTaker) ?? 0).toFixed(2)}`
-                    : "N/A"}
-                </p>
-              </div>
+                {/* Top wicket taker */}
+                <div className="rounded-2xl border border-sky-500/20 bg-sky-500/5 p-3 flex flex-col gap-1">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-sky-400">
+                    Top Wickets
+                  </p>
+                  <p className="text-sm font-bold text-white truncate">
+                    {topBowler?.name || "—"}
+                  </p>
+                  <p className="score-num text-3xl font-black text-sky-400">
+                    {topBowler?.wickets ?? 0}
+                    <span className="text-base text-slate-500 font-normal">
+                      /{topBowler?.runs ?? 0}
+                    </span>
+                  </p>
+                  <p className="text-[10px] text-slate-500">
+                    {topBowler?.balls
+                      ? `${Math.floor(topBowler.balls / 6)}.${topBowler.balls % 6} ov`
+                      : "—"}
+                    {topBowler?.balls > 0 &&
+                      ` · Eco ${(topBowler.runs / (topBowler.balls / 6)).toFixed(1)}`}
+                  </p>
+                </div>
 
-              <div className="h-full rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4 flex flex-col justify-between">
-                <p className="text-[10px] font-black text-emerald-400">
-                  BEST ECONOMY
-                </p>
-                <p className="mt-2 text-white font-bold truncate">
-                  {bestEconomyPlayer?.name || "N/A"}
-                </p>
-                <p className="score-num mt-3 text-4xl text-emerald-400">
-                  {bestEconomyPlayer
-                    ? (getEconomyValue(bestEconomyPlayer) ?? 0).toFixed(2)
-                    : "N/A"}
-                </p>
-                <p className="mt-2 text-xs text-slate-500">
-                  {bestEconomyPlayer
-                    ? `${calcOvers(getPlayerBowlBalls(bestEconomyPlayer))} Ov • ${getPlayerWickets(bestEconomyPlayer)} wkts`
-                    : "N/A"}
-                </p>
-              </div>
+                {/* Best economy */}
+                <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-3 flex flex-col gap-1">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-emerald-400">
+                    Best Economy
+                  </p>
+                  <p className="text-sm font-bold text-white truncate">
+                    {bestEcon?.name || "—"}
+                  </p>
+                  <p className="score-num text-3xl font-black text-emerald-400">
+                    {bestEcon ? bestEcon.econ.toFixed(2) : "—"}
+                  </p>
+                  <p className="text-[10px] text-slate-500">
+                    {bestEcon
+                      ? `${Math.floor(bestEcon.balls / 6)}.${bestEcon.balls % 6} ov · ${bestEcon.wickets} wkts`
+                      : "min 1 over"}
+                  </p>
+                </div>
 
-              <div className="h-full rounded-2xl border border-purple-500/20 bg-purple-500/5 p-4 flex flex-col justify-between">
-                <p className="text-[10px] font-black text-purple-400">
-                  BEST STRIKE RATE
-                </p>
-                <p className="mt-2 text-white font-bold truncate">
-                  {bestStrikeRatePlayer?.name || "N/A"}
-                </p>
-                <p className="score-num mt-3 text-4xl text-purple-400">
-                  {bestStrikeRatePlayer
-                    ? (getStrikeRateValue(bestStrikeRatePlayer) ?? 0).toFixed(1)
-                    : "N/A"}
-                </p>
-                <p className="mt-2 text-xs text-slate-500">
-                  {bestStrikeRatePlayer
-                    ? `${getPlayerRuns(bestStrikeRatePlayer)} runs • ${getPlayerBallsFaced(bestStrikeRatePlayer)} balls`
-                    : "N/A"}
-                </p>
+                {/* Best strike rate */}
+                <div className="rounded-2xl border border-purple-500/20 bg-purple-500/5 p-3 flex flex-col gap-1">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-purple-400">
+                    Best Strike Rate
+                  </p>
+                  <p className="text-sm font-bold text-white truncate">
+                    {bestSR?.name || "—"}
+                  </p>
+                  <p className="score-num text-3xl font-black text-purple-400">
+                    {bestSR ? bestSR.sr.toFixed(0) : "—"}
+                  </p>
+                  <p className="text-[10px] text-slate-500">
+                    {bestSR
+                      ? `${bestSR.batting?.runs ?? 0} runs · ${bestSR.batting?.balls ?? 0} balls`
+                      : "min 4 balls"}
+                  </p>
+                </div>
               </div>
             </div>
           )}

@@ -1,23 +1,22 @@
 const mongoose = require("mongoose");
 const Group = require("../models/Group");
 const Player = require("../models/Player");
+const GroupPlayerStats = require("../models/GroupPlayerStats");
 const User = require("../models/User");
 
-const normalizeInviteCode = (inviteCode) =>
-  typeof inviteCode === "string" ? inviteCode.trim().toUpperCase() : "";
+const normalizeInviteCode = (code) =>
+  typeof code === "string" ? code.trim().toUpperCase() : "";
 
 const isMember = (group, userId) =>
-  group.members.some((member) => member.user.toString() === userId.toString());
+  group.members.some((m) => m.user.toString() === userId.toString());
 
-/**
- * Ensures a Player document exists for the given user and adds it
- * to the group's playerPool (idempotent - uses $addToSet).
- */
+// Ensures a Player doc exists for this user and adds it to the group pool.
+// Also creates a GroupPlayerStats doc for this player+group (upsert).
 async function ensureUserInPlayerPool(userId, groupId) {
   const user = await User.findById(userId).select("name photoUrl");
   if (!user) return;
 
-  // Find existing player linked to this user, or create a new one
+  // Find or create the Player document linked to this user
   let player = await Player.findOne({ userId });
   if (!player) {
     player = await Player.create({
@@ -31,17 +30,23 @@ async function ensureUserInPlayerPool(userId, groupId) {
   await Group.findByIdAndUpdate(groupId, {
     $addToSet: { playerPool: player._id },
   });
+
+  // Ensure a GroupPlayerStats record exists (upsert — zero stats on creation)
+  await GroupPlayerStats.updateOne(
+    { playerId: player._id, groupId },
+    { $setOnInsert: { playerId: player._id, groupId } },
+    { upsert: true },
+  );
 }
 
+// ─── createGroup ─────────────────────────────────────────────────────────────
 const createGroup = async (req, res) => {
   try {
     const { name, description } = req.body;
     const currentUserId = req.user._id;
 
     if (!name?.trim()) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Group name is required" });
+      return res.status(400).json({ success: false, message: "Group name is required" });
     }
 
     const group = await Group.create({
@@ -52,11 +57,7 @@ const createGroup = async (req, res) => {
       playerPool: [],
     });
 
-    await User.findByIdAndUpdate(currentUserId, {
-      $addToSet: { groups: group._id },
-    });
-
-    // Auto-add group creator to the player pool
+    // ✅ No longer writes to User.groups — single source of truth is Group.members
     await ensureUserInPlayerPool(currentUserId, group._id);
 
     return res.status(201).json({ success: true, group });
@@ -65,8 +66,10 @@ const createGroup = async (req, res) => {
   }
 };
 
+// ─── getMyGroups ──────────────────────────────────────────────────────────────
 const getMyGroups = async (req, res) => {
   try {
+    // ✅ Hits the { "members.user": 1 } index directly
     const groups = await Group.find({ "members.user": req.user._id })
       .populate("createdBy", "name email photoUrl")
       .populate("members.user", "name email photoUrl")
@@ -78,22 +81,20 @@ const getMyGroups = async (req, res) => {
   }
 };
 
+// ─── joinGroup ────────────────────────────────────────────────────────────────
 const joinGroup = async (req, res) => {
   try {
     const { inviteCode } = req.body;
     const normalizedCode = normalizeInviteCode(inviteCode);
 
     if (!normalizedCode) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Invite code is required" });
+      return res.status(400).json({ success: false, message: "Invite code is required" });
     }
 
+    // ✅ Hits the unique index on inviteCode
     const group = await Group.findOne({ inviteCode: normalizedCode });
     if (!group) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Group not found" });
+      return res.status(404).json({ success: false, message: "Group not found" });
     }
 
     if (isMember(group, req.user._id)) {
@@ -107,11 +108,7 @@ const joinGroup = async (req, res) => {
     group.members.push({ user: req.user._id, role: "member" });
     await group.save();
 
-    await User.findByIdAndUpdate(req.user._id, {
-      $addToSet: { groups: group._id },
-    });
-
-    // Auto-add joining user to the group's player pool
+    // ✅ No longer writes to User.groups
     await ensureUserInPlayerPool(req.user._id, group._id);
 
     return res.status(200).json({ success: true, group });
@@ -120,67 +117,52 @@ const joinGroup = async (req, res) => {
   }
 };
 
+// ─── leaveGroup ───────────────────────────────────────────────────────────────
 const leaveGroup = async (req, res) => {
   try {
     const { groupId } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(groupId)) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid group id" });
+      return res.status(400).json({ success: false, message: "Invalid group id" });
     }
 
     const group = await Group.findById(groupId);
     if (!group) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Group not found" });
+      return res.status(404).json({ success: false, message: "Group not found" });
     }
 
     if (!isMember(group, req.user._id)) {
-      return res.status(403).json({
-        success: false,
-        message: "You are not a member of this group",
-      });
+      return res.status(403).json({ success: false, message: "You are not a member of this group" });
     }
 
     group.members = group.members.filter(
-      (member) => member.user.toString() !== req.user._id.toString(),
+      (m) => m.user.toString() !== req.user._id.toString(),
     );
     await group.save();
 
-    await User.findByIdAndUpdate(req.user._id, {
-      $pull: { groups: group._id },
-    });
-
+    // ✅ No longer needs to update User.groups — one write instead of two
     return res.status(200).json({ success: true, group });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
 
+// ─── getGroupPlayers ──────────────────────────────────────────────────────────
 const getGroupPlayers = async (req, res) => {
   try {
     const { groupId } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(groupId)) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid group id" });
+      return res.status(400).json({ success: false, message: "Invalid group id" });
     }
 
     const group = await Group.findById(groupId).populate("playerPool");
     if (!group) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Group not found" });
+      return res.status(404).json({ success: false, message: "Group not found" });
     }
 
     if (!isMember(group, req.user._id)) {
-      return res.status(403).json({
-        success: false,
-        message: "You are not a member of this group",
-      });
+      return res.status(403).json({ success: false, message: "You are not a member of this group" });
     }
 
     return res.status(200).json({ success: true, players: group.playerPool });
@@ -189,110 +171,84 @@ const getGroupPlayers = async (req, res) => {
   }
 };
 
+// ─── addGroupPlayer ───────────────────────────────────────────────────────────
 const addGroupPlayer = async (req, res) => {
   try {
     const { groupId } = req.params;
     const { playerId } = req.body;
 
     if (!mongoose.Types.ObjectId.isValid(groupId)) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid group id" });
+      return res.status(400).json({ success: false, message: "Invalid group id" });
     }
 
     if (!mongoose.Types.ObjectId.isValid(playerId)) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid player id" });
+      return res.status(400).json({ success: false, message: "Invalid player id" });
     }
 
-    const [group, player] = await Promise.all([
-      Group.findById(groupId),
-      Player.findById(playerId),
-    ]);
-
+    const group = await Group.findById(groupId);
     if (!group) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Group not found" });
+      return res.status(404).json({ success: false, message: "Group not found" });
     }
 
     if (!isMember(group, req.user._id)) {
-      return res.status(403).json({
-        success: false,
-        message: "You are not a member of this group",
-      });
+      return res.status(403).json({ success: false, message: "You are not a member of this group" });
     }
 
+    const player = await Player.findById(playerId);
     if (!player) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Player not found" });
+      return res.status(404).json({ success: false, message: "Player not found" });
     }
 
-    const alreadyInPool = group.playerPool.some(
-      (existingPlayerId) => existingPlayerId.toString() === playerId,
-    );
-
-    if (alreadyInPool) {
-      return res.status(200).json({
-        success: true,
-        message: "Player already in group player pool",
-      });
+    if (group.playerPool.some((id) => id.toString() === playerId)) {
+      return res.status(400).json({ success: false, message: "Player already in pool" });
     }
 
     group.playerPool.push(player._id);
     await group.save();
 
-    const updatedGroup = await Group.findById(groupId).populate("playerPool");
+    // ✅ Create GroupPlayerStats record for this player in this group
+    await GroupPlayerStats.updateOne(
+      { playerId: player._id, groupId },
+      { $setOnInsert: { playerId: player._id, groupId } },
+      { upsert: true },
+    );
 
-    return res
-      .status(200)
-      .json({ success: true, players: updatedGroup.playerPool });
+    const updatedGroup = await Group.findById(groupId).populate("playerPool");
+    return res.status(200).json({ success: true, players: updatedGroup.playerPool });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
 
+// ─── removeGroupPlayer ────────────────────────────────────────────────────────
 const removeGroupPlayer = async (req, res) => {
   try {
     const { groupId, playerId } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(groupId)) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid group id" });
+      return res.status(400).json({ success: false, message: "Invalid group id" });
     }
 
     if (!mongoose.Types.ObjectId.isValid(playerId)) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid player id" });
+      return res.status(400).json({ success: false, message: "Invalid player id" });
     }
 
     const group = await Group.findById(groupId);
     if (!group) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Group not found" });
+      return res.status(404).json({ success: false, message: "Group not found" });
     }
 
     if (!isMember(group, req.user._id)) {
-      return res.status(403).json({
-        success: false,
-        message: "You are not a member of this group",
-      });
+      return res.status(403).json({ success: false, message: "You are not a member of this group" });
     }
 
     group.playerPool = group.playerPool.filter(
-      (existingId) => existingId.toString() !== playerId,
+      (id) => id.toString() !== playerId,
     );
     await group.save();
 
     const updatedGroup = await Group.findById(groupId).populate("playerPool");
-    return res
-      .status(200)
-      .json({ success: true, players: updatedGroup.playerPool });
+    return res.status(200).json({ success: true, players: updatedGroup.playerPool });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }

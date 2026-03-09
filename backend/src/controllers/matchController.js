@@ -3,384 +3,296 @@ const Player = require("../models/Player");
 const Group = require("../models/Group");
 const mongoose = require("mongoose");
 
+// ─── Auth helper ──────────────────────────────────────────────────────────────
 const ensureUserIsGroupMember = async (groupId, userId) => {
   const group = await Group.findOne({
     _id: groupId,
     "members.user": userId,
-  }).select("_id");
-
+  }).select("_id").lean();
   return Boolean(group);
 };
 
-function buildCompletedResultMessage(match) {
-  if (!match || match.status !== "completed") {
-    return "";
-  }
-
-  if (typeof match.firstInningsScore !== "number") {
-    return "";
-  }
-
-  const firstInningsScore = Number(match.firstInningsScore) || 0;
-  const chasingScore = Number(match.totalRuns) || 0;
-  const wicketsLost = Number(match.wickets) || 0;
-
-  if (chasingScore === firstInningsScore) {
-    return "Match Tied";
-  }
-
-  if (chasingScore > firstInningsScore) {
-    const battingCountFromStats = (match.playerStats || []).filter(
-      (player) => player.team === match.battingTeam,
-    ).length;
-    const battingCountFromTeams =
-      match.battingTeam === match.team1Name
-        ? (match.team1Players || []).length
-        : match.battingTeam === match.team2Name
-          ? (match.team2Players || []).length
-          : 0;
-    const battingPlayersCount =
-      battingCountFromStats || battingCountFromTeams || 11;
-    const wicketsRemaining = Math.max(0, battingPlayersCount - 1 - wicketsLost);
-    return `${match.battingTeam} won by ${wicketsRemaining} wicket${wicketsRemaining === 1 ? "" : "s"}`;
-  }
-
-  const runsMargin = firstInningsScore - chasingScore;
-  return `${match.bowlingTeam} won by ${runsMargin} run${runsMargin === 1 ? "" : "s"}`;
+// ─── Result message builder ───────────────────────────────────────────────────
+function buildResultMessage(match) {
+  if (match.status !== "completed") return "";
+  return match.result?.message || "";
 }
 
+// ─── Map match to API response shape ─────────────────────────────────────────
+// ✅ No .populate() needed — team1.players / team2.players are embedded snapshots
 function mapMatchSummary(match) {
+  const m = match.toObject ? match.toObject() : match;
   return {
-    _id: match._id,
-    groupId: match.groupId,
-    team1Name: match.team1Name,
-    team2Name: match.team2Name,
-    totalOvers: match.totalOvers,
-    status: match.status,
-    inningsNumber: match.inningsNumber,
-    totalRuns: match.totalRuns,
-    wickets: match.wickets,
-    oversBowled: match.oversBowled,
-    ballsBowled: match.ballsBowled,
-    firstInningsScore: match.firstInningsScore,
-    targetScore: match.targetScore,
-    battingTeam: match.battingTeam,
-    bowlingTeam: match.bowlingTeam,
-    currentStriker: match.currentStriker || null,
-    currentNonStriker: match.currentNonStriker || null,
-    currentBowler: match.currentBowler || null,
-    playerStats: (match.playerStats || []).map((player) => ({
-      name: player.name,
+    _id: m._id,
+    groupId: m.groupId,
+
+    // Flat team fields for frontend compatibility
+    team1Name: m.team1.name,
+    team2Name: m.team2.name,
+    team1Players: m.team1.players,   // [{ playerId, name, photoUrl }]
+    team2Players: m.team2.players,
+
+    totalOvers: m.totalOvers,
+    status: m.status,
+
+    // Toss
+    tossWinner: m.toss?.winner || "",
+    tossChoice: m.toss?.choice || "",
+
+    // Live state (flattened for frontend)
+    inningsNumber: m.current.inningsNumber,
+    battingTeam:   m.current.battingTeam === "team1" ? m.team1.name : m.team2.name,
+    bowlingTeam:   m.current.battingTeam === "team1" ? m.team2.name : m.team1.name,
+    totalRuns:     m.current.runs,
+    wickets:       m.current.wickets,
+    oversBowled:   m.current.oversBowled,
+    ballsBowled:   m.current.ballsBowled,
+    currentStriker:    m.current.striker?.name    || null,
+    currentNonStriker: m.current.nonStriker?.name || null,
+    currentBowler:     m.current.bowler?.name     || null,
+    nextBatterFor:     m.current.nextBatterFor    || null,
+
+    // Innings 1 summary
+    firstInningsScore: m.innings1?.score  ?? null,
+    targetScore:       m.innings1?.target ?? null,
+
+    // Player stats
+    playerStats: (m.playerStats || []).map((p) => ({
+      playerId: p.playerId,
+      name: p.name,
+      team: p.team === "team1" ? m.team1.name : m.team2.name,
+      didBat:  p.didBat,
+      didBowl: p.didBowl,
+      isOut:   p.isOut,
       batting: {
-        runs: Number(player?.batting?.runs || 0),
-        balls: Number(player?.batting?.balls || 0),
+        runs:  p.batting?.runs  || 0,
+        balls: p.batting?.balls || 0,
+        fours: p.batting?.fours || 0,
+        sixes: p.batting?.sixes || 0,
+        dismissalType: p.batting?.dismissalType || "",
       },
       bowling: {
-        wickets: Number(player?.bowling?.wickets || 0),
-        runs: Number(player?.bowling?.runs || 0),
-        balls: Number(player?.bowling?.balls || 0),
+        overs:   p.bowling?.overs   || 0,
+        balls:   p.bowling?.balls   || 0,
+        runs:    p.bowling?.runs    || 0,
+        wickets: p.bowling?.wickets || 0,
+        wides:   p.bowling?.wides   || 0,
+        noBalls: p.bowling?.noBalls || 0,
       },
     })),
-    resultMessage: buildCompletedResultMessage(match),
-    createdAt: match.createdAt,
-    updatedAt: match.updatedAt,
-    team1Players: (match.team1Players || []).map((player) => ({
-      _id: player._id,
-      name: player.name,
-      photoUrl: player.photoUrl || "",
-    })),
-    team2Players: (match.team2Players || []).map((player) => ({
-      _id: player._id,
-      name: player.name,
-      photoUrl: player.photoUrl || "",
-    })),
+
+    resultMessage: buildResultMessage(m),
+    createdAt: m.createdAt,
+    updatedAt: m.updatedAt,
   };
 }
 
-const createMatch = async (req, res) => {
-  try {
-    const {
-      groupId,
-      battingTeam,
-      bowlingTeam,
-      currentStriker,
-      currentNonStriker,
-      currentBowler,
-    } = req.body;
-
-    if (!groupId || !mongoose.Types.ObjectId.isValid(groupId)) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Valid groupId is required" });
-    }
-
-    const canAccessGroup = await ensureUserIsGroupMember(groupId, req.user._id);
-    if (!canAccessGroup) {
-      return res.status(403).json({
-        success: false,
-        message: "You are not a member of this group",
-      });
-    }
-
-    const match = new Match({
-      groupId,
-      battingTeam,
-      bowlingTeam,
-      currentStriker,
-      currentNonStriker,
-      currentBowler,
-    });
-
-    const savedMatch = await match.save();
-    res.status(201).json({ success: true, match: savedMatch });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
+// ─── createUpcomingMatch ──────────────────────────────────────────────────────
 const createUpcomingMatch = async (req, res) => {
   try {
-    const {
-      groupId,
-      team1Name,
-      team2Name,
-      team1PlayerIds,
-      team2PlayerIds,
-      totalOvers,
-    } = req.body;
+    const { groupId, team1Name, team2Name, team1PlayerIds, team2PlayerIds, totalOvers } = req.body;
 
     if (!groupId || !mongoose.Types.ObjectId.isValid(groupId)) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Valid groupId is required" });
-    }
-
-    const canAccessGroup = await ensureUserIsGroupMember(groupId, req.user._id);
-    if (!canAccessGroup) {
-      return res.status(403).json({
-        success: false,
-        message: "You are not a member of this group",
-      });
+      return res.status(400).json({ success: false, message: "Valid groupId is required" });
     }
 
     if (!team1Name?.trim() || !team2Name?.trim()) {
-      return res.status(400).json({
-        success: false,
-        message: "Both team names are required",
-      });
+      return res.status(400).json({ success: false, message: "Both team names are required" });
     }
 
-    const t1Players = await Player.find({
-      _id: { $in: team1PlayerIds || [] },
-    }).select("name photoUrl");
-    const t2Players = await Player.find({
-      _id: { $in: team2PlayerIds || [] },
-    }).select("name photoUrl");
+    const canAccess = await ensureUserIsGroupMember(groupId, req.user._id);
+    if (!canAccess) {
+      return res.status(403).json({ success: false, message: "You are not a member of this group" });
+    }
 
-    const playerStats = [];
-    t1Players.forEach((player) => {
-      playerStats.push({
-        playerId: player._id,
-        name: player.name,
-        team: team1Name.trim(),
-        didBat: false,
-        didBowl: false,
-      });
-    });
-    t2Players.forEach((player) => {
-      playerStats.push({
-        playerId: player._id,
-        name: player.name,
-        team: team2Name.trim(),
-        didBat: false,
-        didBowl: false,
-      });
-    });
+    // ✅ Fetch player snapshots (name + photoUrl) once at creation time
+    // After this, no populate is ever needed on match reads
+    const [t1Players, t2Players] = await Promise.all([
+      Player.find({ _id: { $in: team1PlayerIds || [] } }).select("name photoUrl").lean(),
+      Player.find({ _id: { $in: team2PlayerIds || [] } }).select("name photoUrl").lean(),
+    ]);
+
+    const toSnapshot = (p) => ({ playerId: p._id, name: p.name, photoUrl: p.photoUrl || "" });
+
+    const playerStats = [
+      ...t1Players.map((p) => ({ playerId: p._id, name: p.name, team: "team1" })),
+      ...t2Players.map((p) => ({ playerId: p._id, name: p.name, team: "team2" })),
+    ];
+
     const match = await Match.create({
       groupId,
-      team1Name: team1Name.trim(),
-      team2Name: team2Name.trim(),
-      team1Players: team1PlayerIds || [],
-      team2Players: team2PlayerIds || [],
-      totalOvers: Number(totalOvers) || 5,
-      battingTeam: team1Name.trim(),
-      bowlingTeam: team2Name.trim(),
-      inningsNumber: 1,
+      team1: { name: team1Name.trim(), players: t1Players.map(toSnapshot) },
+      team2: { name: team2Name.trim(), players: t2Players.map(toSnapshot) },
+      totalOvers: totalOvers || 5,
       status: "upcoming",
+      current: { battingTeam: "team1", inningsNumber: 1 },
       playerStats,
     });
 
-    const populatedMatch = await Match.findById(match._id)
-      .populate("team1Players", "name photoUrl")
-      .populate("team2Players", "name photoUrl");
-
-    res
-      .status(201)
-      .json({ success: true, match: mapMatchSummary(populatedMatch) });
+    return res.status(201).json({ success: true, match: mapMatchSummary(match) });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    return res.status(500).json({ success: false, message: error.message });
   }
 };
 
-const getMatch = async (req, res) => {
+// ─── createMatch (live start) ─────────────────────────────────────────────────
+const createMatch = async (req, res) => {
   try {
-    const { id } = req.params;
-    const match = await Match.findById(id)
-      .populate("team1Players", "name photoUrl")
-      .populate("team2Players", "name photoUrl");
+    const { groupId, team1Name, team2Name, team1PlayerIds, team2PlayerIds, totalOvers } = req.body;
 
-    if (!match) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Match not found" });
+    if (!groupId || !mongoose.Types.ObjectId.isValid(groupId)) {
+      return res.status(400).json({ success: false, message: "Valid groupId is required" });
     }
 
-    res.status(200).json({ success: true, match });
+    const canAccess = await ensureUserIsGroupMember(groupId, req.user._id);
+    if (!canAccess) {
+      return res.status(403).json({ success: false, message: "You are not a member of this group" });
+    }
+
+    const [t1Players, t2Players] = await Promise.all([
+      Player.find({ _id: { $in: team1PlayerIds || [] } }).select("name photoUrl").lean(),
+      Player.find({ _id: { $in: team2PlayerIds || [] } }).select("name photoUrl").lean(),
+    ]);
+
+    const toSnapshot = (p) => ({ playerId: p._id, name: p.name, photoUrl: p.photoUrl || "" });
+
+    const playerStats = [
+      ...t1Players.map((p) => ({ playerId: p._id, name: p.name, team: "team1" })),
+      ...t2Players.map((p) => ({ playerId: p._id, name: p.name, team: "team2" })),
+    ];
+
+    const match = await Match.create({
+      groupId,
+      team1: { name: team1Name?.trim() || "Team 1", players: t1Players.map(toSnapshot) },
+      team2: { name: team2Name?.trim() || "Team 2", players: t2Players.map(toSnapshot) },
+      totalOvers: totalOvers || 5,
+      status: "toss",
+      current: { battingTeam: "team1", inningsNumber: 1 },
+      playerStats,
+    });
+
+    return res.status(201).json({ success: true, match: mapMatchSummary(match) });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ─── getMatch ─────────────────────────────────────────────────────────────────
+const getMatch = async (req, res) => {
+  try {
+    // ✅ No .populate() — player data is embedded in team1.players / team2.players
+    const match = await Match.findById(req.params.id).lean();
+    if (!match) {
+      return res.status(404).json({ success: false, message: "Match not found" });
+    }
+    res.status(200).json({ success: true, match: mapMatchSummary(match) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
+// ─── listUpcomingMatches ──────────────────────────────────────────────────────
 const listUpcomingMatches = async (req, res) => {
   try {
     const filter = { status: "upcoming" };
     const { groupId } = req.query;
 
-    if (groupId !== undefined) {
+    if (groupId) {
       if (!mongoose.Types.ObjectId.isValid(groupId)) {
-        return res
-          .status(400)
-          .json({ success: false, message: "Invalid groupId query parameter" });
+        return res.status(400).json({ success: false, message: "Invalid groupId" });
       }
-
       const isMember = await ensureUserIsGroupMember(groupId, req.user._id);
       if (!isMember) {
-        return res.status(403).json({
-          success: false,
-          message: "You are not a member of this group",
-        });
+        return res.status(403).json({ success: false, message: "You are not a member of this group" });
       }
-
       filter.groupId = groupId;
     }
 
-    const matches = await Match.find(filter)
-      .populate("team1Players", "name photoUrl")
-      .populate("team2Players", "name photoUrl")
-      .sort({ createdAt: -1 });
-
-    res.status(200).json({
-      success: true,
-      matches: matches.map(mapMatchSummary),
-    });
+    // ✅ Hits { groupId, status } compound index. No populate.
+    const matches = await Match.find(filter).sort({ createdAt: -1 }).lean();
+    res.status(200).json({ success: true, matches: matches.map(mapMatchSummary) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
+// ─── listLiveMatches ──────────────────────────────────────────────────────────
 const listLiveMatches = async (req, res) => {
   try {
-    const filter = {
-      status: { $in: ["toss", "innings", "live", "innings_complete"] },
-    };
+    const filter = { status: { $in: ["toss", "innings", "live", "innings_complete"] } };
     const { groupId } = req.query;
 
-    if (groupId !== undefined) {
+    if (groupId) {
       if (!mongoose.Types.ObjectId.isValid(groupId)) {
-        return res
-          .status(400)
-          .json({ success: false, message: "Invalid groupId query parameter" });
+        return res.status(400).json({ success: false, message: "Invalid groupId" });
       }
-
       const isMember = await ensureUserIsGroupMember(groupId, req.user._id);
       if (!isMember) {
-        return res.status(403).json({
-          success: false,
-          message: "You are not a member of this group",
-        });
+        return res.status(403).json({ success: false, message: "You are not a member of this group" });
       }
-
       filter.groupId = groupId;
     }
 
-    const matches = await Match.find(filter)
-      .populate("team1Players", "name photoUrl")
-      .populate("team2Players", "name photoUrl")
-      .sort({ updatedAt: -1 });
-
-    res.status(200).json({
-      success: true,
-      matches: matches.map(mapMatchSummary),
-    });
+    const matches = await Match.find(filter).sort({ updatedAt: -1 }).lean();
+    res.status(200).json({ success: true, matches: matches.map(mapMatchSummary) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
+// ─── listCompletedMatches ─────────────────────────────────────────────────────
 const listCompletedMatches = async (req, res) => {
   try {
     const filter = { status: "completed" };
     const { groupId } = req.query;
 
-    if (groupId !== undefined) {
+    if (groupId) {
       if (!mongoose.Types.ObjectId.isValid(groupId)) {
-        return res
-          .status(400)
-          .json({ success: false, message: "Invalid groupId query parameter" });
+        return res.status(400).json({ success: false, message: "Invalid groupId" });
       }
-
       const isMember = await ensureUserIsGroupMember(groupId, req.user._id);
       if (!isMember) {
-        return res.status(403).json({
-          success: false,
-          message: "You are not a member of this group",
-        });
+        return res.status(403).json({ success: false, message: "You are not a member of this group" });
       }
-
       filter.groupId = groupId;
     }
 
-    const matches = await Match.find(filter)
-      .populate("team1Players", "name photoUrl")
-      .populate("team2Players", "name photoUrl")
-      .sort({ updatedAt: -1 });
-
-    res.status(200).json({
-      success: true,
-      matches: matches.map(mapMatchSummary),
-    });
+    const matches = await Match.find(filter).sort({ updatedAt: -1 }).lean();
+    res.status(200).json({ success: true, matches: matches.map(mapMatchSummary) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
+// ─── getOngoingMatch ──────────────────────────────────────────────────────────
+const getOngoingMatch = async (_req, res) => {
+  try {
+    // ✅ Hits { status, updatedAt } index
+    const match = await Match.findOne({
+      status: { $in: ["toss", "innings", "live", "innings_complete"] },
+    }).sort({ updatedAt: -1 }).lean();
+
+    res.status(200).json({ success: true, match: match ? mapMatchSummary(match) : null });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ─── startMatch ───────────────────────────────────────────────────────────────
 const startMatch = async (req, res) => {
   try {
-    const { id } = req.params;
-    const match = await Match.findById(id);
-
+    const match = await Match.findById(req.params.id);
     if (!match) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Match not found" });
+      return res.status(404).json({ success: false, message: "Match not found" });
     }
 
-    const canAccessGroup = await ensureUserIsGroupMember(
-      match.groupId,
-      req.user._id,
-    );
-    if (!canAccessGroup) {
-      return res.status(403).json({
-        success: false,
-        message: "You are not a member of this group",
-      });
+    const canAccess = await ensureUserIsGroupMember(match.groupId, req.user._id);
+    if (!canAccess) {
+      return res.status(403).json({ success: false, message: "You are not a member of this group" });
     }
 
     if (match.status === "completed") {
-      return res.status(400).json({
-        success: false,
-        message: "Cannot start a completed match",
-      });
+      return res.status(400).json({ success: false, message: "Cannot start a completed match" });
     }
 
     if (match.status === "upcoming") {
@@ -388,60 +300,26 @@ const startMatch = async (req, res) => {
       await match.save();
     }
 
-    res.status(200).json({
-      success: true,
-      match: {
-        _id: match._id,
-        status: match.status,
-      },
-    });
+    res.status(200).json({ success: true, match: { _id: match._id, status: match.status } });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
-const getOngoingMatch = async (_req, res) => {
-  try {
-    const match = await Match.findOne({
-      status: { $in: ["toss", "innings", "live", "innings_complete"] },
-    }).sort({
-      updatedAt: -1,
-    });
-
-    if (!match) {
-      return res.status(200).json({ success: true, match: null });
-    }
-
-    res.status(200).json({ success: true, match });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
+// ─── deleteMatch ──────────────────────────────────────────────────────────────
 const deleteMatch = async (req, res) => {
   try {
-    const { id } = req.params;
-    const match = await Match.findById(id);
-
+    const match = await Match.findById(req.params.id).lean();
     if (!match) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Match not found" });
+      return res.status(404).json({ success: false, message: "Match not found" });
     }
 
-    const canAccessGroup = await ensureUserIsGroupMember(
-      match.groupId,
-      req.user._id,
-    );
-    if (!canAccessGroup) {
-      return res.status(403).json({
-        success: false,
-        message: "You are not a member of this group",
-      });
+    const canAccess = await ensureUserIsGroupMember(match.groupId, req.user._id);
+    if (!canAccess) {
+      return res.status(403).json({ success: false, message: "You are not a member of this group" });
     }
 
-    await Match.findByIdAndDelete(id);
-
+    await Match.findByIdAndDelete(req.params.id);
     res.status(200).json({ success: true });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

@@ -133,6 +133,11 @@ const matchSchema = new mongoose.Schema(
       wickets:     { type: Number, default: null },
       overs:       { type: Number, default: null },
       target:      { type: Number, default: null }, // score + 1
+      // ✅ Store full batting/bowling rows so statsUpdater can read
+      // first innings bowling figures at match completion time.
+      // Mixed type allows flexible row shapes without strict sub-schemas.
+      battingRows: { type: mongoose.Schema.Types.Mixed, default: [] },
+      bowlingRows: { type: mongoose.Schema.Types.Mixed, default: [] },
     },
 
     // ── Match result (populated on completion) ────────────────────────────
@@ -175,6 +180,7 @@ const matchSchema = new mongoose.Schema(
         wicketType:    { type: String, enum: ["none", "bowled", "caught", "lbw", "run-out", "stumped", "hit-wicket"], default: "none" },
         batterDismissed: { type: String, default: "" },
         striker:       { type: String, default: "" },
+        nonStriker:    { type: String, default: "" }, // ✅ needed for undo strike-rotation replay
         bowler:        { type: String, default: "" },
       },
     ],
