@@ -5,12 +5,9 @@ const INVITE_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 const generateInviteCode = () => {
   let code = "";
-
-  for (let i = 0; i < INVITE_CODE_LENGTH; i += 1) {
-    const idx = Math.floor(Math.random() * INVITE_CODE_CHARS.length);
-    code += INVITE_CODE_CHARS[idx];
+  for (let i = 0; i < INVITE_CODE_LENGTH; i++) {
+    code += INVITE_CODE_CHARS[Math.floor(Math.random() * INVITE_CODE_CHARS.length)];
   }
-
   return code;
 };
 
@@ -28,7 +25,7 @@ const groupSchema = new mongoose.Schema(
     },
     inviteCode: {
       type: String,
-      unique: true,
+      unique: true,       // ← index automatically created
       uppercase: true,
       minlength: INVITE_CODE_LENGTH,
       maxlength: INVITE_CODE_LENGTH,
@@ -52,25 +49,30 @@ const groupSchema = new mongoose.Schema(
         },
       },
     ],
+    // playerPool stores ObjectId refs to Player documents.
+    // Used to quickly find which players belong to this group.
     playerPool: [{ type: mongoose.Schema.Types.ObjectId, ref: "Player" }],
   },
   { timestamps: true },
 );
 
-groupSchema.pre("validate", async function ensureInviteCode(next) {
-  if (this.inviteCode) {
-    return next();
+// ─── Indexes ────────────────────────────────────────────────────────────────
+// Fast "get my groups" query: Group.find({ "members.user": userId })
+groupSchema.index({ "members.user": 1 });
+
+// inviteCode already indexed via unique:true above.
+
+// ─── Auto-generate invite code ──────────────────────────────────────────────
+groupSchema.pre("validate", async function (next) {
+  if (this.inviteCode) return next();
+
+  let code = generateInviteCode();
+  let exists = await this.constructor.exists({ inviteCode: code });
+  while (exists) {
+    code = generateInviteCode();
+    exists = await this.constructor.exists({ inviteCode: code });
   }
-
-  let nextCode = generateInviteCode();
-  let codeExists = await this.constructor.exists({ inviteCode: nextCode });
-
-  while (codeExists) {
-    nextCode = generateInviteCode();
-    codeExists = await this.constructor.exists({ inviteCode: nextCode });
-  }
-
-  this.inviteCode = nextCode;
+  this.inviteCode = code;
   return next();
 });
 

@@ -26,24 +26,24 @@ const userSchema = new mongoose.Schema(
       default: "",
       trim: true,
     },
-    groups: [{ type: mongoose.Schema.Types.ObjectId, ref: "Group" }],
+    // ❌ REMOVED: groups: [ObjectId]
+    // Reason: was a redundant bidirectional ref that required 2 writes on
+    // join/leave and could go out of sync. Derive group membership from
+    // Group.members instead — one source of truth.
   },
   { timestamps: true },
 );
 
-userSchema.pre("save", async function hashPassword(next) {
-  if (!this.isModified("password")) {
-    return next();
-  }
+// Index already created by unique:true on email above.
 
+userSchema.pre("save", async function hashPassword(next) {
+  if (!this.isModified("password")) return next();
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
   return next();
 });
 
-userSchema.methods.comparePassword = function comparePassword(
-  candidatePassword,
-) {
+userSchema.methods.comparePassword = function (candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
 };
 

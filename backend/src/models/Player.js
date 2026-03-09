@@ -1,5 +1,17 @@
 const mongoose = require("mongoose");
 
+// ─── Player ──────────────────────────────────────────────────────────────────
+// Intentionally lean. Stats are no longer stored here.
+//
+// WHY: The old model stored a single global batting/bowling object, meaning
+// stats from all groups were blended together. You couldn't answer
+// "what are this player's stats in Group A vs Group B?"
+//
+// Stats now live in GroupPlayerStats (one document per player per group),
+// indexed for O(1) lookup. This also means getGroupPlayersWithStats drops
+// from 2 queries → 1 query.
+// ─────────────────────────────────────────────────────────────────────────────
+
 const playerSchema = new mongoose.Schema(
   {
     name: {
@@ -12,39 +24,22 @@ const playerSchema = new mongoose.Schema(
       default: "",
       trim: true,
     },
+    // Optional link to a registered User account.
+    // Null for "guest" players added manually to a group.
     userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       default: null,
     },
-    batting: {
-      matches: { type: Number, default: 0 },
-      innings: { type: Number, default: 0 },
-      runs: { type: Number, default: 0 },
-      balls: { type: Number, default: 0 },
-      fours: { type: Number, default: 0 },
-      sixes: { type: Number, default: 0 },
-      thirties: { type: Number, default: 0 },
-      highestScore: { type: Number, default: 0 },
-      fifties: { type: Number, default: 0 },
-      hundreds: { type: Number, default: 0 },
-      notOuts: { type: Number, default: 0 },
-    },
-    bowling: {
-      matches: { type: Number, default: 0 },
-      innings: { type: Number, default: 0 },
-      overs: { type: Number, default: 0 },
-      balls: { type: Number, default: 0 },
-      runs: { type: Number, default: 0 },
-      wickets: { type: Number, default: 0 },
-      threeWickets: { type: Number, default: 0 },
-      bestFiguresWickets: { type: Number, default: 0 },
-      bestFiguresRuns: { type: Number, default: 0 },
-      fourWickets: { type: Number, default: 0 },
-      fiveWickets: { type: Number, default: 0 },
-    },
   },
   { timestamps: true },
 );
+
+// ─── Indexes ────────────────────────────────────────────────────────────────
+// Fast lookup when linking a User → their Player document
+playerSchema.index({ userId: 1 }, { sparse: true });
+
+// Fast duplicate-name check on createPlayer
+playerSchema.index({ name: 1 });
 
 module.exports = mongoose.model("Player", playerSchema);
