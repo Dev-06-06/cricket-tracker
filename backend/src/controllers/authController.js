@@ -10,7 +10,7 @@ const getJwtSecret = () => {
 };
 
 const buildToken = (userId) =>
-  jwt.sign({ userId }, getJwtSecret(), { expiresIn: "7d" });
+  jwt.sign({ userId }, getJwtSecret(), { expiresIn: "15d" });
 
 // Clean user shape — no more `groups` field (removed from User model)
 const formatUser = (user) => ({
