@@ -155,7 +155,6 @@ function emitMatchState(target, match) {
 async function completeMatchWithStats({ matchId, resultMessage, io }) {
   const session = await mongoose.startSession();
   let payload = null;
-  let matchForEmit = null;
 
   try {
     await session.withTransaction(async () => {
@@ -172,8 +171,6 @@ async function completeMatchWithStats({ matchId, resultMessage, io }) {
       await match.save({ session });
       await updateCareerStats(match, { session });
 
-      matchForEmit = match;
-
       payload = {
         matchId,
         resultMessage,
@@ -188,7 +185,8 @@ async function completeMatchWithStats({ matchId, resultMessage, io }) {
   if (!payload) return false;
 
   // ✅ No extra DB query — emit using the already-loaded match
-  if (matchForEmit) emitMatchState(io.to(matchId), matchForEmit);
+  const completedMatch = await Match.findById(matchId);
+  if (completedMatch) emitMatchState(io.to(matchId), completedMatch);
   io.to(matchId).emit("match_completed", payload);
   return true;
 }
@@ -814,24 +812,6 @@ function setupSockets(io) {
         await match.save();
         // ✅ Pass match directly — no extra DB query
         emitMatchState(io.to(matchId), match);
-        const lastBall = match.timeline[match.timeline.length - 1];
-        if (lastBall) {
-          io.to(matchId).emit("newBall", {
-            ball: {
-              ...(lastBall.toObject ? lastBall.toObject() : lastBall),
-              runs: lastBall.runsOffBat,
-              isValidBall: isValidBallType(lastBall.extraType),
-            },
-            totalRuns:         match.current.runs,
-            wickets:           match.current.wickets,
-            ballsBowled:       match.current.ballsBowled,
-            oversBowled:       match.current.oversBowled,
-            currentStriker:    match.current.striker?.name    || null,
-            currentNonStriker: match.current.nonStriker?.name || null,
-            currentBowler:     match.current.bowler?.name     || null,
-            status:            match.status,
-          });
-        }
       } catch (error) {
         console.error("Error handling delivery:", error);
         socket.emit("error", { message: "Failed to record delivery" });
@@ -949,24 +929,6 @@ function setupSockets(io) {
 
         await match.save();
         emitMatchState(io.to(matchId), match);
-        const lastBall = match.timeline[match.timeline.length - 1];
-        if (lastBall) {
-          io.to(matchId).emit("newBall", {
-            ball: {
-              ...(lastBall.toObject ? lastBall.toObject() : lastBall),
-              runs: lastBall.runsOffBat,
-              isValidBall: isValidBallType(lastBall.extraType),
-            },
-            totalRuns:         match.current.runs,
-            wickets:           match.current.wickets,
-            ballsBowled:       match.current.ballsBowled,
-            oversBowled:       match.current.oversBowled,
-            currentStriker:    match.current.striker?.name    || null,
-            currentNonStriker: match.current.nonStriker?.name || null,
-            currentBowler:     match.current.bowler?.name     || null,
-            status:            match.status,
-          });
-        }
       } catch (error) {
         console.error("Error handling umpire_update:", error);
       }
