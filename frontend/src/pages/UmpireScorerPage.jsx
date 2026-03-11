@@ -294,6 +294,53 @@ export default function UmpireScorerPage() {
       }
     });
 
+    socket.on("newBall", (update) => {
+      setMatch((prev) => {
+        if (!prev) return prev;
+        const prevTimeline = prev.timeline || [];
+        const incomingBall = update.ball;
+        const lastBall = prevTimeline[prevTimeline.length - 1];
+
+        const duplicateById =
+          incomingBall?._id &&
+          prevTimeline.some((ball) => String(ball?._id) === String(incomingBall._id));
+
+        const sameAsLastBall =
+          !!incomingBall &&
+          !!lastBall &&
+          (incomingBall.striker || "") === (lastBall.striker || "") &&
+          (incomingBall.nonStriker || "") === (lastBall.nonStriker || "") &&
+          (incomingBall.bowler || "") === (lastBall.bowler || "") &&
+          (incomingBall.extraType || null) === (lastBall.extraType || null) &&
+          (incomingBall.wicketType || null) === (lastBall.wicketType || null) &&
+          !!incomingBall.isWicket === !!lastBall.isWicket &&
+          (incomingBall.runsOffBat ?? incomingBall.runs ?? 0) ===
+            (lastBall.runsOffBat ?? lastBall.runs ?? 0) &&
+          (incomingBall.extraRuns || 0) === (lastBall.extraRuns || 0);
+
+        const duplicateByLastBall =
+          sameAsLastBall && prev.ballsBowled === update.ballsBowled;
+
+        const nextTimeline =
+          incomingBall && !duplicateById && !duplicateByLastBall
+            ? [...prevTimeline, incomingBall]
+            : prevTimeline;
+
+        return {
+          ...prev,
+          timeline:          nextTimeline,
+          totalRuns:         update.totalRuns,
+          wickets:           update.wickets,
+          ballsBowled:       update.ballsBowled,
+          oversBowled:       update.oversBowled,
+          currentStriker:    update.currentStriker,
+          currentNonStriker: update.currentNonStriker,
+          currentBowler:     update.currentBowler,
+          status:            update.status,
+        };
+      });
+    });
+
     socket.on("innings_complete", () => {
       setShowBatterModal(false);
       setShowBowlerModal(false);
@@ -322,6 +369,7 @@ export default function UmpireScorerPage() {
       [
         "connect",
         "matchState",
+        "newBall",
         "innings_complete",
         "match_completed",
         "matchEnded",
