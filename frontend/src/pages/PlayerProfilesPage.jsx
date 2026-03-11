@@ -564,22 +564,26 @@ export default function PlayerProfilesPage() {
   };
 
   const battingSorted = useMemo(
-    () =>
-      [...filteredPlayers].sort(
+    () => {
+      if (activeTab !== "batting") return [];
+      return [...filteredPlayers].sort(
         (a, b) => battingSortValue(b) - battingSortValue(a),
-      ),
-    [filteredPlayers, filterBy],
+      );
+    },
+    [filteredPlayers, filterBy, activeTab],
   );
 
   const bowlingSorted = useMemo(
-    () =>
-      [...filteredPlayers].sort((a, b) => {
+    () => {
+      if (activeTab !== "bowling") return [];
+      return [...filteredPlayers].sort((a, b) => {
         if (filterBy === "economy") {
           return bowlingSortValue(a) - bowlingSortValue(b);
         }
         return bowlingSortValue(b) - bowlingSortValue(a);
-      }),
-    [filteredPlayers, filterBy],
+      });
+    },
+    [filteredPlayers, filterBy, activeTab],
   );
 
   const displayList = activeTab === "batting" ? battingSorted : bowlingSorted;

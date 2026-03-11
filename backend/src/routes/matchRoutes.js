@@ -20,8 +20,8 @@ router.post("/:id/start", authMiddleware, startMatch);
 router.get("/upcoming", authMiddleware, listUpcomingMatches);
 router.get("/live", authMiddleware, listLiveMatches);
 router.get("/completed", authMiddleware, listCompletedMatches);
-router.get("/ongoing", getOngoingMatch);
-router.get("/:id", getMatch);
+router.get("/ongoing", authMiddleware, getOngoingMatch);
+router.get("/:id", authMiddleware, getMatch);
 router.delete("/:id", authMiddleware, deleteMatch);
 
 module.exports = router;

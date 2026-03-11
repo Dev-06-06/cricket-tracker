@@ -704,6 +704,40 @@ function UmpireSetupPage() {
     return freshMatches;
   };
 
+  const mergeMatchesCache = (partialMatches) => {
+    const cachedMatches = matchesCache.get() || {};
+    matchesCache.set({
+      upcoming: cachedMatches.upcoming || upcomingMatches,
+      live: cachedMatches.live || liveMatches,
+      completed: cachedMatches.completed || completedMatches,
+      ...partialMatches,
+    });
+  };
+
+  const refreshUpcoming = async () => {
+    const response = await getUpcomingMatches(selectedGroupId, token);
+    const matches = response.matches || [];
+    setUpcomingMatches(matches);
+    mergeMatchesCache({ upcoming: matches });
+    return matches;
+  };
+
+  const refreshLive = async () => {
+    const response = await getLiveMatches(selectedGroupId, token);
+    const matches = response.matches || [];
+    setLiveMatches(matches);
+    mergeMatchesCache({ live: matches });
+    return matches;
+  };
+
+  const refreshCompleted = async () => {
+    const response = await getCompletedMatches(selectedGroupId, token);
+    const matches = response.matches || [];
+    setCompletedMatches(matches);
+    mergeMatchesCache({ completed: matches });
+    return matches;
+  };
+
   useEffect(() => {
     let isMounted = true;
     const init = async () => {
@@ -753,7 +787,7 @@ function UmpireSetupPage() {
       map[player._id] = player;
     });
     return map;
-  }, [players]);
+  }, [players.map(p => p._id).join(",")]);
 
   const unassignedPlayers = players.filter(
     (player) =>
@@ -855,7 +889,7 @@ function UmpireSetupPage() {
         },
         token,
       );
-      await loadDashboard();
+      await refreshUpcoming();
       resetForm();
       setActiveTab("upcoming");
     } catch (requestError) {
@@ -869,7 +903,7 @@ function UmpireSetupPage() {
     try {
       setError("");
       await startMatch(matchId, token);
-      await loadDashboard();
+      await Promise.all([refreshUpcoming(), refreshLive()]);
       navigate(`/umpire/toss/${matchId}`);
     } catch (requestError) {
       setError(requestError.message || "Unable to start match");
@@ -890,7 +924,16 @@ function UmpireSetupPage() {
       setDeletingMatchId(deleteCandidate._id);
       setError("");
       await deleteMatch(deleteCandidate._id);
-      await loadDashboard();
+      if (deleteCandidate.status === "upcoming") {
+        await refreshUpcoming();
+      } else if (
+        deleteCandidate.status === "live" ||
+        deleteCandidate.status === "innings"
+      ) {
+        await refreshLive();
+      } else if (deleteCandidate.status === "completed") {
+        await refreshCompleted();
+      }
       setDeleteCandidate(null);
     } catch (requestError) {
       setError(requestError.message || "Unable to delete match");

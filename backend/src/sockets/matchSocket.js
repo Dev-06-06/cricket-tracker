@@ -1,9 +1,26 @@
 const mongoose = require("mongoose");
 const Match = require("../models/Match");
 const Player = require("../models/Player");
+const Group = require("../models/Group");
 const { updateCareerStats, isValidBallType } = require("../utils/statsUpdater");
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * Verify that a user is a member of the group associated with the match.
+ * @param {Object} match - The match document
+ * @param {String} userId - The userId to verify
+ * @returns {Promise<Boolean>} True if user is a group member, false otherwise
+ */
+async function assertGroupMember(match, userId) {
+  if (!match || !userId) return false;
+  const group = await Group.findOne({
+    _id: match.groupId,
+    "members.user": userId,
+  }).select("_id");
+  return Boolean(group);
+}
 
 function calculateOvers(totalValidBalls) {
   const balls = Number(totalValidBalls) || 0;
@@ -613,6 +630,13 @@ function setupSockets(io) {
         const match = await Match.findById(matchId);
         if (!match) return;
 
+        const userId = socket.user?.userId;
+        const isMember = await assertGroupMember(match, userId);
+        if (!isMember) {
+          socket.emit("matchError", { message: "Unauthorized" });
+          return;
+        }
+
         const batterEntry = match.playerStats.find((p) => p.name === batter);
         const batterObj   = { name: batter, playerId: batterEntry?.playerId || null };
 
@@ -646,6 +670,13 @@ function setupSockets(io) {
         const match = await Match.findById(matchId);
         if (!match) return;
 
+        const userId = socket.user?.userId;
+        const isMember = await assertGroupMember(match, userId);
+        if (!isMember) {
+          socket.emit("matchError", { message: "Unauthorized" });
+          return;
+        }
+
         const bowlerEntry = match.playerStats.find((p) => p.name === bowler);
         match.current.bowler = { name: bowler, playerId: bowlerEntry?.playerId || null };
         if (bowlerEntry) bowlerEntry.didBowl = true;
@@ -666,6 +697,13 @@ function setupSockets(io) {
         const match = await Match.findById(matchId);
         if (!match) {
           socket.emit("error", { message: "Match not found" });
+          return;
+        }
+
+        const userId = socket.user?.userId;
+        const isMember = await assertGroupMember(match, userId);
+        if (!isMember) {
+          socket.emit("matchError", { message: "Unauthorized" });
           return;
         }
 
@@ -786,6 +824,13 @@ function setupSockets(io) {
         const match = await Match.findById(matchId);
         if (!match) return;
 
+        const userId = socket.user?.userId;
+        const isMember = await assertGroupMember(match, userId);
+        if (!isMember) {
+          socket.emit("matchError", { message: "Unauthorized" });
+          return;
+        }
+
         const dismissedBatter    = deliveryData.dismissedBatter || deliveryData.batterDismissed || "";
         const dismissedPlayerType = deliveryData.dismissedPlayerType;
         const originalNonStriker  = match.current.nonStriker?.name;
@@ -894,6 +939,13 @@ function setupSockets(io) {
       try {
         const match = await Match.findById(matchId);
         if (!match) return;
+
+        const userId = socket.user?.userId;
+        const isMember = await assertGroupMember(match, userId);
+        if (!isMember) {
+          socket.emit("matchError", { message: "Unauthorized" });
+          return;
+        }
         await completeMatchWithStats({ matchId, resultMessage: "Match completed", io });
       } catch (error) {
         console.error("Error handling complete_match:", error);
@@ -906,6 +958,13 @@ function setupSockets(io) {
       try {
         const match = await Match.findById(matchId);
         if (!match || match.timeline.length === 0) return;
+
+        const userId = socket.user?.userId;
+        const isMember = await assertGroupMember(match, userId);
+        if (!isMember) {
+          socket.emit("matchError", { message: "Unauthorized" });
+          return;
+        }
 
         // Remove last ball
         match.timeline.pop();

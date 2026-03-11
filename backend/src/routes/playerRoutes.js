@@ -23,8 +23,8 @@ const getPlayersLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-router.get("/", getPlayersLimiter, getPlayers);
+router.get("/", getPlayersLimiter, authMiddleware, getPlayers);
 router.get("/by-group/:groupId", authMiddleware, getGroupPlayersWithStats);
-router.post("/", createPlayerLimiter, createPlayer);
+router.post("/", createPlayerLimiter, authMiddleware, createPlayer);
 
 module.exports = router;

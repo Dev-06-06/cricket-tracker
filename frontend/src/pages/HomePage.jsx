@@ -19,6 +19,38 @@ function calcOvers(ballsBowled) {
   return `${Math.floor(ballsBowled / 6)}.${ballsBowled % 6}`;
 }
 
+function PlayerAvatar({ player }) {
+  const [err, setErr] = useState(false);
+  const initials =
+    player.name
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((w) => w.charAt(0))
+      .join("")
+      .toUpperCase() || "?";
+
+  return (
+    <span
+      title={player.name}
+      className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-[#0d1117] overflow-hidden ring-1 ring-white/5"
+    >
+      {player.photoUrl && !err ? (
+        <img
+          src={player.photoUrl}
+          alt={player.name}
+          className="h-full w-full object-cover"
+          onError={() => setErr(true)}
+        />
+      ) : (
+        <span className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-600 to-slate-800 text-[9px] font-bold text-slate-300">
+          {initials}
+        </span>
+      )}
+    </span>
+  );
+}
+
 /* ─── PlayerAvatarStack ──────────────────────────────────────────────────────── */
 function PlayerAvatarStack({ players = [], max = 6 }) {
   const valid = (players || []).filter((p) => p?.name);
@@ -27,37 +59,9 @@ function PlayerAvatarStack({ players = [], max = 6 }) {
 
   return (
     <div className="flex items-center -space-x-1.5">
-      {shown.map((player, i) => {
-        const [err, setErr] = useState(false);
-        const initials =
-          player.name
-            .split(" ")
-            .filter(Boolean)
-            .slice(0, 2)
-            .map((w) => w.charAt(0))
-            .join("")
-            .toUpperCase() || "?";
-        return (
-          <span
-            key={`${player.name}-${i}`}
-            title={player.name}
-            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-[#0d1117] overflow-hidden ring-1 ring-white/5"
-          >
-            {player.photoUrl && !err ? (
-              <img
-                src={player.photoUrl}
-                alt={player.name}
-                className="h-full w-full object-cover"
-                onError={() => setErr(true)}
-              />
-            ) : (
-              <span className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-600 to-slate-800 text-[9px] font-bold text-slate-300">
-                {initials}
-              </span>
-            )}
-          </span>
-        );
-      })}
+      {shown.map((player, i) => (
+        <PlayerAvatar key={`${player.name}-${i}`} player={player} />
+      ))}
       {overflow > 0 && (
         <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-[#0d1117] bg-slate-800 text-[9px] font-bold text-slate-500 ring-1 ring-white/5">
           +{overflow}
@@ -568,15 +572,36 @@ function HomePage() {
       } finally {
         if (isMounted) {
           setLoading(false);
-          pollTimer = setTimeout(loadMatches, 5000);
+          if (document.visibilityState === "visible") {
+            pollTimer = setTimeout(loadMatches, 5000);
+          }
         }
       }
     };
 
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        if (pollTimer) {
+          clearTimeout(pollTimer);
+          pollTimer = null;
+        }
+        return;
+      }
+
+      if (!isMounted) return;
+      if (pollTimer) {
+        clearTimeout(pollTimer);
+        pollTimer = null;
+      }
+      loadMatches();
+    };
+
     loadMatches();
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       isMounted = false;
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       if (pollTimer) clearTimeout(pollTimer);
     };
   }, [activeGroupId]);

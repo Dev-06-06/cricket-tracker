@@ -3,6 +3,142 @@ import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import BottomNav from "../components/BottomNav";
 
+/* ─── Static style constants ────────────────────────────────────────────── */
+const MAIN_CONTAINER_STYLE = {
+  minHeight: "100vh",
+  background: "#0d1117",
+  color: "#fff",
+  fontFamily: "'DM Sans', sans-serif",
+  overflowX: "hidden",
+};
+
+const HERO_SECTION_STYLE = {
+  position: "relative",
+  minHeight: "88vh",
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "60px 20px 80px",
+  textAlign: "center",
+  overflow: "hidden",
+};
+
+const SPINNING_CIRCLE_STYLE = {
+  position: "absolute",
+  width: 440,
+  height: 440,
+  borderRadius: "50%",
+  border: "1px dashed rgba(249,115,22,0.1)",
+  top: "50%",
+  left: "50%",
+  transform: "translate(-50%,-50%)",
+  pointerEvents: "none",
+};
+
+const FEATURES_SECTION_STYLE = {
+  maxWidth: 960,
+  margin: "0 auto",
+  padding: "64px 20px",
+};
+
+const FEATURES_HEADER_STYLE = {
+  textAlign: "center",
+  marginBottom: 40,
+};
+
+const FEATURES_GRID_STYLE = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
+  gap: 14,
+};
+
+const STEPS_SECTION_STYLE = {
+  maxWidth: 960,
+  margin: "0 auto",
+  padding: "64px 20px",
+};
+
+const STEPS_HEADER_STYLE = {
+  textAlign: "center",
+  marginBottom: 48,
+};
+
+const STEPS_GRID_STYLE = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+  gap: 2,
+};
+
+const COMING_SOON_SECTION_STYLE = {
+  maxWidth: 960,
+  margin: "0 auto",
+  padding: "64px 20px",
+  textAlign: "center",
+};
+
+const COMING_SOON_BOX_STYLE = {
+  background: "linear-gradient(135deg, rgba(249,115,22,0.07), rgba(249,115,22,0.03))",
+  border: "1px solid rgba(249,115,22,0.15)",
+  borderRadius: 24,
+  padding: "48px 32px",
+  position: "relative",
+  overflow: "hidden",
+};
+
+const CTA_SECTION_STYLE = {
+  maxWidth: 960,
+  margin: "0 auto",
+  padding: "32px 20px 64px",
+  textAlign: "center",
+};
+
+const CTA_BUTTONS_CONTAINER_STYLE = {
+  marginTop: 36,
+  display: "flex",
+  gap: 12,
+  justifyContent: "center",
+  flexWrap: "wrap",
+};
+
+const SUGGESTIONS_SECTION_STYLE = {
+  maxWidth: 960,
+  margin: "0 auto",
+  padding: "64px 20px",
+  textAlign: "center",
+};
+
+const SUGGESTIONS_BOX_STYLE = {
+  background: "rgba(255,255,255,0.02)",
+  border: "1px solid rgba(255,255,255,0.07)",
+  borderRadius: 24,
+  padding: "48px 32px",
+  position: "relative",
+  overflow: "hidden",
+};
+
+const SUGGESTIONS_OVERLAY_STYLE = {
+  position: "absolute",
+  inset: 0,
+  borderRadius: 24,
+  background: "radial-gradient(ellipse at 50% 110%, rgba(99,102,241,0.06), transparent 65%)",
+  pointerEvents: "none",
+};
+
+const FOOTER_STYLE = {
+  borderTop: "1px solid rgba(255,255,255,0.05)",
+  padding: "24px 20px",
+  textAlign: "center",
+};
+
+const FOOTER_LOGO_CONTAINER_STYLE = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 8,
+  marginBottom: 8,
+};
+
 function FloatingBall({ style, size = 80, opacity = 0.06 }) {
   return (
     <span
@@ -278,15 +414,7 @@ export default function LandingPage() {
   ];
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background: "#0d1117",
-        color: "#fff",
-        fontFamily: "'DM Sans', sans-serif",
-        overflowX: "hidden",
-      }}
-    >
+    <div style={MAIN_CONTAINER_STYLE}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Barlow+Condensed:wght@500;600;700;800;900&display=swap');
         @keyframes fadeUp { from { opacity:0; transform:translateY(24px); } to { opacity:1; transform:translateY(0); } }
@@ -521,19 +649,7 @@ export default function LandingPage() {
       </nav>
 
       {/* HERO */}
-      <section
-        style={{
-          position: "relative",
-          minHeight: "88vh",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: "60px 20px 80px",
-          textAlign: "center",
-          overflow: "hidden",
-        }}
-      >
+      <section style={HERO_SECTION_STYLE}>
         <FloatingBall
           style={{ top: "8%", left: "6%", filter: "blur(8px)" }}
           size={120}
@@ -557,17 +673,7 @@ export default function LandingPage() {
         <div
           aria-hidden
           className="spin-slow"
-          style={{
-            position: "absolute",
-            width: 440,
-            height: 440,
-            borderRadius: "50%",
-            border: "1px dashed rgba(249,115,22,0.1)",
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%,-50%)",
-            pointerEvents: "none",
-          }}
+          style={SPINNING_CIRCLE_STYLE}
         />
 
         <div
@@ -745,10 +851,8 @@ export default function LandingPage() {
       <hr className="divider" />
 
       {/* FEATURES */}
-      <section
-        style={{ maxWidth: 960, margin: "0 auto", padding: "64px 20px" }}
-      >
-        <div style={{ textAlign: "center", marginBottom: 40 }}>
+      <section style={FEATURES_SECTION_STYLE}>
+        <div style={FEATURES_HEADER_STYLE}>
           <p
             style={{
               fontSize: 11,
@@ -785,13 +889,7 @@ export default function LandingPage() {
             proper scoring.
           </p>
         </div>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
-            gap: 14,
-          }}
-        >
+        <div style={FEATURES_GRID_STYLE}>
           {features.map((f) => (
             <FeatureCard key={f.title} {...f} />
           ))}
@@ -801,10 +899,8 @@ export default function LandingPage() {
       <hr className="divider" />
 
       {/* HOW IT WORKS */}
-      <section
-        style={{ maxWidth: 960, margin: "0 auto", padding: "64px 20px" }}
-      >
-        <div style={{ textAlign: "center", marginBottom: 48 }}>
+      <section style={STEPS_SECTION_STYLE}>
+        <div style={STEPS_HEADER_STYLE}>
           <p
             style={{
               fontSize: 11,
@@ -828,13 +924,7 @@ export default function LandingPage() {
             Up and running in 3 steps
           </h2>
         </div>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-            gap: 2,
-          }}
-        >
+        <div style={STEPS_GRID_STYLE}>
           {steps.map((s, i) => (
             <div
               key={s.num}
@@ -880,25 +970,9 @@ export default function LandingPage() {
       <hr className="divider" />
 
       {/* COMING SOON */}
-      <section
-        style={{
-          maxWidth: 960,
-          margin: "0 auto",
-          padding: "64px 20px",
-          textAlign: "center",
-        }}
-      >
-        <div
-          style={{
-            background:
-              "linear-gradient(135deg, rgba(249,115,22,0.07), rgba(249,115,22,0.03))",
-            border: "1px solid rgba(249,115,22,0.15)",
-            borderRadius: 24,
-            padding: "48px 32px",
-            position: "relative",
-            overflow: "hidden",
-          }}
-        >
+      <section style={COMING_SOON_SECTION_STYLE}>
+        <div style={COMING_SOON_BOX_STYLE}>
+          <div style={SUGGESTIONS_OVERLAY_STYLE} />
           <FloatingBall
             style={{ top: -30, right: -30 }}
             size={120}
@@ -986,14 +1060,7 @@ export default function LandingPage() {
       </section>
 
       {/* BOTTOM CTA */}
-      <section
-        style={{
-          maxWidth: 960,
-          margin: "0 auto",
-          padding: "32px 20px 64px",
-          textAlign: "center",
-        }}
-      >
+      <section style={CTA_SECTION_STYLE}>
         <h2
           style={{
             fontFamily: "'Barlow Condensed', sans-serif",
@@ -1015,15 +1082,7 @@ export default function LandingPage() {
             Pick your role.
           </span>
         </h2>
-        <div
-          style={{
-            marginTop: 36,
-            display: "flex",
-            gap: 12,
-            justifyContent: "center",
-            flexWrap: "wrap",
-          }}
-        >
+        <div style={CTA_BUTTONS_CONTAINER_STYLE}>
           {roles.map((r) => (
             <button
               key={r.label}
@@ -1085,34 +1144,9 @@ export default function LandingPage() {
       <hr className="divider" />
 
       {/* SUGGESTIONS */}
-      <section
-        style={{
-          maxWidth: 960,
-          margin: "0 auto",
-          padding: "64px 20px",
-          textAlign: "center",
-        }}
-      >
-        <div
-          style={{
-            background: "rgba(255,255,255,0.02)",
-            border: "1px solid rgba(255,255,255,0.07)",
-            borderRadius: 24,
-            padding: "48px 32px",
-            position: "relative",
-            overflow: "hidden",
-          }}
-        >
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              borderRadius: 24,
-              background:
-                "radial-gradient(ellipse at 50% 110%, rgba(99,102,241,0.06), transparent 65%)",
-              pointerEvents: "none",
-            }}
-          />
+      <section style={SUGGESTIONS_SECTION_STYLE}>
+        <div style={SUGGESTIONS_BOX_STYLE}>
+          <div style={SUGGESTIONS_OVERLAY_STYLE} />
           <span style={{ fontSize: 40 }}>💡</span>
           <h2
             style={{
@@ -1180,22 +1214,8 @@ export default function LandingPage() {
       </section>
 
       {/* FOOTER */}
-      <footer
-        style={{
-          borderTop: "1px solid rgba(255,255,255,0.05)",
-          padding: "24px 20px",
-          textAlign: "center",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 8,
-            marginBottom: 8,
-          }}
-        >
+      <footer style={FOOTER_STYLE}>
+        <div style={FOOTER_LOGO_CONTAINER_STYLE}>
           <div
             style={{
               width: 22,

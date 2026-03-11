@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Link,
   useNavigate,
@@ -1324,6 +1324,7 @@ function ScoreboardPage() {
     if (!matchId) return;
     const socket = createMatchSocket();
     socketRef.current = socket;
+    let pollInterval = null;
 
     const apply = (updatedMatch) => {
       setMatch(updatedMatch);
@@ -1350,7 +1351,35 @@ function ScoreboardPage() {
       }
     };
 
-    socket.on("connect", () => socket.emit("joinMatch", { matchId }));
+    const startFallbackPolling = () => {
+      if (!isViewerMode || pollInterval) return;
+      pollInterval = setInterval(async () => {
+        try {
+          const res = await getMatch(matchId);
+          if (res?.match) apply(res.match);
+        } catch {
+          /* silent */
+        }
+      }, 3000);
+    };
+
+    const stopFallbackPolling = () => {
+      if (!pollInterval) return;
+      clearInterval(pollInterval);
+      pollInterval = null;
+    };
+
+    const handleConnect = () => {
+      stopFallbackPolling();
+      socket.emit("joinMatch", { matchId });
+    };
+
+    const handleDisconnect = () => {
+      startFallbackPolling();
+    };
+
+    socket.on("connect", handleConnect);
+    socket.on("disconnect", handleDisconnect);
     socket.on("matchState", apply);
     socket.on("score_updated", apply);
     socket.on("match_completed", (payload) => {
@@ -1373,20 +1402,10 @@ function ScoreboardPage() {
     );
     socket.on("connect_error", (err) => setError(err.message));
 
-    let pollInterval;
-    if (isViewerMode) {
-      pollInterval = setInterval(async () => {
-        try {
-          const res = await getMatch(matchId);
-          if (res?.match) apply(res.match);
-        } catch {
-          /* silent */
-        }
-      }, 3000);
-    }
-
     return () => {
-      socket.off("connect");
+      stopFallbackPolling();
+      socket.off("connect", handleConnect);
+      socket.off("disconnect", handleDisconnect);
       socket.off("matchState");
       socket.off("score_updated");
       socket.off("match_completed");
@@ -1394,7 +1413,6 @@ function ScoreboardPage() {
       socket.off("toss_flip_result");
       socket.off("connect_error");
       socket.disconnect();
-      if (pollInterval) clearInterval(pollInterval);
     };
   }, [isViewerMode, matchId]);
 
@@ -1476,32 +1494,30 @@ function ScoreboardPage() {
       ]
     : bowlingRows;
 
+  const photoMap = useMemo(() => {
+    const map = {};
+    const collectPhoto = (player) => {
+      const name = player?.name;
+      if (!name || map[name]) return;
+      const photo =
+        player?.photoUrl ||
+        player?.photoURL ||
+        player?.avatarUrl ||
+        player?.imageUrl ||
+        null;
+      if (photo) map[name] = photo;
+    };
+
+    (match?.playerStats || []).forEach(collectPhoto);
+    (match?.team1Players || []).forEach(collectPhoto);
+    (match?.team2Players || []).forEach(collectPhoto);
+
+    return map;
+  }, [match?.playerStats, match?.team1Players, match?.team2Players]);
+
   const getPlayerPhoto = (name) => {
     if (!name) return null;
-
-    const normalizeName = (value) =>
-      typeof value === "string" ? value.trim().toLowerCase() : "";
-    const targetName = normalizeName(name);
-
-    const fromStats = (match.playerStats || []).find(
-      (x) => normalizeName(x.name) === targetName,
-    );
-    const fromTeams = [
-      ...(match.team1Players || []),
-      ...(match.team2Players || []),
-    ].find((player) => normalizeName(player?.name) === targetName);
-
-    return (
-      fromStats?.photoUrl ||
-      fromStats?.photoURL ||
-      fromStats?.avatarUrl ||
-      fromStats?.imageUrl ||
-      fromTeams?.photoUrl ||
-      fromTeams?.photoURL ||
-      fromTeams?.avatarUrl ||
-      fromTeams?.imageUrl ||
-      null
-    );
+    return photoMap[name] ?? null;
   };
 
   const firstInningsSummary = match.firstInningsSummary || null;

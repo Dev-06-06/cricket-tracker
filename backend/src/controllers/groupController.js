@@ -135,6 +135,18 @@ const leaveGroup = async (req, res) => {
       return res.status(403).json({ success: false, message: "You are not a member of this group" });
     }
 
+    // Prevent last admin from leaving without promoting another member
+    const memberEntry = group.members.find(m => m.user.toString() === req.user._id.toString());
+    if (memberEntry && memberEntry.role === "admin") {
+      const adminCount = group.members.filter(m => m.role === "admin").length;
+      if (adminCount === 1) {
+        return res.status(400).json({
+          success: false,
+          message: "You are the only admin. Please promote another member to admin before leaving."
+        });
+      }
+    }
+
     group.members = group.members.filter(
       (m) => m.user.toString() !== req.user._id.toString(),
     );

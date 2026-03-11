@@ -3,6 +3,7 @@ const http = require("http");
 const { Server } = require("socket.io");
 const cors = require("cors");
 const dotenv = require("dotenv");
+const jwt = require("jsonwebtoken");
 dotenv.config();
 const connectDB = require("./config/db");
 const setupSockets = require("./sockets/matchSocket");
@@ -30,6 +31,26 @@ const io = new Server(server, {
     origin: "*",
     methods: ["GET", "POST"],
   },
+});
+
+// JWT authentication middleware for Socket.IO
+io.use((socket, next) => {
+  try {
+    const token = socket.handshake.auth.token;
+    if (!token) {
+      return next(new Error("Unauthorized: token missing"));
+    }
+
+    if (!process.env.JWT_SECRET) {
+      return next(new Error("JWT_SECRET is not configured"));
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    socket.user = decoded;
+    next();
+  } catch (error) {
+    next(new Error("Unauthorized: invalid token"));
+  }
 });
 
 setupSockets(io);

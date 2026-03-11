@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { createMatchSocket } from "../services/socket";
 import { getMatch } from "../services/api";
@@ -467,25 +467,30 @@ export default function UmpireScorerPage() {
   const nonStrikerStats = getBatterStat(match, nonStriker);
   const bowlerStat = getBowlerStat(match, match.currentBowler);
 
+  const photoMap = useMemo(() => {
+    const map = {};
+    const collectPhoto = (player) => {
+      const name = player?.name;
+      if (!name || map[name]) return;
+      const photo =
+        player?.photoUrl ||
+        player?.photoURL ||
+        player?.avatarUrl ||
+        player?.imageUrl ||
+        null;
+      if (photo) map[name] = photo;
+    };
+
+    (match?.playerStats || []).forEach(collectPhoto);
+    (match?.team1Players || []).forEach(collectPhoto);
+    (match?.team2Players || []).forEach(collectPhoto);
+
+    return map;
+  }, [match?.playerStats, match?.team1Players, match?.team2Players]);
+
   const getPhoto = (name) => {
     if (!name) return null;
-    const fromStats = (match.playerStats || []).find((x) => x.name === name);
-    const fromTeams = [
-      ...(match.team1Players || []),
-      ...(match.team2Players || []),
-    ].find((player) => player?.name === name);
-
-    return (
-      fromStats?.photoUrl ||
-      fromStats?.photoURL ||
-      fromStats?.avatarUrl ||
-      fromStats?.imageUrl ||
-      fromTeams?.photoUrl ||
-      fromTeams?.photoURL ||
-      fromTeams?.avatarUrl ||
-      fromTeams?.imageUrl ||
-      null
-    );
+    return photoMap[name] ?? null;
   };
 
   const bowlingTeamPlayers = (match.playerStats || []).filter(
