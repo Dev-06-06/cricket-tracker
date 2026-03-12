@@ -1,6 +1,5 @@
 const mongoose = require("mongoose");
 const Match = require("../models/Match");
-const Player = require("../models/Player");
 const Group = require("../models/Group");
 const { updateCareerStats, isValidBallType } = require("../utils/statsUpdater");
 
@@ -515,44 +514,6 @@ function setupSockets(io) {
       if (match) emitMatchState(socket, match);
     });
 
-    // ── createMatch (via socket) ───────────────────────────────────────────
-    socket.on("createMatch", async ({ team1Name, team2Name, team1PlayerIds, team2PlayerIds, totalOvers, groupId }) => {
-      try {
-        if (!team1Name || !team2Name) {
-          socket.emit("matchError", { message: "Team names are required" });
-          return;
-        }
-
-        const [t1Players, t2Players] = await Promise.all([
-          Player.find({ _id: { $in: team1PlayerIds || [] } }).select("name photoUrl").lean(),
-          Player.find({ _id: { $in: team2PlayerIds || [] } }).select("name photoUrl").lean(),
-        ]);
-
-        const toSnapshot = (p) => ({ playerId: p._id, name: p.name, photoUrl: p.photoUrl || "" });
-
-        const playerStats = [
-          ...t1Players.map((p) => ({ playerId: p._id, name: p.name, team: "team1" })),
-          ...t2Players.map((p) => ({ playerId: p._id, name: p.name, team: "team2" })),
-        ];
-
-        const match = await Match.create({
-          groupId: groupId || null,
-          team1: { name: team1Name, players: t1Players.map(toSnapshot) },
-          team2: { name: team2Name, players: t2Players.map(toSnapshot) },
-          totalOvers: totalOvers || 5,
-          status: "toss",
-          current: { battingTeam: "team1", inningsNumber: 1 },
-          playerStats,
-        });
-
-        socket.emit("matchCreated", { matchId: match._id });
-        emitMatchState(socket, match);
-      } catch (error) {
-        console.error("Error creating match:", error);
-        socket.emit("matchError", { message: "Failed to create match" });
-      }
-    });
-
     // ── toss events ────────────────────────────────────────────────────────
     socket.on("toss_flip_started", ({ matchId }) => {
       if (!matchId) return;
@@ -568,6 +529,13 @@ function setupSockets(io) {
       try {
         const match = await Match.findById(matchId);
         if (!match) return;
+
+        const userId = socket.user?.userId;
+        const isMember = await assertGroupMember(match, userId);
+        if (!isMember) {
+          socket.emit("matchError", { message: "Unauthorized" });
+          return;
+        }
 
         // tossWinner is a team name string ("Team A" etc.)
         // Map it to "team1" | "team2"
@@ -597,6 +565,13 @@ function setupSockets(io) {
       try {
         const match = await Match.findById(matchId);
         if (!match) return;
+
+        const userId = socket.user?.userId;
+        const isMember = await assertGroupMember(match, userId);
+        if (!isMember) {
+          socket.emit("matchError", { message: "Unauthorized" });
+          return;
+        }
 
         // Resolve playerIds from playerStats
         const findPlayerEntry = (name) =>
@@ -685,6 +660,38 @@ function setupSockets(io) {
         emitMatchState(io.to(matchId), match);
       } catch (error) {
         console.error("Error handling setNewBowler:", error);
+      }
+    });
+
+    // ── swapStriker ────────────────────────────────────────────────────────
+    socket.on("swapStriker", async ({ matchId }) => {
+      try {
+        const match = await Match.findById(matchId);
+        if (!match) return;
+
+        const userId = socket.user?.userId;
+        const isMember = await assertGroupMember(match, userId);
+        if (!isMember) {
+          socket.emit("matchError", { message: "Unauthorized" });
+          return;
+        }
+
+        const strikerSnapshot = {
+          name: match.current.striker?.name || null,
+          playerId: match.current.striker?.playerId || null,
+        };
+        const nonStrikerSnapshot = {
+          name: match.current.nonStriker?.name || null,
+          playerId: match.current.nonStriker?.playerId || null,
+        };
+
+        match.current.striker = nonStrikerSnapshot;
+        match.current.nonStriker = strikerSnapshot;
+        match.markModified("current");
+        await match.save();
+        emitMatchState(io.to(matchId), match);
+      } catch (error) {
+        console.error("Error handling swapStriker:", error);
       }
     });
 

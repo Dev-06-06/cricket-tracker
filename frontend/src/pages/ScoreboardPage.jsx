@@ -5,6 +5,7 @@ import {
   useParams,
   useSearchParams,
 } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import BottomNav from "../components/BottomNav";
 import ProfileToolbarButton from "../components/ProfileToolbarButton";
 import { createMatchSocket } from "../services/socket";
@@ -1303,10 +1304,12 @@ function MatchSummaryView({ match }) {
 
 function ScoreboardPage() {
   const { matchId } = useParams();
+  const { token } = useAuth();
   const [searchParams] = useSearchParams();
   const socketRef = useRef(null);
 
   const [match, setMatch] = useState(null);
+  const [loadError, setLoadError] = useState("");
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState("scorecard");
   const [matchEndStatus, setMatchEndStatus] = useState({
@@ -1320,9 +1323,30 @@ function ScoreboardPage() {
   });
   const isViewerMode = searchParams.get("viewer") === "1";
 
+  const photoMap = useMemo(() => {
+    const map = {};
+    const collectPhoto = (player) => {
+      const name = player?.name;
+      if (!name || map[name]) return;
+      const photo =
+        player?.photoUrl ||
+        player?.photoURL ||
+        player?.avatarUrl ||
+        player?.imageUrl ||
+        null;
+      if (photo) map[name] = photo;
+    };
+
+    (match?.playerStats || []).forEach(collectPhoto);
+    (match?.team1Players || []).forEach(collectPhoto);
+    (match?.team2Players || []).forEach(collectPhoto);
+
+    return map;
+  }, [match?.playerStats, match?.team1Players, match?.team2Players]);
+
   useEffect(() => {
     if (!matchId) return;
-    const socket = createMatchSocket();
+    const socket = createMatchSocket(token);
     socketRef.current = socket;
     let pollInterval = null;
 
@@ -1344,6 +1368,8 @@ function ScoreboardPage() {
             teamBPlayersCount: cnt,
             totalValidBalls: updatedMatch.ballsBowled,
             totalOvers: updatedMatch.totalOvers,
+            teamAName: updatedMatch.bowlingTeam,
+            teamBName: updatedMatch.battingTeam,
           }),
         );
       } else {
@@ -1353,13 +1379,14 @@ function ScoreboardPage() {
 
     const startFallbackPolling = () => {
       if (!isViewerMode || pollInterval) return;
-      pollInterval = setInterval(async () => {
-        try {
-          const res = await getMatch(matchId);
-          if (res?.match) apply(res.match);
-        } catch {
-          /* silent */
-        }
+      pollInterval = setInterval(() => {
+        getMatch(matchId, token)
+          .then((res) => {
+            if (res?.match) setMatch(res.match);
+          })
+          .catch((err) => {
+            setLoadError(err.message || "Failed to load match");
+          });
       }, 3000);
     };
 
@@ -1414,7 +1441,7 @@ function ScoreboardPage() {
       socket.off("connect_error");
       socket.disconnect();
     };
-  }, [isViewerMode, matchId]);
+  }, [isViewerMode, matchId, token]);
 
   if (error)
     return (
@@ -1427,12 +1454,16 @@ function ScoreboardPage() {
 
   if (!match)
     return (
-      <main className="min-h-screen bg-[#0d1117] flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#f97316] border-t-transparent" />
-          <p className="text-slate-400 text-sm">Loading scoreboard...</p>
-        </div>
-      </main>
+      <div className="flex h-screen items-center justify-center bg-[#0d1117]">
+        {loadError ? (
+          <p className="text-red-400 text-sm px-6 text-center">{loadError}</p>
+        ) : (
+          <div className="flex flex-col items-center gap-3">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#f97316] border-t-transparent" />
+            <p className="text-slate-500 text-sm">Loading scoreboard...</p>
+          </div>
+        )}
+      </div>
     );
 
   /* ── computed values ── */
@@ -1493,27 +1524,6 @@ function ScoreboardPage() {
         ...bowlingRows.filter((p) => p.name !== currentBowlerRow.name),
       ]
     : bowlingRows;
-
-  const photoMap = useMemo(() => {
-    const map = {};
-    const collectPhoto = (player) => {
-      const name = player?.name;
-      if (!name || map[name]) return;
-      const photo =
-        player?.photoUrl ||
-        player?.photoURL ||
-        player?.avatarUrl ||
-        player?.imageUrl ||
-        null;
-      if (photo) map[name] = photo;
-    };
-
-    (match?.playerStats || []).forEach(collectPhoto);
-    (match?.team1Players || []).forEach(collectPhoto);
-    (match?.team2Players || []).forEach(collectPhoto);
-
-    return map;
-  }, [match?.playerStats, match?.team1Players, match?.team2Players]);
 
   const getPlayerPhoto = (name) => {
     if (!name) return null;

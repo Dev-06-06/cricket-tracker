@@ -288,12 +288,27 @@ const listCompletedMatches = async (req, res) => {
 };
 
 // ─── getOngoingMatch ──────────────────────────────────────────────────────────
-const getOngoingMatch = async (_req, res) => {
+const getOngoingMatch = async (req, res) => {
   try {
-    // ✅ Hits { status, updatedAt } index
-    const match = await Match.findOne({
-      status: { $in: ["toss", "innings", "live", "innings_complete"] },
-    }).sort({ updatedAt: -1 }).lean();
+    const filter = { status: { $in: ["toss", "innings", "live", "innings_complete"] } };
+    const { groupId } = req.query;
+
+    if (!groupId) {
+      return res.status(400).json({ success: false, message: "groupId query parameter is required" });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(groupId)) {
+      return res.status(400).json({ success: false, message: "Invalid groupId" });
+    }
+
+    const isMember = await ensureUserIsGroupMember(groupId, req.user._id);
+    if (!isMember) {
+      return res.status(403).json({ success: false, message: "You are not a member of this group" });
+    }
+
+    filter.groupId = groupId;
+
+    const match = await Match.findOne(filter).sort({ updatedAt: -1 }).lean();
 
     res.status(200).json({ success: true, match: match ? mapMatchSummary(match) : null });
   } catch (error) {

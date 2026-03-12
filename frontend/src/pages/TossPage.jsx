@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import GroupChip from "../components/GroupChip";
 import ProfileToolbarButton from "../components/ProfileToolbarButton";
 import { createMatchSocket } from "../services/socket";
@@ -58,6 +59,7 @@ function TeamAvatarStack({ players = [] }) {
 
 export default function TossPage() {
   const { matchId } = useParams();
+  const { token } = useAuth();
   const navigate = useNavigate();
   const socketRef = useRef(null);
 
@@ -116,7 +118,7 @@ export default function TossPage() {
   /* ── original socket (unchanged) ── */
   useEffect(() => {
     if (!matchId) return;
-    const socket = createMatchSocket();
+    const socket = createMatchSocket(token);
     socketRef.current = socket;
     socket.on("connect", () => socket.emit("joinMatch", { matchId }));
     socket.on("matchState", (updatedMatch) => {
@@ -128,7 +130,7 @@ export default function TossPage() {
       socket.off("matchState");
       socket.disconnect();
     };
-  }, [matchId, navigate]);
+  }, [matchId, navigate, token]);
 
   /* ── CORRECT flip logic ──
      callingTeam called `callingTeamSide`.
@@ -187,7 +189,6 @@ export default function TossPage() {
         className="flex h-screen items-center justify-center bg-[#0d1117]"
         style={{ fontFamily: "'DM Sans', sans-serif" }}
       >
-        <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Barlow+Condensed:wght@600;700;800&display=swap');`}</style>
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#f97316] border-t-transparent" />
           <p className="text-sm text-slate-500">Loading match…</p>
@@ -211,11 +212,6 @@ export default function TossPage() {
       style={{ fontFamily: "'DM Sans', sans-serif" }}
     >
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Barlow+Condensed:wght@600;700;800&display=swap');
-        .score-num { font-family: 'Barlow Condensed', sans-serif; }
-        .btn-tap { transition: transform 0.08s, opacity 0.1s; }
-        .btn-tap:active { transform: scale(0.94); opacity: 0.85; }
-
         /* 3D coin */
         .coin-scene { perspective: 700px; }
         .coin {

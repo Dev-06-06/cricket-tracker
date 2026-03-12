@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import { getMatch } from "../services/api";
 import { createMatchSocket } from "../services/socket";
 import { checkMatchEnd } from "../utils/matchResult";
@@ -102,7 +103,9 @@ function BowlerStatsRow({ match }) {
 
 function ScorerPage() {
   const { matchId } = useParams();
+  const { token } = useAuth();
   const socketRef = useRef(null);
+  const prevBallsBowledRef = useRef(null);
 
   const [match, setMatch] = useState(null);
   const [delivery, setDelivery] = useState(initialDelivery);
@@ -127,12 +130,12 @@ function ScorerPage() {
     }
 
     let isMounted = true;
-    const socket = createMatchSocket();
+    const socket = createMatchSocket(token);
     socketRef.current = socket;
 
     const loadMatch = async () => {
       try {
-        const response = await getMatch(matchId);
+        const response = await getMatch(matchId, token);
         if (isMounted) {
           setMatch(response.match);
         }
@@ -168,6 +171,8 @@ function ScorerPage() {
               teamBPlayersCount,
               totalValidBalls: updatedMatch.ballsBowled,
               totalOvers: updatedMatch.totalOvers,
+              teamAName: updatedMatch.bowlingTeam,
+              teamBName: updatedMatch.battingTeam,
             }),
           );
         } else {
@@ -194,14 +199,19 @@ function ScorerPage() {
         } else {
           setShowBatterModal(false);
         }
+        const currBalls = updatedMatch.ballsBowled ?? 0;
+        const prevBalls = prevBallsBowledRef.current;
         if (
-          updatedMatch.ballsBowled > 0 &&
-          updatedMatch.ballsBowled % 6 === 0 &&
+          prevBalls !== null &&
+          currBalls !== prevBalls &&
+          currBalls > 0 &&
+          currBalls % 6 === 0 &&
           updatedMatch.status === "innings"
         ) {
           setShowBowlerModal(true);
           setSelectedBowler("");
         }
+        prevBallsBowledRef.current = currBalls;
       }
     });
     socket.on("innings_complete", () => {
@@ -213,9 +223,6 @@ function ScorerPage() {
         setSecondInningsNonStriker("");
         setSecondInningsBowler("");
       }
-    });
-    socket.on("score_updated", (updatedMatch) => {
-      setMatch(updatedMatch);
     });
     socket.on("match_completed", (payload) => {
       if (!isMounted) {
@@ -236,13 +243,13 @@ function ScorerPage() {
 
     return () => {
       isMounted = false;
+      prevBallsBowledRef.current = null;
       socket.off("matchState");
       socket.off("innings_complete");
-      socket.off("score_updated");
       socket.off("match_completed");
       socket.disconnect();
     };
-  }, [matchId]);
+  }, [matchId, token]);
 
   const disableWicketFields = !delivery.isWicket;
 

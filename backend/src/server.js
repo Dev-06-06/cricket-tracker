@@ -11,7 +11,10 @@ const setupSockets = require("./sockets/matchSocket");
 connectDB();
 
 const app = express();
-app.use(cors());
+const allowedOrigins = process.env.CLIENT_URL
+  ? process.env.CLIENT_URL.split(",").map((s) => s.trim())
+  : ["http://localhost:5173"];
+app.use(cors({ origin: allowedOrigins, credentials: true }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -28,7 +31,7 @@ app.use("/api/players", playerRoutes);
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "*",
+    origin: allowedOrigins,
     methods: ["GET", "POST"],
   },
 });

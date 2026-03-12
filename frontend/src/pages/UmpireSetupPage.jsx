@@ -9,6 +9,7 @@ import usePageCache from "../hooks/usePageCache";
 import {
   API_BASE_URL,
   addGroupPlayer,
+  createPlayer,
   createUpcomingMatch,
   deleteMatch,
   getCompletedMatches,
@@ -825,14 +826,10 @@ function UmpireSetupPage() {
     try {
       setError("");
       // 1. Create player globally
-      const response = await fetch(`${API_BASE_URL}/api/players`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, photoUrl: newPlayerPhotoUrl.trim() }),
-      });
-      const data = await response.json();
-      if (!response.ok || !data?.success)
-        throw new Error(data?.message || "Unable to add player");
+      const data = await createPlayer(
+        { name, photoUrl: newPlayerPhotoUrl.trim() },
+        token,
+      );
       // 2. Add player to this group's pool
       await addGroupPlayer(selectedGroupId, data.player._id, token);
       // 3. Refresh player list from group
@@ -923,7 +920,7 @@ function UmpireSetupPage() {
     try {
       setDeletingMatchId(deleteCandidate._id);
       setError("");
-      await deleteMatch(deleteCandidate._id);
+      await deleteMatch(deleteCandidate._id, token);
       if (deleteCandidate.status === "upcoming") {
         await refreshUpcoming();
       } else if (
@@ -985,7 +982,6 @@ function UmpireSetupPage() {
         className="flex h-screen items-center justify-center bg-[#0d1117]"
         style={{ fontFamily: "'DM Sans', sans-serif" }}
       >
-        <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Barlow+Condensed:wght@600;700;800&display=swap');`}</style>
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#f97316] border-t-transparent" />
           <p className="text-sm text-slate-500">Loading dashboard…</p>
@@ -1007,10 +1003,6 @@ function UmpireSetupPage() {
       style={{ fontFamily: "'DM Sans', sans-serif" }}
     >
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Barlow+Condensed:wght@600;700;800&display=swap');
-        .score-num { font-family: 'Barlow Condensed', sans-serif; }
-        .btn-tap { transition: transform 0.08s, opacity 0.1s; }
-        .btn-tap:active { transform: scale(0.95); opacity: 0.85; }
         input::placeholder { color: #475569; }
         input[type=number]::-webkit-inner-spin-button { opacity: 0.3; }
       `}</style>

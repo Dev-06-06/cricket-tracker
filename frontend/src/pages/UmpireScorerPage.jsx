@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import { createMatchSocket } from "../services/socket";
 import { getMatch } from "../services/api";
 import { checkMatchEnd } from "../utils/matchResult";
@@ -199,6 +200,7 @@ function ModalBtn({ onClick, disabled, label, variant = "primary" }) {
 
 export default function UmpireScorerPage() {
   const { matchId } = useParams();
+  const { token } = useAuth();
   const navigate = useNavigate();
   const socketRef = useRef(null);
   const prevBallsBowledRef = useRef(null);
@@ -211,6 +213,7 @@ export default function UmpireScorerPage() {
   const [showBowlerModal, setShowBowlerModal] = useState(false);
   const [selectedNewBowler, setSelectedNewBowler] = useState("");
   const [showBatterModal, setShowBatterModal] = useState(false);
+  const showBatterModalRef = useRef(false);
   const [selectedNewBatter, setSelectedNewBatter] = useState("");
   const [showSecondInningsModal, setShowSecondInningsModal] = useState(false);
   const [secondInningsStriker, setSecondInningsStriker] = useState("");
@@ -224,10 +227,10 @@ export default function UmpireScorerPage() {
 
   useEffect(() => {
     if (!matchId) return;
-    const socket = createMatchSocket();
+    const socket = createMatchSocket(token);
     socketRef.current = socket;
 
-    getMatch(matchId)
+    getMatch(matchId, token)
       .then((r) => {
         if (r?.match) setMatch(normalizeMatch(r.match));
       })
@@ -255,6 +258,8 @@ export default function UmpireScorerPage() {
             teamBPlayersCount: cnt,
             totalValidBalls: m.ballsBowled,
             totalOvers: m.totalOvers,
+            teamAName: m.bowlingTeam,
+            teamBName: m.battingTeam,
           }),
         );
       } else {
@@ -263,6 +268,7 @@ export default function UmpireScorerPage() {
 
       if (m.status === "innings_complete") {
         setShowBatterModal(false);
+        showBatterModalRef.current = false;
         setShowBowlerModal(false);
         setShowSecondInningsModal(true);
         setSecondInningsStriker("");
@@ -287,15 +293,17 @@ export default function UmpireScorerPage() {
         m.status === "live" &&
         !m.striker &&
         !m.currentStriker &&
-        !showBatterModal
+        !showBatterModalRef.current
       ) {
         setShowBatterModal(true);
+        showBatterModalRef.current = true;
         setSelectedNewBatter("");
       }
     });
 
     socket.on("innings_complete", () => {
       setShowBatterModal(false);
+      showBatterModalRef.current = false;
       setShowBowlerModal(false);
       setShowSecondInningsModal(true);
       setSecondInningsStriker("");
@@ -311,6 +319,7 @@ export default function UmpireScorerPage() {
           resultMessage: payload.resultMessage,
         });
       setShowBatterModal(false);
+      showBatterModalRef.current = false;
       setShowBowlerModal(false);
       setShowSecondInningsModal(false);
     });
@@ -330,7 +339,7 @@ export default function UmpireScorerPage() {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [matchId, navigate]);
+  }, [matchId, navigate, token]);
 
   /* ── delivery ── */
   function recordDelivery(runs) {
@@ -419,6 +428,34 @@ export default function UmpireScorerPage() {
     setDismissedBatter("");
   }
 
+  const photoMap = useMemo(() => {
+    const map = {};
+    const collectPhoto = (player) => {
+      const name = player?.name;
+      if (!name || map[name]) return;
+      const photo =
+        player?.photoUrl ||
+        player?.photoURL ||
+        player?.avatarUrl ||
+        player?.imageUrl ||
+        null;
+      if (photo) map[name] = photo;
+    };
+
+    if (!match) return map;
+
+    (match?.playerStats || []).forEach(collectPhoto);
+    (match?.team1Players || []).forEach(collectPhoto);
+    (match?.team2Players || []).forEach(collectPhoto);
+
+    return map;
+  }, [match?.playerStats, match?.team1Players, match?.team2Players]);
+
+  const getPhoto = (name) => {
+    if (!name) return null;
+    return photoMap[name] ?? null;
+  };
+
   /* ── loading ── */
   if (!match)
     return (
@@ -426,7 +463,6 @@ export default function UmpireScorerPage() {
         className="flex h-screen items-center justify-center bg-[#0d1117]"
         style={{ fontFamily: "'DM Sans', sans-serif" }}
       >
-        <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Barlow+Condensed:wght@600;700;800&display=swap');`}</style>
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#f97316] border-t-transparent" />
           <p className="text-slate-500 text-sm">Loading match…</p>
@@ -466,32 +502,6 @@ export default function UmpireScorerPage() {
   const strikerStats = getBatterStat(match, striker);
   const nonStrikerStats = getBatterStat(match, nonStriker);
   const bowlerStat = getBowlerStat(match, match.currentBowler);
-
-  const photoMap = useMemo(() => {
-    const map = {};
-    const collectPhoto = (player) => {
-      const name = player?.name;
-      if (!name || map[name]) return;
-      const photo =
-        player?.photoUrl ||
-        player?.photoURL ||
-        player?.avatarUrl ||
-        player?.imageUrl ||
-        null;
-      if (photo) map[name] = photo;
-    };
-
-    (match?.playerStats || []).forEach(collectPhoto);
-    (match?.team1Players || []).forEach(collectPhoto);
-    (match?.team2Players || []).forEach(collectPhoto);
-
-    return map;
-  }, [match?.playerStats, match?.team1Players, match?.team2Players]);
-
-  const getPhoto = (name) => {
-    if (!name) return null;
-    return photoMap[name] ?? null;
-  };
 
   const bowlingTeamPlayers = (match.playerStats || []).filter(
     (p) => p.team === match.bowlingTeam,
@@ -550,10 +560,6 @@ export default function UmpireScorerPage() {
       style={{ fontFamily: "'DM Sans', sans-serif" }}
     >
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Barlow+Condensed:wght@600;700;800&display=swap');
-        .score-num { font-family: 'Barlow Condensed', sans-serif; }
-        .btn-tap { transition: transform 0.08s, opacity 0.08s; }
-        .btn-tap:active { transform: scale(0.93); opacity: 0.85; }
         .flash { animation: popIn 0.5s cubic-bezier(.36,.07,.19,.97); }
         @keyframes popIn {
           0%  { transform: scale(2); opacity: 0; }
@@ -664,6 +670,7 @@ export default function UmpireScorerPage() {
                 batter: selectedNewBatter,
               });
               setShowBatterModal(false);
+              showBatterModalRef.current = false;
               setSelectedNewBatter("");
             }}
             disabled={!selectedNewBatter}

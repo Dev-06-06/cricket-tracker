@@ -604,7 +604,7 @@ function HomePage() {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       if (pollTimer) clearTimeout(pollTimer);
     };
-  }, [activeGroupId]);
+  }, [activeGroupId, token]);
 
   // Load user's groups for dropdown
   useEffect(() => {
@@ -653,13 +653,6 @@ function HomePage() {
       className="min-h-screen bg-[#0d1117] text-white"
       style={{ fontFamily: "'DM Sans', sans-serif" }}
     >
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Barlow+Condensed:wght@600;700;800&display=swap');
-        .score-num { font-family: 'Barlow Condensed', sans-serif; }
-        .btn-tap { transition: transform 0.08s, opacity 0.1s; }
-        .btn-tap:active { transform: scale(0.95); opacity: 0.85; }
-      `}</style>
-
       {/* ══ STICKY HEADER ══ */}
       <header className="sticky top-0 z-20 border-b border-white/5 bg-[#0d1117]/95 backdrop-blur-md">
         <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">

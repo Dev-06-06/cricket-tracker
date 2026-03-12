@@ -5,6 +5,8 @@ export function checkMatchEnd({
   teamBPlayersCount = 11,
   totalValidBalls,
   totalOvers,
+  teamAName = "Team A",
+  teamBName = "Team B",
 }) {
   const firstInningsScore = Number(teamAScore) || 0;
   const chasingScore = Number(teamBScore) || 0;
@@ -18,7 +20,7 @@ export function checkMatchEnd({
   if (chasingScore > firstInningsScore) {
     return {
       isMatchOver: true,
-      resultMessage: `Team B won by ${Math.max(0, allOutWicketCount - wicketsLost)} wickets`,
+      resultMessage: `${teamBName} won by ${Math.max(0, allOutWicketCount - wicketsLost)} wickets`,
     };
   }
 
@@ -33,7 +35,7 @@ export function checkMatchEnd({
   if (chasingScore < firstInningsScore) {
     return {
       isMatchOver: true,
-      resultMessage: `Team A won by ${firstInningsScore - chasingScore} runs`,
+      resultMessage: `${teamAName} won by ${firstInningsScore - chasingScore} runs`,
     };
   }
 

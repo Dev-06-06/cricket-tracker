@@ -41,13 +41,6 @@ function withGroupId(path, groupId) {
   return `${path}${separator}groupId=${encodeURIComponent(groupId)}`;
 }
 
-export function createMatch(payload) {
-  return request("/api/match", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-}
-
 export function createUpcomingMatch(payload, token) {
   return request("/api/match/upcoming", {
     method: "POST",
@@ -83,12 +76,10 @@ export function removeGroupPlayer(groupId, playerId, token) {
   });
 }
 
-export function getMatch(matchId) {
-  return request(`/api/match/${matchId}`);
-}
-
-export function getOngoingMatch() {
-  return request("/api/match/ongoing");
+export function getMatch(matchId, token) {
+  return request(`/api/match/${matchId}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
 }
 
 export function getUpcomingMatches(groupId, token) {
@@ -116,9 +107,10 @@ export function startMatch(matchId, token) {
   });
 }
 
-export function deleteMatch(matchId) {
+export function deleteMatch(matchId, token) {
   return request(`/api/match/${matchId}`, {
     method: "DELETE",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
 }
 
@@ -183,6 +175,14 @@ export function updateMyProfile(payload, token) {
     headers: {
       Authorization: `Bearer ${token}`,
     },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function createPlayer(payload, token) {
+  return request("/api/players", {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: JSON.stringify(payload),
   });
 }

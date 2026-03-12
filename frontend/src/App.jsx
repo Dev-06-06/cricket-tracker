@@ -11,7 +11,7 @@ import GroupsPage from "./pages/GroupsPage";
 import UserProfilePage from "./pages/UserProfilePage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
-import ProtectedRoute from "./routes/ProtectedRoute";
+import RequireAuth from "./routes/RequireAuth";
 
 function App() {
   return (
@@ -20,66 +20,66 @@ function App() {
       <Route
         path="/view"
         element={
-          <ProtectedRoute>
+          <RequireAuth>
             <HomePage />
-          </ProtectedRoute>
+          </RequireAuth>
         }
       />
       <Route
         path="/umpire"
         element={
-          <ProtectedRoute>
+          <RequireAuth>
             <UmpireSetupPage />
-          </ProtectedRoute>
+          </RequireAuth>
         }
       />
       <Route
         path="/umpire/toss/:matchId"
         element={
-          <ProtectedRoute>
+          <RequireAuth>
             <TossPage />
-          </ProtectedRoute>
+          </RequireAuth>
         }
       />
       <Route
         path="/umpire/scorer/:matchId"
         element={
-          <ProtectedRoute>
+          <RequireAuth>
             <UmpireScorerPage />
-          </ProtectedRoute>
+          </RequireAuth>
         }
       />
       <Route
         path="/scorer/:matchId"
         element={
-          <ProtectedRoute>
+          <RequireAuth>
             <ScorerPage />
-          </ProtectedRoute>
+          </RequireAuth>
         }
       />
       <Route path="/scoreboard/:matchId" element={<ScoreboardPage />} />
       <Route
         path="/players"
         element={
-          <ProtectedRoute>
+          <RequireAuth>
             <PlayerProfilesPage />
-          </ProtectedRoute>
+          </RequireAuth>
         }
       />
       <Route
         path="/groups"
         element={
-          <ProtectedRoute>
+          <RequireAuth>
             <GroupsPage />
-          </ProtectedRoute>
+          </RequireAuth>
         }
       />
       <Route
         path="/profile"
         element={
-          <ProtectedRoute>
+          <RequireAuth>
             <UserProfilePage />
-          </ProtectedRoute>
+          </RequireAuth>
         }
       />
       <Route path="/login" element={<LoginPage />} />
