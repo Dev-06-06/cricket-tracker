@@ -503,6 +503,7 @@ function HomePage() {
   const [showGroupDropdown, setShowGroupDropdown] = useState(false);
   const [upcomingMatches, setUpcomingMatches] = useState([]);
   const [liveMatches, setLiveMatches] = useState([]);
+  const [liveScores, setLiveScores] = useState({});
   const [completedMatches, setCompletedMatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -611,6 +612,10 @@ function HomePage() {
   }, [activeGroupId, token]);
 
   useEffect(() => {
+    setLiveScores({});
+  }, [activeGroupId]);
+
+  useEffect(() => {
     if (!activeGroupId || !token) return;
 
     let isMounted = true;
@@ -622,11 +627,18 @@ function HomePage() {
       if (!isMounted) return;
       if (data.groupId?.toString() !== activeGroupId?.toString()) return;
 
-      getLiveMatches(activeGroupId, token)
-        .then((res) => {
-          if (isMounted) setLiveMatches(res.matches || []);
-        })
-        .catch(() => {});
+      setLiveScores((prev) => ({
+        ...prev,
+        [data._id]: {
+          totalRuns: data.totalRuns,
+          wickets: data.wickets,
+          oversBowled: data.oversBowled,
+          ballsBowled: data.ballsBowled,
+          battingTeam: data.battingTeam,
+          bowlingTeam: data.bowlingTeam,
+          status: data.status,
+        },
+      }));
     };
 
     const handleGroupUpdate = (data) => {
@@ -923,13 +935,20 @@ function HomePage() {
                 <EmptyState icon="📡" label="No live matches right now" />
               ) : (
                 <div className="space-y-3">
-                  {liveMatches.map((match) => (
-                    <LiveMatchCard
-                      key={match._id}
-                      match={match}
-                      onUmpireMode={handleOpenLiveUmpire}
-                    />
-                  ))}
+                  {liveMatches.map((match) => {
+                    const realtimeScore = liveScores[match._id];
+                    const displayMatch = realtimeScore
+                      ? { ...match, ...realtimeScore }
+                      : match;
+
+                    return (
+                      <LiveMatchCard
+                        key={match._id}
+                        match={displayMatch}
+                        onUmpireMode={handleOpenLiveUmpire}
+                      />
+                    );
+                  })}
                 </div>
               )}
             </section>
