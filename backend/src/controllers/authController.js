@@ -142,4 +142,58 @@ const updateProfile = async (req, res) => {
   }
 };
 
-module.exports = { register, login, me, updateProfile };
+const resetPassword = async (req, res) => {
+  try {
+    const { name, email, newPassword } = req.body;
+
+    if (!name || !email || !newPassword) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Name, email and new password are required" 
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Password must be at least 6 characters" 
+      });
+    }
+
+    const user = await User.findOne({ 
+      email: email.toLowerCase().trim() 
+    });
+
+    if (!user) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "No account found with that name and email" 
+      });
+    }
+
+    const nameMatches = 
+      user.name.toLowerCase().trim() === name.toLowerCase().trim();
+
+    if (!nameMatches) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "No account found with that name and email" 
+      });
+    }
+
+    user.password = newPassword;
+    await user.save();
+
+    res.status(200).json({ 
+      success: true, 
+      message: "Password reset successful. You can now log in." 
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      success: false, 
+      message: error.message 
+    });
+  }
+};
+
+module.exports = { register, login, me, updateProfile, resetPassword };
