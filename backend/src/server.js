@@ -10,8 +10,8 @@ const setupSockets = require("./sockets/matchSocket");
 connectDB();
 
 const app = express();
-const allowedOrigins = process.env.CLIENT_URL
-  ? process.env.CLIENT_URL.split(",").map((s) => s.trim())
+const allowedOrigins = process.env.CLIENT_ORIGIN
+  ? process.env.CLIENT_ORIGIN.split(",").map((s) => s.trim())
   : ["http://localhost:5173"];
 app.use((req, res, next) => {
   const origin = req.headers.origin;
