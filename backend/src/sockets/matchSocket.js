@@ -514,6 +514,16 @@ function setupSockets(io) {
       if (match) emitMatchState(socket, match);
     });
 
+    socket.on("joinGroup", ({ groupId }) => {
+      if (!groupId) return;
+      // Leave any previously joined group rooms first
+      const rooms = [...socket.rooms];
+      rooms.forEach((room) => {
+        if (room.startsWith("group:")) socket.leave(room);
+      });
+      socket.join(`group:${groupId}`);
+    });
+
     // ── toss events ────────────────────────────────────────────────────────
     socket.on("toss_flip_started", ({ matchId }) => {
       if (!matchId) return;

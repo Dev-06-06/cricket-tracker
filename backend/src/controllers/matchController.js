@@ -3,6 +3,18 @@ const Player = require("../models/Player");
 const Group = require("../models/Group");
 const mongoose = require("mongoose");
 
+let _io = null;
+const setIo = (ioInstance) => { _io = ioInstance; };
+
+const broadcastGroupUpdate = (groupId, type) => {
+  if (_io && groupId) {
+    _io.to(`group:${groupId}`).emit("groupMatchUpdate", {
+      groupId: groupId.toString(),
+      type,
+    });
+  }
+};
+
 // ─── Auth helper ──────────────────────────────────────────────────────────────
 const ensureUserIsGroupMember = async (groupId, userId) => {
   const group = await Group.findOne({
@@ -145,6 +157,8 @@ const createUpcomingMatch = async (req, res) => {
       current: { battingTeam: "team1", inningsNumber: 1 },
       playerStats,
     });
+
+    broadcastGroupUpdate(groupId, "match_created");
 
     return res.status(201).json({ success: true, match: mapMatchSummary(match) });
   } catch (error) {
@@ -336,6 +350,7 @@ const startMatch = async (req, res) => {
     if (match.status === "upcoming") {
       match.status = "toss";
       await match.save();
+      broadcastGroupUpdate(match.groupId, "match_started");
     }
 
     res.status(200).json({ success: true, match: { _id: match._id, status: match.status } });
@@ -358,6 +373,7 @@ const deleteMatch = async (req, res) => {
     }
 
     await Match.findByIdAndDelete(req.params.id);
+    broadcastGroupUpdate(match.groupId, "match_deleted");
     res.status(200).json({ success: true });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -374,4 +390,5 @@ module.exports = {
   listUpcomingMatches,
   listLiveMatches,
   startMatch,
+  setIo,
 };

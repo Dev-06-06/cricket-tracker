@@ -11,6 +11,7 @@ import {
   getUpcomingMatches,
   startMatch,
 } from "../services/api";
+import { createMatchSocket } from "../services/socket";
 import usePageCache from "../hooks/usePageCache";
 
 /* ─── helpers ────────────────────────────────────────────────────────────────── */
@@ -510,6 +511,7 @@ function HomePage() {
   const liveSectionRef = useRef(null);
   const upcomingSectionRef = useRef(null);
   const completedSectionRef = useRef(null);
+  const loadMatchesRef = useRef(null);
 
   const handleStartMatch = async (matchId) => {
     try {
@@ -573,11 +575,13 @@ function HomePage() {
         if (isMounted) {
           setLoading(false);
           if (document.visibilityState === "visible") {
-            pollTimer = setTimeout(loadMatches, 5000);
+            pollTimer = setTimeout(loadMatches, 30000);
           }
         }
       }
     };
+
+    loadMatchesRef.current = loadMatches;
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
@@ -603,6 +607,42 @@ function HomePage() {
       isMounted = false;
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       if (pollTimer) clearTimeout(pollTimer);
+    };
+  }, [activeGroupId, token]);
+
+  useEffect(() => {
+    if (!activeGroupId || !token) return;
+
+    let isMounted = true;
+    const socket = createMatchSocket(token);
+
+    socket.emit("joinGroup", { groupId: activeGroupId });
+
+    const handleMatchState = (data) => {
+      if (!isMounted) return;
+      if (data.groupId?.toString() !== activeGroupId?.toString()) return;
+
+      getLiveMatches(activeGroupId, token)
+        .then((res) => {
+          if (isMounted) setLiveMatches(res.matches || []);
+        })
+        .catch(() => {});
+    };
+
+    const handleGroupUpdate = (data) => {
+      if (!isMounted) return;
+      if (data.groupId?.toString() !== activeGroupId?.toString()) return;
+      loadMatchesRef.current?.();
+    };
+
+    socket.on("matchState", handleMatchState);
+    socket.on("groupMatchUpdate", handleGroupUpdate);
+
+    return () => {
+      isMounted = false;
+      socket.off("matchState", handleMatchState);
+      socket.off("groupMatchUpdate", handleGroupUpdate);
+      socket.disconnect();
     };
   }, [activeGroupId, token]);
 
