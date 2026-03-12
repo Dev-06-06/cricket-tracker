@@ -71,8 +71,9 @@ const getMyGroups = async (req, res) => {
   try {
     // ✅ Hits the { "members.user": 1 } index directly
     const groups = await Group.find({ "members.user": req.user._id })
-      .populate("createdBy", "name email photoUrl")
-      .populate("members.user", "name email photoUrl")
+      .populate("createdBy", "name photoUrl")
+      .select("name description inviteCode members playerPool createdBy createdAt")
+      .lean()
       .sort({ createdAt: -1 });
 
     return res.status(200).json({ success: true, groups });
