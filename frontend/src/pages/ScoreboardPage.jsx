@@ -1408,6 +1408,11 @@ function ScoreboardPage() {
     socket.on("connect", handleConnect);
     socket.on("disconnect", handleDisconnect);
     socket.on("matchState", apply);
+    socket.on("fullTimeline", (data) => {
+      if (data.matchId?.toString() === matchId?.toString()) {
+        setMatch((prev) => (prev ? { ...prev, timeline: data.timeline } : prev));
+      }
+    });
     socket.on("score_updated", apply);
     socket.on("match_completed", (payload) => {
       if (payload) apply(payload);
@@ -1434,6 +1439,7 @@ function ScoreboardPage() {
       socket.off("connect", handleConnect);
       socket.off("disconnect", handleDisconnect);
       socket.off("matchState");
+      socket.off("fullTimeline");
       socket.off("score_updated");
       socket.off("match_completed");
       socket.off("toss_flip_started");

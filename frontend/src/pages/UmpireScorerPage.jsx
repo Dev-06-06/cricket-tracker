@@ -301,6 +301,12 @@ export default function UmpireScorerPage() {
       }
     });
 
+    socket.on("fullTimeline", (data) => {
+      if (data.matchId?.toString() === matchId?.toString()) {
+        setMatch((prev) => (prev ? { ...prev, timeline: data.timeline } : prev));
+      }
+    });
+
     socket.on("innings_complete", () => {
       setShowBatterModal(false);
       showBatterModalRef.current = false;
@@ -331,6 +337,7 @@ export default function UmpireScorerPage() {
       [
         "connect",
         "matchState",
+        "fullTimeline",
         "innings_complete",
         "match_completed",
         "matchEnded",
