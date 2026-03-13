@@ -99,6 +99,17 @@ function emitMatchState(target, match) {
     }
   }
 
+  const fullTimeline = (m.timeline || []).map((ball) => ({
+    ...ball,
+    runs: ball.runsOffBat,
+    isValidBall: isValidBallType(ball.extraType),
+  }));
+
+  // Only send last 12 balls (current over + previous over)
+  // for real-time updates. Frontend scoreboard only needs
+  // current over balls for the live over display.
+  const recentTimeline = fullTimeline.slice(-12);
+
   target.emit("matchState", {
     _id: m._id,
     groupId: m.groupId,
@@ -139,14 +150,27 @@ function emitMatchState(target, match) {
     } : null,
 
     playerStats: Object.values(statsMap),
-    timeline: (m.timeline || []).map((ball) => ({
-      ...ball,
-      runs: ball.runsOffBat,
-      isValidBall: isValidBallType(ball.extraType),
-    })),
+    timeline: recentTimeline,
+    timelineLength: fullTimeline.length,
 
     result: m.result || {},
     statsApplied: m.statsApplied,
+  });
+}
+
+function emitFullMatchState(target, match) {
+  const m = match.toObject ? match.toObject() : match;
+  const fullTimeline = (m.timeline || []).map((ball) => ({
+    ...ball,
+    runs: ball.runsOffBat,
+    isValidBall: isValidBallType(ball.extraType),
+  }));
+
+  // Emit a separate event with the full timeline
+  target.emit("fullTimeline", {
+    matchId: m._id,
+    timeline: fullTimeline,
+    timelineLength: fullTimeline.length,
   });
 }
 
@@ -504,14 +528,20 @@ function setupSockets(io) {
     // ── joinMatch ──────────────────────────────────────────────────────────
     socket.on("joinMatch", async ({ matchId }) => {
       socket.join(matchId);
-      const match = await Match.findById(matchId);
-      if (match) emitMatchState(socket, match);
+      const match = await Match.findById(matchId).lean();
+      if (match) {
+        emitMatchState(socket, match);
+        emitFullMatchState(socket, match);
+      }
     });
 
     socket.on("join_match", async (matchId) => {
       socket.join(matchId);
-      const match = await Match.findById(matchId);
-      if (match) emitMatchState(socket, match);
+      const match = await Match.findById(matchId).lean();
+      if (match) {
+        emitMatchState(socket, match);
+        emitFullMatchState(socket, match);
+      }
     });
 
     socket.on("joinGroup", ({ groupId }) => {
