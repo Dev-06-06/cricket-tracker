@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import BottomSheet from "./BottomSheet";
 import BottomSheetOption from "./BottomSheetOption";
 import PlayerManagerTab from "./PlayerManagerTab";
@@ -24,6 +24,8 @@ export default function OverBreakDrawer({
     dissolveJokers: [],
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const touchStartXRef = useRef(null);
+  const touchStartYRef = useRef(null);
 
   const bowlingTeamPlayers = useMemo(() => {
     if (!match?.playerStats) return [];
@@ -87,6 +89,44 @@ export default function OverBreakDrawer({
   const canStartOver = selectedBowler.length > 0 &&
     oversValid &&
     (!needsBatter || selectedBatter.length > 0);
+
+  const handleTouchStart = (e) => {
+    touchStartXRef.current = e.touches[0].clientX;
+    touchStartYRef.current = e.touches[0].clientY;
+  };
+
+  const handleTouchEnd = (e) => {
+    if (touchStartXRef.current === null) return;
+
+    const deltaX = e.changedTouches[0].clientX -
+      touchStartXRef.current;
+    const deltaY = e.changedTouches[0].clientY -
+      (touchStartYRef.current || 0);
+
+    if (Math.abs(deltaX) < Math.abs(deltaY)) return;
+    if (Math.abs(deltaX) < 50) return;
+
+    const visibleSections = needsBatter
+      ? ["batter", "bowler", "overs", "teams"]
+      : ["bowler", "overs", "teams"];
+
+    const currentIndex = visibleSections.indexOf(activeSection);
+    if (currentIndex === -1) return;
+
+    if (deltaX < 0) {
+      const nextIndex = Math.min(
+        currentIndex + 1,
+        visibleSections.length - 1
+      );
+      setActiveSection(visibleSections[nextIndex]);
+    } else {
+      const prevIndex = Math.max(currentIndex - 1, 0);
+      setActiveSection(visibleSections[prevIndex]);
+    }
+
+    touchStartXRef.current = null;
+    touchStartYRef.current = null;
+  };
 
   const handleCommit = async () => {
     if (!canStartOver) return;
@@ -199,6 +239,35 @@ export default function OverBreakDrawer({
         })}
       </div>
 
+      {(() => {
+        const visibleSections = needsBatter
+          ? ["batter", "bowler", "overs", "teams"]
+          : ["bowler", "overs", "teams"];
+        const currentIndex = visibleSections.indexOf(activeSection);
+        return (
+          <div className="flex items-center justify-center gap-1.5 -mt-1 mb-1">
+            {visibleSections.map((s, i) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setActiveSection(s)}
+                className={`rounded-full transition-all ${
+                  i === currentIndex
+                    ? "h-1.5 w-4 bg-[#f97316]"
+                    : "h-1.5 w-1.5 bg-white/20 hover:bg-white/40"
+                }`}
+              />
+            ))}
+          </div>
+        );
+      })()}
+
+      <div
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        className="w-full transition-opacity duration-150"
+        key={activeSection}
+      >
       {activeSection === "batter" && (
         <div className="space-y-3">
           <div className="rounded-xl border border-red-500/20 bg-red-500/5 px-3 py-2.5">
@@ -422,6 +491,8 @@ export default function OverBreakDrawer({
           onChange={setTeamChanges}
         />
       )}
+
+      </div>
 
       <div className="mt-6 space-y-2">
         {!selectedBowler && (
