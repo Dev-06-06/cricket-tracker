@@ -1,5 +1,4 @@
 import { useState, useMemo } from "react";
-import BottomSheetOption from "./BottomSheetOption";
 
 export default function PlayerManagerTab({
   match,
@@ -9,12 +8,8 @@ export default function PlayerManagerTab({
   const [activeSubTab, setActiveSubTab] = useState("roster");
   const [localReshuffles, setLocalReshuffles] = useState([]);
 
-  const [addTab, setAddTab] = useState("pool");
   const [newPlayerName, setNewPlayerName] = useState("");
-  const [newPlayerToTeam, setNewPlayerToTeam] = useState("team1");
   const [pendingAddPlayers, setPendingAddPlayers] = useState([]);
-  const [selectedPoolPlayer, setSelectedPoolPlayer] = useState(null);
-  const [poolPlayerToTeam, setPoolPlayerToTeam] = useState("team1");
 
   const [pendingSetJokers, setPendingSetJokers] = useState([]);
   const [pendingDissolveJokers, setPendingDissolveJokers] = useState([]);
@@ -89,47 +84,6 @@ export default function PlayerManagerTab({
 
     setLocalReshuffles(updated);
     notifyChanges({ reshuffles: updated });
-  };
-
-  const handleAddFromPool = () => {
-    if (!selectedPoolPlayer) return;
-
-    const toAdd = {
-      name: selectedPoolPlayer.name,
-      photoUrl: selectedPoolPlayer.photoUrl || "",
-      fromPool: true,
-      playerId: selectedPoolPlayer._id,
-      toTeam: poolPlayerToTeam,
-    };
-    const updated = [...pendingAddPlayers, toAdd];
-
-    setPendingAddPlayers(updated);
-    setSelectedPoolPlayer(null);
-    notifyChanges({ addPlayers: updated });
-  };
-
-  const handleAddNewPlayer = () => {
-    if (!newPlayerName.trim()) return;
-
-    const toAdd = {
-      name: newPlayerName.trim(),
-      photoUrl: "",
-      fromPool: false,
-      playerId: null,
-      toTeam: newPlayerToTeam,
-    };
-    const updated = [...pendingAddPlayers, toAdd];
-
-    setPendingAddPlayers(updated);
-    setNewPlayerName("");
-    notifyChanges({ addPlayers: updated });
-  };
-
-  const handleRemovePending = (name) => {
-    const updated = pendingAddPlayers.filter((player) => player.name !== name);
-
-    setPendingAddPlayers(updated);
-    notifyChanges({ addPlayers: updated });
   };
 
   const handleSetJoker = (playerName) => {
@@ -287,138 +241,171 @@ export default function PlayerManagerTab({
 
       {activeSubTab === "add" && (
         <div className="space-y-4">
-          <div className="flex gap-1 rounded-xl border border-white/5 bg-white/3 p-1">
-            {[
-              { key: "pool", label: "From Pool" },
-              { key: "new", label: "New Player" },
-            ].map((tab) => (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => setAddTab(tab.key)}
-                className={`flex-1 rounded-lg py-1.5 text-[11px] font-black uppercase tracking-widest transition-all ${addTab === tab.key
-                  ? "bg-slate-700 text-white"
-                  : "text-slate-600 hover:text-slate-400"
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
 
-          <div>
-            <p className="mb-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600">
-              Add to team
-            </p>
-            <div className="flex gap-2">
-              {[
-                {
-                  key: "team1",
-                  name: match?.team1Name,
-                  active: "border-indigo-500/50 bg-indigo-500/10 text-indigo-300",
-                },
-                {
-                  key: "team2",
-                  name: match?.team2Name,
-                  active: "border-cyan-500/50 bg-cyan-500/10 text-cyan-300",
-                },
-              ].map((team) => {
-                const value = addTab === "pool" ? poolPlayerToTeam : newPlayerToTeam;
-                const setValue = addTab === "pool" ? setPoolPlayerToTeam : setNewPlayerToTeam;
-
-                return (
-                  <button
-                    key={team.key}
-                    type="button"
-                    onClick={() => setValue(team.key)}
-                    className={`flex-1 rounded-xl border py-2 text-xs font-black uppercase tracking-widest transition-all ${value === team.key
-                      ? team.active
-                      : "border-white/8 bg-white/3 text-slate-500 hover:text-slate-300"
-                    }`}
-                  >
-                    {team.name}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {addTab === "pool" && (
-            <div className="space-y-2">
-              {unassignedPoolPlayers.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-white/8 py-8 text-center text-sm text-slate-600">
-                  No unassigned players in pool
-                </div>
-              ) : (
-                unassignedPoolPlayers.map((player) => (
-                  <BottomSheetOption
-                    key={player._id}
-                    label={player.name}
-                    photoUrl={player.photoUrl}
-                    selected={selectedPoolPlayer?._id === player._id}
-                    onClick={() =>
-                      setSelectedPoolPlayer(
-                        selectedPoolPlayer?._id === player._id ? null : player
-                      )
-                    }
-                  />
-                ))
-              )}
-              {selectedPoolPlayer && (
-                <button
-                  type="button"
-                  onClick={handleAddFromPool}
-                  className="w-full rounded-xl bg-[#f97316] py-2.5 text-xs font-black uppercase tracking-widest text-white transition-all hover:bg-orange-500"
-                >
-                  + Add {selectedPoolPlayer.name}
-                </button>
-              )}
-            </div>
-          )}
-
-          {addTab === "new" && (
-            <div className="space-y-2">
-              <input
-                value={newPlayerName}
-                onChange={(event) => setNewPlayerName(event.target.value)}
-                onKeyDown={(event) =>
-                  event.key === "Enter" && handleAddNewPlayer()
-                }
-                placeholder="Player name"
-                className="w-full rounded-xl border border-white/8 bg-slate-800 px-3 py-2.5 text-sm text-white outline-none transition-all focus:ring-2 focus:ring-[#f97316]"
-              />
-              <button
-                type="button"
-                onClick={handleAddNewPlayer}
-                disabled={!newPlayerName.trim()}
-                className="w-full rounded-xl bg-[#f97316] py-2.5 text-xs font-black uppercase tracking-widest text-white transition-all hover:bg-orange-500 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                + Add Player
-              </button>
-            </div>
-          )}
-
-          {pendingAddPlayers.length > 0 && (
+          {/* From pool */}
+          {unassignedPoolPlayers.length > 0 && (
             <div>
-              <p className="mb-1.5 text-[9px] font-black uppercase tracking-widest text-slate-600">
-                Pending additions
+              <p className="text-[9px] font-black uppercase tracking-widest text-slate-600 mb-2">
+                From group pool
               </p>
               <div className="space-y-1.5">
-                {pendingAddPlayers.map((player) => (
+                {unassignedPoolPlayers.map((p) => (
                   <div
-                    key={player.name}
-                    className="flex items-center gap-2 rounded-xl border border-[#f97316]/20 bg-[#f97316]/5 px-3 py-2"
+                    key={p._id}
+                    className="flex items-center gap-2 rounded-xl border border-white/8 bg-white/3 px-3 py-2.5"
                   >
-                    <p className="flex-1 text-xs font-bold text-white">
-                      {player.name}
-                    </p>
-                    <p className="text-[10px] text-slate-500">
-                      → {player.toTeam === "team1" ? match?.team1Name : match?.team2Name}
+                    <span className="inline-flex h-8 w-8 shrink-0 rounded-full bg-slate-700 items-center justify-center text-xs font-bold text-slate-300">
+                      {p.name.charAt(0).toUpperCase()}
+                    </span>
+                    <p className="flex-1 text-sm font-medium text-white truncate">
+                      {p.name}
                     </p>
                     <button
                       type="button"
-                      onClick={() => handleRemovePending(player.name)}
-                      className="text-[11px] text-red-600 hover:text-red-400"
+                      onClick={() => {
+                        const toAdd = {
+                          name: p.name,
+                          photoUrl: p.photoUrl || "",
+                          fromPool: true,
+                          playerId: p._id,
+                          toTeam: "team1",
+                        };
+                        const updated = [...pendingAddPlayers, toAdd];
+                        setPendingAddPlayers(updated);
+                        notifyChanges({ addPlayers: updated });
+                      }}
+                      className="rounded-lg border border-indigo-600/40 bg-indigo-600/20 px-2 py-1 text-[9px] font-bold text-indigo-400 hover:bg-indigo-600/35 transition-colors"
+                    >
+                      T1
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const toAdd = {
+                          name: p.name,
+                          photoUrl: p.photoUrl || "",
+                          fromPool: true,
+                          playerId: p._id,
+                          toTeam: "team2",
+                        };
+                        const updated = [...pendingAddPlayers, toAdd];
+                        setPendingAddPlayers(updated);
+                        notifyChanges({ addPlayers: updated });
+                      }}
+                      className="rounded-lg border border-cyan-600/40 bg-cyan-600/20 px-2 py-1 text-[9px] font-bold text-cyan-400 hover:bg-cyan-600/35 transition-colors"
+                    >
+                      T2
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* New player */}
+          <div>
+            <p className="text-[9px] font-black uppercase tracking-widest text-slate-600 mb-2">
+              New player
+            </p>
+            <div className="flex gap-2">
+              <input
+                value={newPlayerName}
+                onChange={(e) => setNewPlayerName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && newPlayerName.trim()) {
+                    const toAdd = {
+                      name: newPlayerName.trim(),
+                      photoUrl: "",
+                      fromPool: false,
+                      playerId: null,
+                      toTeam: "team1",
+                    };
+                    const updated = [...pendingAddPlayers, toAdd];
+                    setPendingAddPlayers(updated);
+                    setNewPlayerName("");
+                    notifyChanges({ addPlayers: updated });
+                  }
+                }}
+                placeholder="Player name"
+                className="flex-1 rounded-xl border border-white/8 bg-slate-800 px-3 py-2.5 text-sm text-white outline-none focus:ring-2 focus:ring-[#f97316] transition-all"
+              />
+              <button
+                type="button"
+                disabled={!newPlayerName.trim()}
+                onClick={() => {
+                  if (!newPlayerName.trim()) return;
+                  const toAdd = {
+                    name: newPlayerName.trim(),
+                    photoUrl: "",
+                    fromPool: false,
+                    playerId: null,
+                    toTeam: "team1",
+                  };
+                  const updated = [...pendingAddPlayers, toAdd];
+                  setPendingAddPlayers(updated);
+                  setNewPlayerName("");
+                  notifyChanges({ addPlayers: updated });
+                }}
+                className="shrink-0 rounded-lg border border-indigo-600/40 bg-indigo-600/20 px-2.5 py-2.5 text-[9px] font-bold text-indigo-400 hover:bg-indigo-600/35 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                T1
+              </button>
+              <button
+                type="button"
+                disabled={!newPlayerName.trim()}
+                onClick={() => {
+                  if (!newPlayerName.trim()) return;
+                  const toAdd = {
+                    name: newPlayerName.trim(),
+                    photoUrl: "",
+                    fromPool: false,
+                    playerId: null,
+                    toTeam: "team2",
+                  };
+                  const updated = [...pendingAddPlayers, toAdd];
+                  setPendingAddPlayers(updated);
+                  setNewPlayerName("");
+                  notifyChanges({ addPlayers: updated });
+                }}
+                className="shrink-0 rounded-lg border border-cyan-600/40 bg-cyan-600/20 px-2.5 py-2.5 text-[9px] font-bold text-cyan-400 hover:bg-cyan-600/35 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                T2
+              </button>
+            </div>
+            <p className="mt-1.5 text-[10px] text-slate-700">
+              T1 = {match?.team1Name} · T2 = {match?.team2Name}
+            </p>
+          </div>
+
+          {/* Pending */}
+          {pendingAddPlayers.length > 0 && (
+            <div>
+              <p className="text-[9px] font-black uppercase tracking-widest text-slate-600 mb-2">
+                Pending ({pendingAddPlayers.length})
+              </p>
+              <div className="space-y-1.5">
+                {pendingAddPlayers.map((p, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center gap-2 rounded-xl border border-[#f97316]/15 bg-[#f97316]/5 px-3 py-2"
+                  >
+                    <p className="flex-1 text-xs font-bold text-white">
+                      {p.name}
+                    </p>
+                    <p className="text-[10px] text-slate-500">
+                      → {p.toTeam === "team1"
+                        ? match?.team1Name
+                        : match?.team2Name}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const updated = pendingAddPlayers
+                          .filter((_, idx) => idx !== i);
+                        setPendingAddPlayers(updated);
+                        notifyChanges({ addPlayers: updated });
+                      }}
+                      className="text-[11px] text-red-600 hover:text-red-400 transition-colors"
                     >
                       ✕
                     </button>
@@ -427,6 +414,7 @@ export default function PlayerManagerTab({
               </div>
             </div>
           )}
+
         </div>
       )}
 

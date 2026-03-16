@@ -261,17 +261,51 @@ export default function UmpireScorerPage() {
       const prev = prevBallsBowledRef.current;
 
       // Append new balls FIRST before setMatch.
-      if (data.timeline && data.timeline.length > 0) {
-        setFullTimeline((prevTimeline) => {
-          const existingIds = new Set(
-            prevTimeline.map((b) => b._id?.toString()).filter(Boolean),
-          );
-          const newBalls = (data.timeline || []).filter(
-            (b) => b._id && !existingIds.has(b._id.toString()),
-          );
-          return newBalls.length > 0 ? [...prevTimeline, ...newBalls] : prevTimeline;
-        });
-      }
+        if (data.ballsBowled !== undefined) {
+          setFullTimeline((prevTimeline) => {
+            // RISK: after undo, ballsBowled decreases
+            // fullTimeline must be trimmed to remove the undone ball
+            // We detect undo by comparing ballsBowled to fullTimeline
+            // valid ball count
+            const prevValidCount = prevTimeline.filter(
+              (b) =>
+                !b.extraType ||
+                b.extraType === "none" ||
+                b.extraType === "bye" ||
+                b.extraType === "leg-bye",
+            ).length;
+
+            const newValidCount = data.ballsBowled ?? 0;
+
+            // Undo detected — ballsBowled decreased
+            if (newValidCount < prevValidCount && prevTimeline.length > 0) {
+              // Remove balls from the end until valid count matches
+              const trimmed = [...prevTimeline];
+              let currentValid = prevValidCount;
+              while (currentValid > newValidCount && trimmed.length > 0) {
+                const last = trimmed[trimmed.length - 1];
+                trimmed.pop();
+                const wasValid =
+                  !last.extraType ||
+                  last.extraType === "none" ||
+                  last.extraType === "bye" ||
+                  last.extraType === "leg-bye";
+                if (wasValid) currentValid--;
+              }
+              return trimmed;
+            }
+
+            // Normal delivery — append new balls only
+            if (!data.timeline || data.timeline.length === 0) return prevTimeline;
+            const existingIds = new Set(
+              prevTimeline.map((b) => b._id?.toString()).filter(Boolean),
+            );
+            const newBalls = (data.timeline || []).filter(
+              (b) => b._id && !existingIds.has(b._id.toString()),
+            );
+            return newBalls.length > 0 ? [...prevTimeline, ...newBalls] : prevTimeline;
+          });
+        }
 
       const shouldEval =
         (m.inningsNumber === 2 || typeof m.firstInningsScore === "number") &&
@@ -992,14 +1026,6 @@ export default function UmpireScorerPage() {
         <span className="hidden sm:inline text-[11px] font-black uppercase tracking-[0.2em] text-[#f97316]">
           Umpire
         </span>
-        <button
-          type="button"
-          onClick={() => socketRef.current?.emit("swapStriker", { matchId })}
-          disabled={match.status !== "live" || !striker || !nonStriker}
-          className="text-[11px] font-bold text-slate-500 hover:text-[#f97316] disabled:opacity-25 disabled:cursor-not-allowed transition-colors btn-tap"
-        >
-          ⇄ Swap
-        </button>
       </div>
 
       {/* ═══════════════════════════════════════
@@ -1268,6 +1294,18 @@ export default function UmpireScorerPage() {
             className="rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-3 py-1.5 text-[11px] font-black uppercase tracking-widest text-indigo-400 hover:border-indigo-400/50 transition-all"
           >
             ⚾ Change Bowler
+          </button>
+          <button
+            type="button"
+            onClick={() => socketRef.current?.emit("swapStriker", { matchId })}
+            disabled={
+              match?.status !== "live" ||
+              !match?.currentStriker ||
+              !match?.currentNonStriker
+            }
+            className="rounded-xl border border-slate-700/50 bg-slate-800/50 px-3 py-1.5 text-[11px] font-black uppercase tracking-widest text-slate-400 hover:border-slate-600 hover:text-slate-200 disabled:opacity-25 disabled:cursor-not-allowed transition-all"
+          >
+            ⇄ Swap
           </button>
         </div>
 

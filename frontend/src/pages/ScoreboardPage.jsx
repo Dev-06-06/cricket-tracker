@@ -1430,8 +1430,42 @@ function ScoreboardPage() {
 
     const apply = (updatedMatch) => {
       setMatch(updatedMatch);
-      if (updatedMatch.timeline && updatedMatch.timeline.length > 0) {
+        if (updatedMatch.ballsBowled !== undefined) {
         setFullTimeline((prev) => {
+            // RISK: after undo, ballsBowled decreases
+            // fullTimeline must be trimmed to remove the undone ball
+            // We detect undo by comparing ballsBowled to fullTimeline
+            // valid ball count
+            const prevValidCount = prev.filter(
+              (b) =>
+                !b.extraType ||
+                b.extraType === "none" ||
+                b.extraType === "bye" ||
+                b.extraType === "leg-bye",
+            ).length;
+
+            const newValidCount = updatedMatch.ballsBowled ?? 0;
+
+            // Undo detected — ballsBowled decreased
+            if (newValidCount < prevValidCount && prev.length > 0) {
+              // Remove balls from the end until valid count matches
+              const trimmed = [...prev];
+              let currentValid = prevValidCount;
+              while (currentValid > newValidCount && trimmed.length > 0) {
+                const last = trimmed[trimmed.length - 1];
+                trimmed.pop();
+                const wasValid =
+                  !last.extraType ||
+                  last.extraType === "none" ||
+                  last.extraType === "bye" ||
+                  last.extraType === "leg-bye";
+                if (wasValid) currentValid--;
+              }
+              return trimmed;
+            }
+
+            // Normal delivery — append new balls only
+            if (!updatedMatch.timeline || updatedMatch.timeline.length === 0) return prev;
           const existingIds = new Set(
             prev.map((b) => b._id?.toString()).filter(Boolean),
           );
