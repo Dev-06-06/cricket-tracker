@@ -548,6 +548,14 @@ async function handleWicketInningsCompletion(match, matchId, io, options = {}) {
       firstInningsScore: secondInningsState.firstInningsScore,
     });
     if (!suppressStateEmit) emitMatchState(io.to(matchId), match);
+    // Trigger innings break drawer on frontend
+    // Same as over break but with opener selection required
+    io.to(matchId).emit("inningsBreakStarted", {
+      matchId,
+      nextBattingTeam: secondInningsState.battingTeam,
+      targetScore: secondInningsState.targetScore,
+      firstInningsScore: secondInningsState.firstInningsScore,
+    });
     return "innings_complete";
   }
 
@@ -625,6 +633,14 @@ async function handleMaxOversTransition(match, matchId, io, totalValidBalls, opt
       firstInningsScore: secondInningsState.firstInningsScore,
     });
     if (!suppressStateEmit) emitMatchState(io.to(matchId), match);
+    // Trigger innings break drawer on frontend
+    // Same as over break but with opener selection required
+    io.to(matchId).emit("inningsBreakStarted", {
+      matchId,
+      nextBattingTeam: secondInningsState.battingTeam,
+      targetScore: secondInningsState.targetScore,
+      firstInningsScore: secondInningsState.firstInningsScore,
+    });
     match.current.overBreakPending = false; // innings complete, not an over break
     return "innings_complete";
   }

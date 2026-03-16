@@ -10,9 +10,13 @@ export default function OverBreakDrawer({
   onCommit,
   onClose,
   onSelectBatter,
+  isInningsBreak = false,
 }) {
   const [selectedBowler, setSelectedBowler] = useState("");
   const [selectedBatter, setSelectedBatter] = useState("");
+  const [inningsStriker, setInningsStriker] = useState("");
+  const [inningsNonStriker, setInningsNonStriker] = useState("");
+  const [inningsBowler, setInningsBowler] = useState("");
   const [pendingOvers, setPendingOvers] = useState(
     match?.totalOvers ?? 5
   );
@@ -57,6 +61,9 @@ export default function OverBreakDrawer({
       setPendingOvers(match?.totalOvers ?? 5);
       setSelectedBowler("");
       setSelectedBatter("");
+      setInningsStriker("");
+      setInningsNonStriker("");
+      setInningsBowler("");
       setActiveSection(needsBatter ? "batter" : "bowler");
       setTeamChanges({
         reshuffles: [],
@@ -74,6 +81,12 @@ export default function OverBreakDrawer({
   }, [isOpen, needsBatter]);
 
   useEffect(() => {
+    if (isOpen && isInningsBreak) {
+      setActiveSection("striker");
+    }
+  }, [isOpen, isInningsBreak]);
+
+  useEffect(() => {
     if (!isOpen) return;
 
     setIsSubmitting(false);
@@ -86,9 +99,21 @@ export default function OverBreakDrawer({
     teamChanges.setJokers.length +
     teamChanges.dissolveJokers.length;
 
-  const canStartOver = selectedBowler.length > 0 &&
-    oversValid &&
-    (!needsBatter || selectedBatter.length > 0);
+  const visibleSections = isInningsBreak
+    ? ["striker", "nonStriker", "bowler", "overs", "teams"]
+    : needsBatter
+      ? ["batter", "bowler", "overs", "teams"]
+      : ["bowler", "overs", "teams"];
+
+  const canStartOver = isInningsBreak
+    ? inningsStriker.length > 0 &&
+      inningsNonStriker.length > 0 &&
+      inningsBowler.length > 0 &&
+      inningsStriker !== inningsNonStriker &&
+      oversValid
+    : selectedBowler.length > 0 &&
+      oversValid &&
+      (!needsBatter || selectedBatter.length > 0);
 
   const handleTouchStart = (e) => {
     touchStartXRef.current = e.touches[0].clientX;
@@ -105,10 +130,6 @@ export default function OverBreakDrawer({
 
     if (Math.abs(deltaX) < Math.abs(deltaY)) return;
     if (Math.abs(deltaX) < 50) return;
-
-    const visibleSections = needsBatter
-      ? ["batter", "bowler", "overs", "teams"]
-      : ["bowler", "overs", "teams"];
 
     const currentIndex = visibleSections.indexOf(activeSection);
     if (currentIndex === -1) return;
@@ -131,35 +152,61 @@ export default function OverBreakDrawer({
   const handleCommit = async () => {
     if (!canStartOver) return;
 
-    if (needsBatter && selectedBatter && onSelectBatter) {
+    if (!isInningsBreak && needsBatter && selectedBatter && onSelectBatter) {
       onSelectBatter(selectedBatter);
     }
 
-    const payload = {
-      newBowler: selectedBowler,
-      newTotalOvers: pendingOvers !== currentTotalOvers
-        ? pendingOvers
-        : null,
-      addPlayers: teamChanges.addPlayers.length > 0
-        ? teamChanges.addPlayers
-        : null,
-      reshuffles: teamChanges.reshuffles.length > 0
-        ? teamChanges.reshuffles
-        : null,
-      setJokers: teamChanges.setJokers.length > 0
-        ? teamChanges.setJokers
-        : null,
-      dissolveJokers: teamChanges.dissolveJokers.length > 0
-        ? teamChanges.dissolveJokers
-        : null,
-    };
-
     try {
       setIsSubmitting(true);
-      await onCommit(payload);
+      if (isInningsBreak) {
+        await onCommit({
+          isInningsBreak: true,
+          striker: inningsStriker,
+          nonStriker: inningsNonStriker,
+          bowler: inningsBowler,
+          newTotalOvers: pendingOvers !== currentTotalOvers
+            ? pendingOvers
+            : null,
+          addPlayers: teamChanges.addPlayers.length > 0
+            ? teamChanges.addPlayers
+            : null,
+          reshuffles: teamChanges.reshuffles.length > 0
+            ? teamChanges.reshuffles
+            : null,
+          setJokers: teamChanges.setJokers.length > 0
+            ? teamChanges.setJokers
+            : null,
+          dissolveJokers: teamChanges.dissolveJokers.length > 0
+            ? teamChanges.dissolveJokers
+            : null,
+        });
+      } else {
+        const payload = {
+          newBowler: selectedBowler,
+          newTotalOvers: pendingOvers !== currentTotalOvers
+            ? pendingOvers
+            : null,
+          addPlayers: teamChanges.addPlayers.length > 0
+            ? teamChanges.addPlayers
+            : null,
+          reshuffles: teamChanges.reshuffles.length > 0
+            ? teamChanges.reshuffles
+            : null,
+          setJokers: teamChanges.setJokers.length > 0
+            ? teamChanges.setJokers
+            : null,
+          dissolveJokers: teamChanges.dissolveJokers.length > 0
+            ? teamChanges.dissolveJokers
+            : null,
+        };
+        await onCommit(payload);
+      }
       onClose?.();
       setSelectedBowler("");
       setSelectedBatter("");
+      setInningsStriker("");
+      setInningsNonStriker("");
+      setInningsBowler("");
       setPendingOvers(match?.totalOvers ?? 5);
       setTeamChanges({
         reshuffles: [],
@@ -167,24 +214,29 @@ export default function OverBreakDrawer({
         setJokers: [],
         dissolveJokers: [],
       });
-      setActiveSection("bowler");
+      setActiveSection(isInningsBreak ? "striker" : "bowler");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const sections = [
-    { key: "bowler", label: "Bowler", required: true },
-    { key: "overs", label: "Overs" },
-    { key: "teams", label: "Teams" },
-  ];
+  const sectionLabels = {
+    striker: "Striker",
+    nonStriker: "Non-Str",
+    bowler: "Bowler",
+    batter: "New Batter",
+    overs: "Overs",
+    teams: "Teams",
+  };
 
-  const visibleSections = needsBatter
-    ? [
-      { key: "batter", label: "New Batter", required: true },
-      ...sections,
-    ]
-    : sections;
+  const sectionRequired = {
+    striker: isInningsBreak,
+    nonStriker: isInningsBreak,
+    bowler: true,
+    batter: needsBatter,
+    overs: false,
+    teams: false,
+  };
 
   const quickOvers = [...new Set([
     oversFloor,
@@ -199,37 +251,54 @@ export default function OverBreakDrawer({
     <BottomSheet
       isOpen={isOpen}
       onClose={() => {}}
-      title="Over Break"
+      title={isInningsBreak ? "Innings Break" : "Over Break"}
       disableClose={true}
       height="full"
     >
       <div className="mb-4 flex gap-1 rounded-xl border border-white/5 bg-white/3 p-1">
-        {visibleSections.map((section) => {
-          const isSectionComplete =
-            section.key === "batter"
-              ? selectedBatter.length > 0
-              : section.key === "bowler"
-                ? selectedBowler.length > 0
-                : true;
-
+        {visibleSections.map((key) => {
           return (
           <button
-            key={section.key}
+            key={key}
             type="button"
-            onClick={() => setActiveSection(section.key)}
-            className={`flex-1 rounded-lg py-2 text-[11px] font-black uppercase tracking-widest transition-all ${activeSection === section.key
+            onClick={() => setActiveSection(key)}
+            className={`flex-1 rounded-lg py-2 text-[11px] font-black uppercase tracking-widest transition-all ${activeSection === key
               ? "bg-[#f97316] text-white"
               : "text-slate-500 hover:text-slate-300"
             }`}
           >
-            {section.label}
-            {section.required && !isSectionComplete && (
+            {sectionLabels[key]}
+            {key === "bowler" && !selectedBowler && !isInningsBreak && (
               <span className="ml-1 text-red-400">*</span>
             )}
-            {section.required && isSectionComplete && (
+            {key === "bowler" && selectedBowler && (
               <span className="ml-1 text-emerald-400">✓</span>
             )}
-            {section.key === "teams" && teamChangesCount > 0 && (
+            {key === "striker" && isInningsBreak && !inningsStriker && (
+              <span className="ml-1 text-red-400">*</span>
+            )}
+            {key === "striker" && isInningsBreak && inningsStriker && (
+              <span className="ml-1 text-emerald-400">✓</span>
+            )}
+            {key === "nonStriker" && isInningsBreak && !inningsNonStriker && (
+              <span className="ml-1 text-red-400">*</span>
+            )}
+            {key === "nonStriker" && isInningsBreak && inningsNonStriker && (
+              <span className="ml-1 text-emerald-400">✓</span>
+            )}
+            {key === "bowler" && isInningsBreak && !inningsBowler && (
+              <span className="ml-1 text-red-400">*</span>
+            )}
+            {key === "bowler" && isInningsBreak && inningsBowler && (
+              <span className="ml-1 text-emerald-400">✓</span>
+            )}
+            {sectionRequired[key] && key === "batter" && !selectedBatter && (
+              <span className="ml-1 text-red-400">*</span>
+            )}
+            {sectionRequired[key] && key === "batter" && selectedBatter && (
+              <span className="ml-1 text-emerald-400">✓</span>
+            )}
+            {key === "teams" && teamChangesCount > 0 && (
               <span className="ml-1 rounded-full bg-[#f97316] px-1 text-[8px] text-white">
                 {teamChangesCount}
               </span>
@@ -240,9 +309,6 @@ export default function OverBreakDrawer({
       </div>
 
       {(() => {
-        const visibleSections = needsBatter
-          ? ["batter", "bowler", "overs", "teams"]
-          : ["bowler", "overs", "teams"];
         const currentIndex = visibleSections.indexOf(activeSection);
         return (
           <div className="flex items-center justify-center gap-1.5 -mt-1 mb-1">
@@ -268,6 +334,74 @@ export default function OverBreakDrawer({
         className="w-full transition-opacity duration-150"
         key={activeSection}
       >
+      {activeSection === "striker" && isInningsBreak && (
+        <div className="space-y-3">
+          <div className="rounded-xl border border-[#f97316]/20 bg-[#f97316]/5 px-3 py-2.5">
+            <p className="text-[10px] font-black uppercase tracking-widest text-[#f97316] mb-1">
+              2nd Innings - {match?.battingTeam} Batting
+            </p>
+            <p className="text-[11px] text-slate-500">
+              Target: {(match?.firstInningsScore ?? 0) + 1} runs
+            </p>
+          </div>
+          <p className="text-[11px] text-slate-500 mb-2">
+            Select opening striker
+          </p>
+          <div className="space-y-2">
+            {(() => {
+              const seen = new Set();
+              return (match?.playerStats || [])
+                .filter(p => {
+                  if (p.team !== match?.battingTeam) return false;
+                  if (seen.has(p.name)) return false;
+                  seen.add(p.name);
+                  return true;
+                })
+                .map(p => (
+                  <BottomSheetOption
+                    key={p.name}
+                    label={p.name}
+                    photoUrl={p.photoUrl}
+                    selected={inningsStriker === p.name}
+                    disabled={p.name === inningsNonStriker}
+                    onClick={() => setInningsStriker(p.name)}
+                  />
+                ));
+            })()}
+          </div>
+        </div>
+      )}
+
+      {activeSection === "nonStriker" && isInningsBreak && (
+        <div className="space-y-3">
+          <p className="text-[11px] text-slate-500 mb-2">
+            Select opening non-striker
+          </p>
+          <div className="space-y-2">
+            {(() => {
+              const seen = new Set();
+              return (match?.playerStats || [])
+                .filter(p => {
+                  if (p.team !== match?.battingTeam) return false;
+                  if (seen.has(p.name)) return false;
+                  seen.add(p.name);
+                  return true;
+                })
+                .map(p => (
+                  <BottomSheetOption
+                    key={p.name}
+                    label={p.name}
+                    photoUrl={p.photoUrl}
+                    selected={inningsNonStriker === p.name}
+                    disabled={p.name === inningsStriker}
+                    onClick={() => setInningsNonStriker(p.name)}
+                  />
+                ));
+            })()}
+          </div>
+        </div>
+      )}
+
       {activeSection === "batter" && (
         <div className="space-y-3">
           <div className="rounded-xl border border-red-500/20 bg-red-500/5 px-3 py-2.5">
@@ -334,7 +468,9 @@ export default function OverBreakDrawer({
       {activeSection === "bowler" && (
         <div className="space-y-2">
           <p className="mb-3 text-[11px] text-slate-500">
-            Select the bowler for over {completedOvers + 1}
+            {isInningsBreak
+              ? "Select opening bowler"
+              : `Select the bowler for over ${completedOvers + 1}`}
           </p>
           {bowlingTeamPlayers.length === 0 ? (
             <div className="rounded-xl border border-dashed border-white/10 py-8 text-center text-sm text-slate-600">
@@ -351,8 +487,16 @@ export default function OverBreakDrawer({
                     ? `${Math.floor(player.bowling.balls / 6)}.${player.bowling.balls % 6} ov ${player.bowling.wickets ?? 0}/${player.bowling.runs ?? 0}`
                     : "Yet to bowl"
                 }
-                selected={selectedBowler === player.name}
-                onClick={() => setSelectedBowler(player.name)}
+                selected={isInningsBreak
+                  ? inningsBowler === player.name
+                  : selectedBowler === player.name}
+                onClick={() => {
+                  if (isInningsBreak) {
+                    setInningsBowler(player.name);
+                  } else {
+                    setSelectedBowler(player.name);
+                  }
+                }}
               />
             ))
           )}
@@ -495,7 +639,7 @@ export default function OverBreakDrawer({
       </div>
 
       <div className="mt-6 space-y-2">
-        {!selectedBowler && (
+        {!isInningsBreak && !selectedBowler && (
           <p className="text-center text-[11px] text-red-400">
             Select a bowler to start the next over
           </p>
@@ -508,9 +652,13 @@ export default function OverBreakDrawer({
         >
           {isSubmitting
             ? "Starting..."
-            : selectedBowler
-              ? `▶ Start Over ${completedOvers + 1}`
-              : "Select Bowler First"}
+            : isInningsBreak
+              ? inningsStriker && inningsNonStriker && inningsBowler
+                ? "▶ Start 2nd Innings"
+                : "Select Openers First"
+              : selectedBowler
+                ? `▶ Start Over ${completedOvers + 1}`
+                : "Select Bowler First"}
         </button>
       </div>
     </BottomSheet>

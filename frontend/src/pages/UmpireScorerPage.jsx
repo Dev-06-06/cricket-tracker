@@ -215,6 +215,7 @@ export default function UmpireScorerPage() {
   const [match, setMatch] = useState(null);
   const [groupPlayers, setGroupPlayers] = useState([]);
   const [overBreakOpen, setOverBreakOpen] = useState(false);
+  const [inningsBreakOpen, setInningsBreakOpen] = useState(false);
   const [isWicket, setIsWicket] = useState(false);
   const [wicketType, setWicketType] = useState("");
   const [extraType, setExtraType] = useState(""); // 'wide' | 'no-ball' | ''
@@ -334,10 +335,10 @@ export default function UmpireScorerPage() {
         setBatterSheetOpen(false);
         setSelectedNewBatter("");
         setBowlerSheetOpen(false);
-        setShowSecondInningsModal(true);
-        setSecondInningsStriker("");
-        setSecondInningsNonStriker("");
-        setSecondInningsBowler("");
+        // RISK: innings break drawer handles this now
+        // Only show old modal if innings break drawer somehow didn't open (fallback only)
+        // Do NOT set showSecondInningsModal here — handleInningsBreakStarted sets it to false
+        // and inningsBreakOpen handles the UI
       }
 
       if (
@@ -365,6 +366,15 @@ export default function UmpireScorerPage() {
         navigate(`/scoreboard/${matchId}?viewer=1`);
       }
 
+      // Only close innings break drawer after setOpeners
+      // is confirmed — check striker is set
+      if (data.status === "live" &&
+          data.currentStriker &&
+          data.currentNonStriker) {
+        setInningsBreakOpen(false);
+        setShowSecondInningsModal(false);
+      }
+
       // RISK: open over break drawer when backend signals pending over break
       // data.current?.overBreakPending is not in flat emit — use ballsBowled
       // The backend emits "overBreakStarted" as a separate event
@@ -378,6 +388,15 @@ export default function UmpireScorerPage() {
     const handleOverBreakStarted = (data) => {
       if (data.matchId !== matchId) return;
       setOverBreakOpen(true);
+    };
+
+    const handleInningsBreakStarted = (data) => {
+      if (data.matchId !== matchId) return;
+      // No delay — immediately open innings break drawer
+      // and suppress the old modal
+      setShowSecondInningsModal(false);
+      setInningsBreakOpen(true);
+      setOverBreakOpen(false);
     };
 
     getMatch(matchId, token)
@@ -408,7 +427,7 @@ export default function UmpireScorerPage() {
       setBatterSheetOpen(false);
       setSelectedNewBatter("");
       setBowlerSheetOpen(false);
-      setShowSecondInningsModal(true);
+      // Do NOT set showSecondInningsModal — innings break drawer handles openers now
       setSecondInningsStriker("");
       setSecondInningsNonStriker("");
       setSecondInningsBowler("");
@@ -425,6 +444,7 @@ export default function UmpireScorerPage() {
     });
 
     socket.on("overBreakStarted", handleOverBreakStarted);
+    socket.on("inningsBreakStarted", handleInningsBreakStarted);
     socket.on("matchEnded", () => navigate(`/scoreboard/${matchId}`));
     socket.on("error", ({ message }) => alert("Error: " + message));
 
@@ -432,6 +452,7 @@ export default function UmpireScorerPage() {
       socket.off("matchState", handleMatchState);
       socket.off("match_completed");
       socket.off("overBreakStarted", handleOverBreakStarted);
+      socket.off("inningsBreakStarted", handleInningsBreakStarted);
       [
         "connect",
         "fullTimeline",
@@ -456,6 +477,9 @@ export default function UmpireScorerPage() {
     if (benchReplacementInProgressRef.current) return;
     // RISK: if over break is open, it handles batter selection
     if (overBreakOpen) return;
+    // RISK: innings break handles opener selection
+    // do not open batter sheet during innings break
+    if (inningsBreakOpen) return;
 
     if (
       match?.nextBatterFor === "striker" ||
@@ -466,7 +490,7 @@ export default function UmpireScorerPage() {
     } else {
       setBatterSheetOpen(false);
     }
-  }, [match?.nextBatterFor, overBreakOpen]);
+  }, [match?.nextBatterFor, overBreakOpen, inningsBreakOpen]);
 
   useEffect(() => {
     if (!match?.groupId || !token) return;
@@ -482,7 +506,7 @@ export default function UmpireScorerPage() {
       !socket ||
       !match ||
       matchEndStatus.isMatchOver ||
-      showSecondInningsModal ||
+      inningsBreakOpen ||
       bowlerSheetOpen
     )
       return;
@@ -564,11 +588,41 @@ export default function UmpireScorerPage() {
 
   const handleOverBreakCommit = (payload) => {
     if (!socketRef.current) return;
-    socketRef.current.emit("overBreakCommit", {
-      matchId,
-      payload,
-    });
-    setOverBreakOpen(false);
+
+    if (payload.isInningsBreak) {
+      // Emit setOpeners directly — socket already in match room
+      socketRef.current.emit("setOpeners", {
+        matchId,
+        striker:    payload.striker,
+        nonStriker: payload.nonStriker,
+        bowler:     payload.bowler,
+      });
+
+      // Only emit overBreakCommit if there are team changes
+      if (payload.addPlayers || payload.reshuffles ||
+          payload.setJokers || payload.dissolveJokers ||
+          payload.newTotalOvers) {
+        socketRef.current.emit("overBreakCommit", {
+          matchId,
+          payload: {
+            newBowler: payload.bowler,
+            newTotalOvers: payload.newTotalOvers,
+            addPlayers: payload.addPlayers,
+            reshuffles: payload.reshuffles,
+            setJokers: payload.setJokers,
+            dissolveJokers: payload.dissolveJokers,
+          },
+        });
+      }
+      setInningsBreakOpen(false);
+    } else {
+      // Normal over break
+      socketRef.current.emit("overBreakCommit", {
+        matchId,
+        payload,
+      });
+      setOverBreakOpen(false);
+    }
 
     if (payload.addPlayers && payload.addPlayers.length > 0) {
       setTimeout(() => {
@@ -667,9 +721,23 @@ export default function UmpireScorerPage() {
     ? oversSummary
     : lastOversSummaryRef.current;
 
-  const currentOverDeliveries = stableOversSummary.length > 0
-    ? stableOversSummary[stableOversSummary.length - 1].balls
-    : [];
+  // RISK: when ballsBowled % 6 === 0, an over just
+  // completed — show empty circles for new over
+  // Only show last over's balls when we are MID-over
+  const ballsInCurrentOver = (match?.ballsBowled ?? 0) % 6;
+
+  const currentOverDeliveries = (() => {
+    if (ballsInCurrentOver === 0) {
+      // Over boundary — new over not started yet
+      // Show empty circles
+      return [];
+    }
+    // Mid-over — show current partial over balls
+    // Last entry in stableOversSummary is current partial over
+    return stableOversSummary.length > 0
+      ? stableOversSummary[stableOversSummary.length - 1].balls
+      : [];
+  })();
 
   const currentOverAllDeliveries = currentOverDeliveries;
 
@@ -792,7 +860,9 @@ export default function UmpireScorerPage() {
 
       {/* ═══ MODALS ═══ */}
 
-      {showSecondInningsModal && (
+      {!inningsBreakOpen &&
+        match?.status === "innings_complete" &&
+        showSecondInningsModal && (
         <Modal title="Set 2nd Innings — Choose Openers &amp; Bowler">
           <ModalSelect
             value={secondInningsStriker}
@@ -1217,7 +1287,11 @@ export default function UmpireScorerPage() {
         {/* Current over chips */}
         <div className="mt-2 flex items-center gap-1.5 overflow-x-auto">
           <span className="text-[10px] font-black uppercase tracking-wider text-slate-700 shrink-0 mr-1">
-            OV {stableOversSummary.length > 0 ? stableOversSummary.length : 1}
+            OV {ballsInCurrentOver === 0
+              ? (Math.floor((match?.ballsBowled ?? 0) / 6) + 1)
+              : stableOversSummary.length > 0
+                ? stableOversSummary.length
+                : 1}
           </span>
           {currentOverAllDeliveries.map((ball, i) => {
             const isWide = ball.extraType === "wide";
@@ -1616,6 +1690,17 @@ export default function UmpireScorerPage() {
               }}
             />
           )}
+
+        {match?.status !== "completed" && (
+          <OverBreakDrawer
+            isOpen={inningsBreakOpen}
+            match={match}
+            groupPlayers={groupPlayers}
+            onCommit={handleOverBreakCommit}
+            onClose={() => {}}
+            isInningsBreak={true}
+          />
+        )}
       </div>
     </main>
   );
