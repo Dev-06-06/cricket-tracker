@@ -5,6 +5,7 @@ import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import RequireAuth from "./routes/RequireAuth";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 const HomePage = lazy(() => import("./pages/HomePage"));
 const UmpireSetupPage = lazy(() => import("./pages/UmpireSetupPage"));
@@ -39,7 +40,9 @@ function App() {
           path="/umpire"
           element={
             <RequireAuth>
-              <UmpireSetupPage />
+              <ErrorBoundary>
+                <UmpireSetupPage />
+              </ErrorBoundary>
             </RequireAuth>
           }
         />
@@ -47,7 +50,9 @@ function App() {
           path="/umpire/toss/:matchId"
           element={
             <RequireAuth>
-              <TossPage />
+              <ErrorBoundary>
+                <TossPage />
+              </ErrorBoundary>
             </RequireAuth>
           }
         />
@@ -55,7 +60,9 @@ function App() {
           path="/umpire/scorer/:matchId"
           element={
             <RequireAuth>
-              <UmpireScorerPage />
+              <ErrorBoundary>
+                <UmpireScorerPage />
+              </ErrorBoundary>
             </RequireAuth>
           }
         />

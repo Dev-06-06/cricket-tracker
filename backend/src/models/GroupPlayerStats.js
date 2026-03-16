@@ -21,13 +21,18 @@ const mongoose = require("mongoose");
 //
 // ─────────────────────────────────────────────────────────────────────────────
 
+// JOKER NOTE: A joker's two playerStats entries are merged in statsUpdater
+// before writing here — this collection always has ONE record per player
+// per group, never two. skipCareerStats:true entries are excluded before
+// this collection is touched.
 const groupPlayerStatsSchema = new mongoose.Schema(
   {
     playerId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Player",
-      required: true,
+      default: null,
     },
+    name: { type: String, required: true, trim: true },
     groupId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Group",
@@ -41,6 +46,7 @@ const groupPlayerStatsSchema = new mongoose.Schema(
       balls:        { type: Number, default: 0 },
       fours:        { type: Number, default: 0 },
       sixes:        { type: Number, default: 0 },
+      dismissals:   { type: Number, default: 0 },
       thirties:     { type: Number, default: 0 },
       fifties:      { type: Number, default: 0 },
       hundreds:     { type: Number, default: 0 },
@@ -68,7 +74,15 @@ const groupPlayerStatsSchema = new mongoose.Schema(
 // ─── Indexes ────────────────────────────────────────────────────────────────
 
 // Primary lookup: find one player's stats in one group
-groupPlayerStatsSchema.index({ playerId: 1, groupId: 1 }, { unique: true });
+groupPlayerStatsSchema.index({ playerId: 1, groupId: 1 }, {
+  unique: true,
+  sparse: true,
+  // RISK: sparse:true means null playerId docs are excluded from this
+  // unique index - allows multiple on-the-fly players with null playerId
+});
+
+// Fallback lookup: by name + groupId (for on-the-fly players)
+groupPlayerStatsSchema.index({ name: 1, groupId: 1 });
 
 // Primary list query: find ALL players' stats in a group
 groupPlayerStatsSchema.index({ groupId: 1 });

@@ -63,6 +63,12 @@ const bowlingFiguresSchema = new mongoose.Schema(
 
 // ── Main schema ─────────────────────────────────────────────────────────────
 
+// JOKER RULE: A joker player has TWO entries in playerStats[] — one per team.
+// Both have isJoker: true and the same playerId.
+// Innings-end logic must deduplicate by playerId when counting batters.
+// skipCareerStats: true on the dissolved/frozen joker entry — only the
+// permanent team entry is pushed to GroupPlayerStats.
+
 const matchSchema = new mongoose.Schema(
   {
     groupId: {
@@ -124,6 +130,8 @@ const matchSchema = new mongoose.Schema(
       },
       // "striker" | "nonStriker" | null
       nextBatterFor: { type: String, default: null },
+      overBreakPending: { type: Boolean, default: false },
+      benchedPlayers: { type: [String], default: [] },
     },
 
     // ── Innings 1 summary (populated at end of first innings) ─────────────
@@ -157,6 +165,12 @@ const matchSchema = new mongoose.Schema(
 
         didBat:  { type: Boolean, default: false },
         didBowl: { type: Boolean, default: false },
+        // migration-safe: defaults handle existing documents
+        isJoker: { type: Boolean, default: false },
+        // migration-safe: defaults handle existing documents
+        isBenched: { type: Boolean, default: false },
+        // migration-safe: defaults handle existing documents
+        skipCareerStats: { type: Boolean, default: false },
         isOut:   { type: Boolean, default: false },
 
         batting: { type: battingFiguresSchema, default: () => ({}) },

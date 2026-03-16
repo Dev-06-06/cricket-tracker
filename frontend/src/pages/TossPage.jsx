@@ -196,13 +196,36 @@ export default function TossPage() {
       </main>
     );
 
-  /* ── original computed (unchanged) ── */
-  const battingPlayers =
-    match.playerStats?.filter((p) => p.team === match.battingTeam) ?? [];
-  const bowlingPlayers =
-    match.playerStats?.filter((p) => p.team === match.bowlingTeam) ?? [];
-  const strikerOptions = battingPlayers.filter((p) => p.name !== nonStriker);
-  const nonStrikerOptions = battingPlayers.filter((p) => p.name !== striker);
+  const isBattingTeam1 = match.battingTeam === match.team1Name;
+
+  const rawBattingPlayers = isBattingTeam1
+    ? (match.team1Players || [])
+    : (match.team2Players || []);
+
+  const rawBowlingPlayers = isBattingTeam1
+    ? (match.team2Players || [])
+    : (match.team1Players || []);
+
+  const seenBat = new Set();
+  const battingPlayers = rawBattingPlayers.filter(p => {
+    if (seenBat.has(p.name)) return false;
+    seenBat.add(p.name);
+    return true;
+  });
+
+  const seenBowl = new Set();
+  const bowlingPlayers = rawBowlingPlayers.filter(p => {
+    if (seenBowl.has(p.name)) return false;
+    seenBowl.add(p.name);
+    return true;
+  });
+
+  const strikerOptions = battingPlayers.filter(
+    p => p.name !== nonStriker
+  );
+  const nonStrikerOptions = battingPlayers.filter(
+    p => p.name !== striker
+  );
 
   const stepNum = tossConfirmed ? 3 : flipState === "done" ? 2 : 1;
 
@@ -738,7 +761,7 @@ export default function TossPage() {
                   >
                     <option value="">— Select —</option>
                     {strikerOptions.map((p) => (
-                      <option key={p._id || p.name} value={p.name}>
+                      <option key={p.playerId || p.name} value={p.name}>
                         {p.name}
                       </option>
                     ))}
@@ -775,7 +798,7 @@ export default function TossPage() {
                   >
                     <option value="">— Select —</option>
                     {nonStrikerOptions.map((p) => (
-                      <option key={p._id || p.name} value={p.name}>
+                      <option key={p.playerId || p.name} value={p.name}>
                         {p.name}
                       </option>
                     ))}
@@ -821,7 +844,7 @@ export default function TossPage() {
                 >
                   <option value="">— Select —</option>
                   {bowlingPlayers.map((p) => (
-                    <option key={p._id || p.name} value={p.name}>
+                    <option key={p.playerId || p.name} value={p.name}>
                       {p.name}
                     </option>
                   ))}

@@ -77,37 +77,96 @@ async function updateCareerStats(match, options = {}) {
 
   const groupId = match.groupId;
   const bowlingByName = buildBowlingByName(match);
-  const ops = [];
+  // STEP 1: Group playerStats entries by a dedup key.
+  // RISK: jokers have TWO entries with the same playerId — must merge them.
+  // RISK: on-the-fly players have no playerId — use name as fallback key.
+  const playerGroups = new Map();
 
   for (const ps of match.playerStats) {
-    if (!ps.playerId) continue;
+    // RISK: skip frozen dissolved joker entries — skipCareerStats flag set
+    // during joker dissolution in overBreakCommit
+    if (ps.skipCareerStats) continue;
 
-    const batting      = ps.batting  || {};
-    const bowlingStats = bowlingByName[ps.name] || { balls: 0, runs: 0, wickets: 0, wides: 0, noBalls: 0 };
-    const didBat  = Boolean(ps.didBat);
-    const didBowl = Boolean(ps.didBowl) || bowlingStats.balls > 0;
-    const battingRuns = Number(batting.runs) || 0;
+    const key = ps.playerId
+      ? ps.playerId.toString()
+      : `name:${ps.name}`;
+
+    if (!playerGroups.has(key)) {
+      playerGroups.set(key, {
+        playerId: ps.playerId || null,
+        name: ps.name,
+        entries: [],
+      });
+    }
+    playerGroups.get(key).entries.push(ps);
+  }
+
+  // STEP 2: Build bulkWrite ops — one per player (or merged joker)
+  const ops = [];
+
+  for (const [key, group] of playerGroups) {
+    const { playerId, name, entries } = group;
+
+    // Bowling is tracked by NAME in the timeline via buildBowlingByName.
+    // This naturally handles jokers since the same name appears in timeline
+    // regardless of which team entry they're from.
+    const bowlingStats = bowlingByName[name] || {
+      balls: 0, runs: 0, wickets: 0, wides: 0, noBalls: 0,
+    };
+
+    // STEP 2a: Merge batting across all entries (handles joker with 2 entries)
+    // RISK: joker innings counts as 1 — not one per entry
+    let didBat = false;
+    let didBowl = false;
+    let isOut = false;
+    let totalRuns  = 0;
+    let totalBalls = 0;
+    let totalFours = 0;
+    let totalSixes = 0;
+
+    for (const entry of entries) {
+      if (entry.didBat) {
+        didBat = true;
+        totalRuns  += Number(entry.batting?.runs)  || 0;
+        totalBalls += Number(entry.batting?.balls) || 0;
+        totalFours += Number(entry.batting?.fours) || 0;
+        totalSixes += Number(entry.batting?.sixes) || 0;
+        // RISK: isOut true if dismissed in ANY of their entries
+        if (entry.isOut) isOut = true;
+      }
+      if (entry.didBowl) didBowl = true;
+    }
+
+    // Also check bowling by timeline (catches bowlers not flagged didBowl)
+    const bowledInTimeline = bowlingStats.balls > 0 ||
+      bowlingStats.runs > 0 ||
+      bowlingStats.wickets > 0;
+    if (bowledInTimeline) didBowl = true;
 
     const inc = {};
     const max = {};
 
+    // STEP 2b: Batting stats — preserve ALL existing fields
     if (didBat) {
       inc["batting.matches"]  = 1;
+      // RISK: innings = 1 even for joker with 2 entries (already merged above)
       inc["batting.innings"]  = 1;
-      inc["batting.runs"]     = battingRuns;
-      inc["batting.balls"]    = Number(batting.balls)  || 0;
-      inc["batting.fours"]    = Number(batting.fours)  || 0;
-      inc["batting.sixes"]    = Number(batting.sixes)  || 0;
+      inc["batting.runs"]     = totalRuns;
+      inc["batting.balls"]    = totalBalls;
+      inc["batting.fours"]    = totalFours;
+      inc["batting.sixes"]    = totalSixes;
 
-      if (!ps.isOut)          inc["batting.notOuts"]  = 1;
-      if (battingRuns >= 100) inc["batting.hundreds"] = 1;
-      else if (battingRuns >= 50) inc["batting.fifties"]  = 1;
-      else if (battingRuns >= 30) inc["batting.thirties"] = 1;
+      if (!isOut)              inc["batting.notOuts"]  = 1;
+      if (totalRuns >= 100)    inc["batting.hundreds"] = 1;
+      else if (totalRuns >= 50) inc["batting.fifties"]  = 1;
+      else if (totalRuns >= 30) inc["batting.thirties"] = 1;
 
-      max["batting.highestScore"] = battingRuns;
+      max["batting.highestScore"] = totalRuns;
     }
 
-    if (didBowl && (bowlingStats.balls > 0 || bowlingStats.runs > 0 || bowlingStats.wickets > 0)) {
+    // STEP 2c: Bowling stats — preserve ALL existing fields
+    // buildBowlingByName already merged both innings correctly
+    if (didBowl && bowledInTimeline) {
       inc["bowling.matches"]  = 1;
       inc["bowling.innings"]  = 1;
       inc["bowling.balls"]    = bowlingStats.balls;
@@ -116,7 +175,7 @@ async function updateCareerStats(match, options = {}) {
       inc["bowling.wides"]    = bowlingStats.wides   || 0;
       inc["bowling.noBalls"]  = bowlingStats.noBalls || 0;
 
-      if (bowlingStats.wickets >= 5)      inc["bowling.fiveWickets"]  = 1;
+      if (bowlingStats.wickets >= 5)       inc["bowling.fiveWickets"]  = 1;
       else if (bowlingStats.wickets === 4) inc["bowling.fourWickets"]  = 1;
       else if (bowlingStats.wickets === 3) inc["bowling.threeWickets"] = 1;
     }
@@ -127,18 +186,39 @@ async function updateCareerStats(match, options = {}) {
     if (Object.keys(inc).length > 0) update.$inc = inc;
     if (Object.keys(max).length > 0) update.$max = max;
 
+    // STEP 2d: Build filter
+    // RISK: on-the-fly players have no playerId — match by name + groupId
+    // RISK: sparse unique index on {playerId, groupId} allows null playerId docs
+    const filter = playerId
+      ? { playerId, groupId }
+      : { playerId: null, name, groupId };
+
     ops.push({
       updateOne: {
-        filter: { playerId: ps.playerId, groupId },
-        update,
+        filter,
+        update: {
+          ...update,
+          // $setOnInsert only runs on upsert insert — safe to always include
+          $setOnInsert: {
+            playerId: playerId || null,
+            name,
+            groupId,
+          },
+        },
         upsert: true,
       },
     });
   }
 
+  // STEP 3: Single round-trip bulkWrite — preserves existing performance pattern
+  // RISK: runs inside the same session/transaction as match completion.
+  // If bulkWrite fails, transaction rolls back — statsApplied stays false
+  // and the match can be safely retried.
   if (ops.length > 0) {
-    // ✅ Single round-trip to MongoDB for all player stat updates
-    await GroupPlayerStats.bulkWrite(ops, options.session ? { session: options.session } : {});
+    await GroupPlayerStats.bulkWrite(
+      ops,
+      options.session ? { session: options.session } : {}
+    );
   }
 }
 

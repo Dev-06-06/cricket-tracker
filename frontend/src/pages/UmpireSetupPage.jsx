@@ -597,6 +597,8 @@ function UmpireSetupPage() {
   const [team2Name, setTeam2Name] = useState("Team 2");
   const [team1Players, setTeam1Players] = useState([]);
   const [team2Players, setTeam2Players] = useState([]);
+  const [selectedJoker, setSelectedJoker] = useState(null);
+  // null or a player object from the pool
   const [totalOvers, setTotalOvers] = useState(5);
   const [oversInput, setOversInput] = useState(String(totalOvers));
   const [newPlayerName, setNewPlayerName] = useState("");
@@ -847,6 +849,7 @@ function UmpireSetupPage() {
     setTeam2Name("Team 2");
     setTeam1Players([]);
     setTeam2Players([]);
+    setSelectedJoker(null);
     setTotalOvers(5);
     setOversInput("5");
   };
@@ -883,6 +886,9 @@ function UmpireSetupPage() {
           team1PlayerIds: team1Players,
           team2PlayerIds: team2Players,
           totalOvers,
+          // RISK: joker player ID passed so backend can create
+          // two playerStats entries at match creation time
+          jokerPlayerId: selectedJoker?._id || null,
         },
         token,
       );
@@ -1302,7 +1308,84 @@ function UmpireSetupPage() {
               </div>
             )}
 
+            {players.length > 0 && selectedGroupId && (
+              <section className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-5">
+                <div className="mb-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-amber-500">
+                      Joker Player (Optional)
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-slate-500">
+                      A joker bats and bowls for both teams
+                    </p>
+                  </div>
+                  {selectedJoker && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedJoker(null)}
+                      className="text-[11px] text-slate-600 hover:text-slate-300 transition-colors"
+                    >
+                      ✕ Remove
+                    </button>
+                  )}
+                </div>
+
+                {selectedJoker ? (
+                  <div className="flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-3">
+                    <span className="text-xl">🃏</span>
+                    <div className="flex-1">
+                      <p className="text-sm font-bold text-white">
+                        {selectedJoker.name}
+                      </p>
+                      <p className="text-[11px] text-amber-500/70">
+                        Will play for both teams
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedJoker(null)}
+                      className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-white transition-all"
+                    >
+                      Change
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    <p className="mb-2 text-[10px] text-slate-600">
+                      Select any player from the pool to be the joker:
+                    </p>
+                    {players.map((player) => (
+                      <button
+                        key={player._id}
+                        type="button"
+                        onClick={() => setSelectedJoker(player)}
+                        className="flex w-full items-center gap-3 rounded-xl border border-white/8 bg-white/3 px-3 py-2.5 text-left transition-all hover:border-amber-500/30 hover:bg-amber-500/5 active:scale-[0.98]"
+                      >
+                        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-700 text-xs font-bold text-slate-300">
+                          {player.name.charAt(0).toUpperCase()}
+                        </span>
+                        <p className="flex-1 text-sm font-medium text-slate-300">
+                          {player.name}
+                        </p>
+                        <span className="text-[10px] font-black uppercase tracking-widest text-amber-500/60">
+                          Make Joker →
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
+
             {/* Create button */}
+            {selectedJoker && (
+              <div className="flex items-center gap-2 rounded-xl border border-amber-500/15 bg-amber-500/5 px-3 py-2">
+                <span>🃏</span>
+                <p className="text-[11px] text-amber-400">
+                  {selectedJoker.name} is set as joker for this match
+                </p>
+              </div>
+            )}
             <button
               type="button"
               onClick={handleCreateUpcoming}

@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import BottomSheet from "../components/BottomSheet";
+import BottomSheetOption from "../components/BottomSheetOption";
+import OverBreakDrawer from "../components/OverBreakDrawer";
 import { createMatchSocket } from "../services/socket";
-import { getMatch } from "../services/api";
+import { getGroupPlayers, getMatch } from "../services/api";
 import { checkMatchEnd } from "../utils/matchResult";
 
 /* ─── constants ─────────────────────────────────────────────────────────────── */
@@ -203,45 +206,72 @@ export default function UmpireScorerPage() {
   const { token } = useAuth();
   const navigate = useNavigate();
   const socketRef = useRef(null);
+  const redirectedRef = useRef(false);
   const prevBallsBowledRef = useRef(null);
+  const lastOversSummaryRef = useRef([]);
+  const overBreakOpenRef = useRef(false);
+  const benchReplacementInProgressRef = useRef(false);
 
   const [match, setMatch] = useState(null);
+  const [groupPlayers, setGroupPlayers] = useState([]);
+  const [overBreakOpen, setOverBreakOpen] = useState(false);
   const [isWicket, setIsWicket] = useState(false);
   const [wicketType, setWicketType] = useState("");
   const [extraType, setExtraType] = useState(""); // 'wide' | 'no-ball' | ''
   const [dismissedBatter, setDismissedBatter] = useState("");
-  const [showBowlerModal, setShowBowlerModal] = useState(false);
-  const [selectedNewBowler, setSelectedNewBowler] = useState("");
-  const [showBatterModal, setShowBatterModal] = useState(false);
-  const showBatterModalRef = useRef(false);
+  const [bowlerSheetOpen, setBowlerSheetOpen] = useState(false);
+  const [selectedBowler, setSelectedBowler] = useState("");
+  const [batterSheetOpen, setBatterSheetOpen] = useState(false);
   const [selectedNewBatter, setSelectedNewBatter] = useState("");
   const [showSecondInningsModal, setShowSecondInningsModal] = useState(false);
   const [secondInningsStriker, setSecondInningsStriker] = useState("");
   const [secondInningsNonStriker, setSecondInningsNonStriker] = useState("");
   const [secondInningsBowler, setSecondInningsBowler] = useState("");
+  const [fullTimeline, setFullTimeline] = useState([]);
+  const [benchSheetOpen, setBenchSheetOpen] = useState(false);
+  const [benchingPosition, setBenchingPosition] = useState(null);
+  // "striker" | "nonStriker"
   const [matchEndStatus, setMatchEndStatus] = useState({
     isMatchOver: false,
     resultMessage: "",
   });
   const [lastBall, setLastBall] = useState(null);
+  const [manageTeamsMidOver, setManageTeamsMidOver] = useState(false);
 
   useEffect(() => {
+    overBreakOpenRef.current = overBreakOpen;
+  }, [overBreakOpen]);
+
+  useEffect(() => {
+    setFullTimeline([]);
+  }, [matchId]);
+
+  useEffect(() => {
+    // RISK: over break drawer already handles bowler selection after
+    // each over — do not open separate bowler sheet
+    if (overBreakOpenRef.current) return;
+
     if (!matchId) return;
     const socket = createMatchSocket(token);
     socketRef.current = socket;
 
-    getMatch(matchId, token)
-      .then((r) => {
-        if (r?.match) setMatch(normalizeMatch(r.match));
-      })
-      .catch(() => {});
-
-    socket.on("connect", () => socket.emit("joinMatch", { matchId }));
-
-    socket.on("matchState", (raw) => {
-      const m = normalizeMatch(raw);
+    const handleMatchState = (data) => {
+      const m = normalizeMatch(data);
       const curr = m.ballsBowled ?? 0;
       const prev = prevBallsBowledRef.current;
+
+      // Append new balls FIRST before setMatch.
+      if (data.timeline && data.timeline.length > 0) {
+        setFullTimeline((prevTimeline) => {
+          const existingIds = new Set(
+            prevTimeline.map((b) => b._id?.toString()).filter(Boolean),
+          );
+          const newBalls = (data.timeline || []).filter(
+            (b) => b._id && !existingIds.has(b._id.toString()),
+          );
+          return newBalls.length > 0 ? [...prevTimeline, ...newBalls] : prevTimeline;
+        });
+      }
 
       const shouldEval =
         (m.inningsNumber === 2 || typeof m.firstInningsScore === "number") &&
@@ -267,9 +297,9 @@ export default function UmpireScorerPage() {
       }
 
       if (m.status === "innings_complete") {
-        setShowBatterModal(false);
-        showBatterModalRef.current = false;
-        setShowBowlerModal(false);
+        setBatterSheetOpen(false);
+        setSelectedNewBatter("");
+        setBowlerSheetOpen(false);
         setShowSecondInningsModal(true);
         setSecondInningsStriker("");
         setSecondInningsNonStriker("");
@@ -283,63 +313,95 @@ export default function UmpireScorerPage() {
         curr % 6 === 0 &&
         m.status === "live"
       ) {
-        setShowBowlerModal(true);
-        setSelectedNewBowler("");
+        setSelectedBowler("");
       }
+
+      // RISK: innings 2 starts fresh — clear fullTimeline
+      if (data.inningsNumber === 2 && match?.inningsNumber === 1) {
+        setFullTimeline([]);
+      }
+
       prevBallsBowledRef.current = curr;
       setMatch({ ...m });
 
-      if (
-        m.status === "live" &&
-        !m.striker &&
-        !m.currentStriker &&
-        !showBatterModalRef.current
-      ) {
-        setShowBatterModal(true);
-        showBatterModalRef.current = true;
-        setSelectedNewBatter("");
+      if (m.status === "completed" && !redirectedRef.current) {
+        // Fallback redirect — catches case where match_completed
+        // event was missed (reconnect, tab backgrounded etc.)
+        redirectedRef.current = true;
+        navigate(`/scoreboard/${matchId}?viewer=1`);
       }
-    });
+
+      // RISK: open over break drawer when backend signals pending over break
+      // data.current?.overBreakPending is not in flat emit — use ballsBowled
+      // The backend emits "overBreakStarted" as a separate event
+      // Handle that below.
+      setOverBreakOpen((prevOpen) => {
+        if (prevOpen && curr > (prev ?? 0)) return false;
+        return prevOpen;
+      });
+    };
+
+    const handleOverBreakStarted = (data) => {
+      if (data.matchId !== matchId) return;
+      setOverBreakOpen(true);
+    };
+
+    getMatch(matchId, token)
+      .then((r) => {
+        if (r?.match) {
+          setMatch(normalizeMatch(r.match));
+          if (Array.isArray(r.match.timeline)) {
+            setFullTimeline(r.match.timeline);
+          }
+        }
+      })
+      .catch(() => {});
+
+    socket.on("connect", () => socket.emit("joinMatch", { matchId }));
+    if (socket.connected) {
+      socket.emit("joinMatch", { matchId });
+    }
+
+    socket.on("matchState", handleMatchState);
 
     socket.on("fullTimeline", (data) => {
       if (data.matchId?.toString() === matchId?.toString()) {
-        setMatch((prev) => (prev ? { ...prev, timeline: data.timeline } : prev));
+        setFullTimeline(data.timeline || []);
       }
     });
 
     socket.on("innings_complete", () => {
-      setShowBatterModal(false);
-      showBatterModalRef.current = false;
-      setShowBowlerModal(false);
+      setBatterSheetOpen(false);
+      setSelectedNewBatter("");
+      setBowlerSheetOpen(false);
       setShowSecondInningsModal(true);
       setSecondInningsStriker("");
       setSecondInningsNonStriker("");
       setSecondInningsBowler("");
     });
 
-    socket.on("match_completed", (payload) => {
-      if (payload) setMatch(normalizeMatch(payload));
-      if (payload?.resultMessage)
-        setMatchEndStatus({
-          isMatchOver: true,
-          resultMessage: payload.resultMessage,
-        });
-      setShowBatterModal(false);
-      showBatterModalRef.current = false;
-      setShowBowlerModal(false);
-      setShowSecondInningsModal(false);
+    socket.on("match_completed", (data) => {
+      // Immediate redirect — scoreboard has full match summary
+      // RISK: redirectedRef prevents double navigate if both
+      // match_completed and matchState fire simultaneously
+      if (!redirectedRef.current) {
+        redirectedRef.current = true;
+        navigate(`/scoreboard/${matchId}?viewer=1`);
+      }
     });
 
+    socket.on("overBreakStarted", handleOverBreakStarted);
     socket.on("matchEnded", () => navigate(`/scoreboard/${matchId}`));
     socket.on("error", ({ message }) => alert("Error: " + message));
 
     return () => {
+      socket.off("matchState", handleMatchState);
+      socket.off("match_completed");
+      socket.off("overBreakStarted", handleOverBreakStarted);
       [
         "connect",
-        "matchState",
         "fullTimeline",
         "innings_complete",
-        "match_completed",
         "matchEnded",
         "error",
       ].forEach((e) => socket.off(e));
@@ -347,6 +409,37 @@ export default function UmpireScorerPage() {
       socketRef.current = null;
     };
   }, [matchId, navigate, token]);
+
+  useEffect(() => {
+    if (overBreakOpen && manageTeamsMidOver) {
+      setManageTeamsMidOver(false);
+    }
+  }, [overBreakOpen]);
+
+  useEffect(() => {
+    // RISK: suppress auto-open during bench replacement flow
+    // bench flow handles replacement itself in one action
+    if (benchReplacementInProgressRef.current) return;
+    // RISK: if over break is open, it handles batter selection
+    if (overBreakOpen) return;
+
+    if (
+      match?.nextBatterFor === "striker" ||
+      match?.nextBatterFor === "nonStriker"
+    ) {
+      setBatterSheetOpen(true);
+      setSelectedNewBatter("");
+    } else {
+      setBatterSheetOpen(false);
+    }
+  }, [match?.nextBatterFor, overBreakOpen]);
+
+  useEffect(() => {
+    if (!match?.groupId || !token) return;
+    getGroupPlayers(match.groupId, token)
+      .then((response) => setGroupPlayers(response.players || []))
+      .catch(() => {});
+  }, [match?.groupId, token]);
 
   /* ── delivery ── */
   function recordDelivery(runs) {
@@ -356,7 +449,7 @@ export default function UmpireScorerPage() {
       !match ||
       matchEndStatus.isMatchOver ||
       showSecondInningsModal ||
-      showBowlerModal
+      bowlerSheetOpen
     )
       return;
 
@@ -435,6 +528,25 @@ export default function UmpireScorerPage() {
     setDismissedBatter("");
   }
 
+  const handleOverBreakCommit = (payload) => {
+    if (!socketRef.current) return;
+    socketRef.current.emit("overBreakCommit", {
+      matchId,
+      payload,
+    });
+    setOverBreakOpen(false);
+
+    if (payload.addPlayers && payload.addPlayers.length > 0) {
+      setTimeout(() => {
+        if (match?.groupId && token) {
+          getGroupPlayers(match.groupId, token)
+            .then((response) => setGroupPlayers(response.players || []))
+            .catch(() => {});
+        }
+      }, 1000);
+    }
+  };
+
   const photoMap = useMemo(() => {
     const map = {};
     const collectPhoto = (player) => {
@@ -457,6 +569,78 @@ export default function UmpireScorerPage() {
 
     return map;
   }, [match?.playerStats, match?.team1Players, match?.team2Players]);
+
+  const availableReplacements = useMemo(() => {
+    if (!match?.playerStats) return [];
+    const strikerName = match.currentStriker;
+    const nonStrikerName = match.currentNonStriker;
+    const seen = new Set();
+
+    return (match.playerStats || []).filter(p => {
+      // p.team is a name string — compare directly
+      if (p.team !== match.battingTeam) return false;
+      if (p.isOut) return false;
+      if (p.name === strikerName || p.name === nonStrikerName) return false;
+      if (seen.has(p.name)) return false;
+      seen.add(p.name);
+      return true;
+    });
+  }, [
+    match?.playerStats,
+    match?.battingTeam,
+    match?.team1Name,
+    match?.currentStriker,
+    match?.currentNonStriker,
+  ]);
+
+  // These derived values are safe before early returns
+  // because they handle null match gracefully
+  // NEVER fall back to match.timeline — it causes flicker
+  // fullTimeline is the only source of truth for over display
+  const timelineForOvers = fullTimeline;
+
+  const oversSummary = useMemo(() => {
+    // RISK: return previous value if fullTimeline temporarily empty
+    if (!timelineForOvers.length) return [];
+    const overs = [];
+    let cur = [], curBowlers = [], valid = 0;
+    for (const ball of timelineForOvers) {
+      cur.push(ball);
+      if (ball?.bowler) curBowlers.push(ball.bowler);
+      const isV = !ball.extraType ||
+                  ball.extraType === "none" ||
+                  ball.extraType === "bye" ||
+                  ball.extraType === "leg-bye";
+      if (isV) {
+        valid++;
+        if (valid % 6 === 0) {
+          overs.push({ balls: [...cur], bowlers: [...curBowlers] });
+          cur = [];
+          curBowlers = [];
+        }
+      }
+    }
+    // Always push current partial over — even if empty
+    overs.push({ balls: [...cur], bowlers: [...curBowlers] });
+    return overs;
+  }, [fullTimeline]);
+
+  // RISK: use ref to persist last known good value
+  if (oversSummary.length > 0) {
+    lastOversSummaryRef.current = oversSummary;
+  }
+  const stableOversSummary = oversSummary.length > 0
+    ? oversSummary
+    : lastOversSummaryRef.current;
+
+  const currentOverDeliveries = stableOversSummary.length > 0
+    ? stableOversSummary[stableOversSummary.length - 1].balls
+    : [];
+
+  const currentOverAllDeliveries = currentOverDeliveries;
+
+  const currentBowlerStats = (match?.playerStats || [])
+    .find((p) => p.name === match?.currentBowler);
 
   const getPhoto = (name) => {
     if (!name) return null;
@@ -500,12 +684,6 @@ export default function UmpireScorerPage() {
         : "0.00"
     : null;
 
-  const currentOverBalls = buildCurrentOver(match.timeline || []);
-  const validThisOver = currentOverBalls.filter((b) =>
-    isValidBall(b.ball),
-  ).length;
-  const dotsRemaining = validThisOver >= 6 ? 0 : 6 - validThisOver;
-
   const strikerStats = getBatterStat(match, striker);
   const nonStrikerStats = getBatterStat(match, nonStriker);
   const bowlerStat = getBowlerStat(match, match.currentBowler);
@@ -517,15 +695,16 @@ export default function UmpireScorerPage() {
     (p) => p.team === match.battingTeam,
   );
   const battingTeamActive = battingTeamAll.filter((p) => !p.isOut);
-  const occupiedBatter = striker ?? nonStriker;
-  const newBatterOptions = battingTeamActive.filter(
-    (p) => p.name !== occupiedBatter,
-  );
-  const nextBatterRole =
-    match.nextBatterFor === "nonStriker" ? "Non-Striker" : "Striker";
+
+  const canBench = availableReplacements.length > 0;
 
   const isMatchDone =
     matchEndStatus.isMatchOver || match.status === "completed";
+
+  const isOverBreak = overBreakOpen;
+  const midOver = !isOverBreak &&
+    match?.status === "live" &&
+    (match?.ballsBowled ?? 0) % 6 !== 0;
 
   /* run button label for wide mode */
   function runLabel(r) {
@@ -637,54 +816,153 @@ export default function UmpireScorerPage() {
         </Modal>
       )}
 
-      {showBowlerModal && (
-        <Modal title="End of Over — New Bowler">
-          <ModalSelect
-            value={selectedNewBowler}
-            onChange={setSelectedNewBowler}
-            options={bowlingTeamPlayers}
-            placeholder="— Choose bowler —"
-          />
-          <ModalBtn
-            onClick={() => {
-              if (!selectedNewBowler) return;
-              socketRef.current?.emit("setNewBowler", {
-                matchId,
-                bowler: selectedNewBowler,
-              });
-              setShowBowlerModal(false);
-              setSelectedNewBowler("");
-            }}
-            disabled={!selectedNewBowler}
-            label="Confirm Bowler"
-          />
-        </Modal>
-      )}
+      <BottomSheet
+        isOpen={bowlerSheetOpen}
+        onClose={() => setBowlerSheetOpen(false)}
+        title="Select Bowler"
+        disableClose={false}
+      >
+        <p className="mb-3 text-[11px] text-slate-500">
+          Choose the bowler for the next over
+        </p>
+        <div className="space-y-2">
+          {/* bowling team players — filter out benched players */}
+          {(match?.playerStats || [])
+            .filter(p => {
+              // p.team is a name string — compare directly to bowlingTeam
+              if (p.team !== match.bowlingTeam) return false;
+              // RISK: isBenched may be undefined from older socket emissions
+              // treat undefined as false
+              if (p.isBenched === true) return false;
+              return true;
+            })
+            .reduce((acc, p) => {
+              // Deduplicate by name — joker has two entries but only 
+              // bowling team entry passes the filter above
+              if (!acc.find(x => x.name === p.name)) acc.push(p);
+              return acc;
+            }, [])
+            .map((p) => (
+              <BottomSheetOption
+                key={p.name}
+                label={p.name}
+                photoUrl={p.photoUrl}
+                sublabel={
+                  (p.bowling?.balls ?? 0) > 0
+                    ? `${Math.floor(p.bowling.balls / 6)}.${p.bowling.balls % 6} ov  ${p.bowling.wickets ?? 0}/${p.bowling.runs ?? 0}`
+                    : "Yet to bowl"
+                }
+                selected={selectedBowler === p.name}
+                onClick={() => setSelectedBowler(p.name)}
+              />
+            ))}
+        </div>
+        <button
+          type="button"
+          disabled={!selectedBowler}
+          onClick={() => {
+            if (!selectedBowler) return;
+            socketRef.current?.emit("setNewBowler", {
+              matchId,
+              bowler: selectedBowler,
+            });
+            setSelectedBowler("");
+            setBowlerSheetOpen(false);
+          }}
+          className="mt-4 w-full rounded-xl bg-[#f97316] py-3 text-sm font-black uppercase tracking-widest text-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-orange-500 transition-all"
+        >
+          Confirm Bowler
+        </button>
+      </BottomSheet>
 
-      {showBatterModal && (
-        <Modal title={`Wicket — New ${nextBatterRole}`}>
-          <ModalSelect
-            value={selectedNewBatter}
-            onChange={setSelectedNewBatter}
-            options={newBatterOptions}
-            placeholder={`— ${nextBatterRole} —`}
-          />
-          <ModalBtn
-            onClick={() => {
-              if (!selectedNewBatter) return;
-              socketRef.current?.emit("setNewBatter", {
-                matchId,
-                batter: selectedNewBatter,
-              });
-              setShowBatterModal(false);
-              showBatterModalRef.current = false;
-              setSelectedNewBatter("");
-            }}
-            disabled={!selectedNewBatter}
-            label="Confirm"
-          />
-        </Modal>
-      )}
+      <BottomSheet
+        isOpen={batterSheetOpen}
+        onClose={() => {}}
+        title={`Select ${match?.nextBatterFor === "striker" ? "Striker" : "Non-Striker"}`}
+        disableClose={true}
+      >
+        <p className="mb-3 text-[11px] text-slate-500">
+          {match?.nextBatterFor === "striker"
+            ? "Who will face the next ball?"
+            : "Who will be at the non-striker end?"}
+        </p>
+
+        <div className="space-y-2">
+          {(() => {
+            const strikerName = match?.currentStriker;
+            const nonStrikerName = match?.currentNonStriker;
+
+            const allBatters = (match?.playerStats || []).filter(p => {
+              // p.team is a name string — compare directly
+              if (p.team !== match.battingTeam) return false;
+              if (p.isOut) return false;
+              if (p.name === strikerName || p.name === nonStrikerName)
+                return false;
+              return true;
+            });
+
+            const seen = new Set();
+            // Deduplicate by name (handles joker who has two team entries —
+            // only their batting-team entry should show here)
+            const deduped = allBatters.filter((p) => {
+              if (seen.has(p.name)) return false;
+              seen.add(p.name);
+              return true;
+            });
+
+            // Sort: benched players first
+            const sorted = [...deduped].sort((a, b) => {
+              if (a.isBenched && !b.isBenched) return -1;
+              if (!a.isBenched && b.isBenched) return 1;
+              return 0;
+            });
+
+            if (sorted.length === 0) {
+              return (
+                <div className="rounded-xl border border-dashed border-white/10 py-8 text-center text-sm text-slate-600">
+                  No batters available - innings will end
+                </div>
+              );
+            }
+
+            return sorted.map((p) => (
+              <BottomSheetOption
+                key={p.name}
+                label={p.name}
+                photoUrl={p.photoUrl}
+                sublabel={
+                  p.isBenched
+                    ? `${p.batting?.runs ?? 0}(${p.batting?.balls ?? 0}) - retired not out`
+                    : p.didBat
+                      ? `${p.batting?.runs ?? 0}(${p.batting?.balls ?? 0})`
+                      : "Yet to bat"
+                }
+                badge={p.isBenched ? "↩ Return" : undefined}
+                badgeColor={p.isBenched ? "text-amber-400" : undefined}
+                selected={selectedNewBatter === p.name}
+                onClick={() => setSelectedNewBatter(p.name)}
+              />
+            ));
+          })()}
+        </div>
+
+        <button
+          type="button"
+          disabled={!selectedNewBatter}
+          onClick={() => {
+            if (!selectedNewBatter) return;
+            socketRef.current?.emit("setNewBatter", {
+              matchId,
+              batter: selectedNewBatter,
+            });
+            setSelectedNewBatter("");
+            setBatterSheetOpen(false);
+          }}
+          className="mt-4 w-full rounded-xl bg-[#f97316] py-3 text-sm font-black uppercase tracking-widest text-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-orange-500 transition-all"
+        >
+          Send to Crease
+        </button>
+      </BottomSheet>
 
       {/* ═══════════════════════════════════════
           ZONE 1 — TOP NAV  (fixed 36px)
@@ -820,6 +1098,21 @@ export default function UmpireScorerPage() {
             <div className="min-w-0 flex-1">
               <p className="text-[11px] font-bold text-white truncate leading-tight">
                 {striker || "—"} <span className="text-[#f97316]">*</span>
+                {match?.currentStriker && canBench && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBenchingPosition("striker");
+                      setBenchSheetOpen(true);
+                    }}
+                    className="ml-1 rounded-lg border border-amber-500/30 
+                      bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-black 
+                      uppercase tracking-widest text-amber-400 
+                      hover:border-amber-400/50 transition-all"
+                  >
+                    Bench
+                  </button>
+                )}
               </p>
               <p className="text-[11px] sm:text-[10px] text-slate-500 tabular-nums leading-tight">
                 {strikerStats.runs}({strikerStats.balls})
@@ -840,6 +1133,21 @@ export default function UmpireScorerPage() {
             <div className="min-w-0 flex-1">
               <p className="text-[11px] font-semibold text-slate-300 truncate leading-tight">
                 {nonStriker || "—"}
+                {match?.currentNonStriker && canBench && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBenchingPosition("nonStriker");
+                      setBenchSheetOpen(true);
+                    }}
+                    className="ml-1 rounded-lg border border-amber-500/30 
+                      bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-black 
+                      uppercase tracking-widest text-amber-400 
+                      hover:border-amber-400/50 transition-all"
+                  >
+                    Bench
+                  </button>
+                )}
               </p>
               <p className="text-[11px] sm:text-[10px] text-slate-500 tabular-nums leading-tight">
                 {nonStrikerStats.runs}({nonStrikerStats.balls})
@@ -861,8 +1169,11 @@ export default function UmpireScorerPage() {
               <p className="text-[11px] sm:text-[10px] font-black uppercase tracking-wide text-slate-600 leading-tight">
                 Bowling
               </p>
-              <p className="text-[11px] font-semibold text-slate-300 truncate leading-tight">
+              <p className="text-[11px] font-semibold text-slate-300 truncate max-w-[110px] leading-tight">
                 {match.currentBowler || "—"}
+                {currentBowlerStats?.isJoker && (
+                  <span className="ml-1 text-amber-400 text-xs">🃏</span>
+                )}
               </p>
               <p className="text-[11px] sm:text-[10px] text-slate-500 tabular-nums leading-tight">
                 {calcOvers(bowlerStat.balls)} · {bowlerStat.wickets}/
@@ -880,18 +1191,53 @@ export default function UmpireScorerPage() {
         {/* Current over chips */}
         <div className="mt-2 flex items-center gap-1.5 overflow-x-auto">
           <span className="text-[10px] font-black uppercase tracking-wider text-slate-700 shrink-0 mr-1">
-            Ov {oversBowled + 1}
+            OV {stableOversSummary.length > 0 ? stableOversSummary.length : 1}
           </span>
-          {currentOverBalls.map((item, i) => (
-            <BallChip key={i} label={item.label} />
-          ))}
-          {Array.from({ length: dotsRemaining }).map((_, i) => (
+          {currentOverAllDeliveries.map((ball, i) => {
+            const isWide = ball.extraType === "wide";
+            const isNoBall = ball.extraType === "no-ball";
+            const isWicket = ball.isWicket === true;
+            const totalRuns = Number(ball.runsOffBat ?? ball.runs ?? 0) +
+                              Number(ball.extraRuns || 0);
+
+            const displayVal = isWicket ? "W" :
+                               isWide ? "Wd" :
+                               isNoBall ? "Nb" :
+                               totalRuns === 0 ? "•" :
+                               String(totalRuns);
+
+            const circleColor = isWicket
+              ? "border-red-500/60 bg-red-500/20 text-red-400"
+              : totalRuns === 6
+                ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-300"
+                : totalRuns === 4
+                  ? "border-blue-500/50 bg-blue-500/15 text-blue-300"
+                  : isWide || isNoBall
+                    ? "border-amber-500/40 bg-amber-500/10 text-amber-400"
+                    : "border-white/15 bg-white/8 text-slate-300";
+
+            return (
+              <span
+                key={ball._id || i}
+                className={`inline-flex h-8 w-8 shrink-0 items-center 
+                  justify-center rounded-full border text-[11px] 
+                  font-black transition-all ${circleColor}`}
+              >
+                {displayVal}
+              </span>
+            );
+          })}
+
+          {/* Empty placeholder circles */}
+          {Array.from({
+            length: Math.max(0, 6 - currentOverAllDeliveries.length)
+          }).map((_, i) => (
             <span
-              key={i}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-800/80 text-slate-800 text-[10px] shrink-0 font-bold"
-            >
-              ·
-            </span>
+              key={`empty-${i}`}
+              className="inline-flex h-8 w-8 shrink-0 items-center 
+                justify-center rounded-full border border-white/8 
+                bg-white/3"
+            />
           ))}
         </div>
       </div>
@@ -902,6 +1248,52 @@ export default function UmpireScorerPage() {
           remaining viewport with NO scroll.
       ═══════════════════════════════════════ */}
       <div className="flex-1 flex flex-col px-3 pt-2 pb-2 gap-2 min-h-0">
+        <div className="shrink-0 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              if (isOverBreak) {
+                setOverBreakOpen(true);
+              } else {
+                setManageTeamsMidOver(true);
+              }
+            }}
+            className="rounded-xl border border-slate-700/50 bg-slate-800/50 px-3 py-1.5 text-[11px] font-black uppercase tracking-widest text-slate-500 hover:border-slate-600 hover:text-slate-300 transition-all"
+          >
+            ⚙ Teams
+          </button>
+          <button
+            type="button"
+            onClick={() => setBowlerSheetOpen(true)}
+            className="rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-3 py-1.5 text-[11px] font-black uppercase tracking-widest text-indigo-400 hover:border-indigo-400/50 transition-all"
+          >
+            ⚾ Change Bowler
+          </button>
+        </div>
+
+        {(match?.playerStats || []).filter((p) => p.isBenched).length > 0 && (
+          <div className="shrink-0 mt-1 rounded-xl border border-amber-500/15 bg-amber-500/5 px-3 py-2">
+            <p className="mb-1.5 text-[9px] font-black uppercase tracking-widest text-amber-500/70">
+              On Bench
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {(match?.playerStats || [])
+                .filter((p) => p.isBenched)
+                .map((p) => (
+                  <span
+                    key={p.name}
+                    className="inline-flex items-center gap-1 rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-[11px] font-bold text-amber-300"
+                  >
+                    {p.name}
+                    <span className="text-[9px] text-amber-500/60">
+                      {p.batting?.runs ?? 0}({p.batting?.balls ?? 0})
+                    </span>
+                  </span>
+                ))}
+            </div>
+          </div>
+        )}
+
         {/* ── Toggle row: Wide | No Ball | Wicket ── */}
         <div className="shrink-0 grid grid-cols-1 gap-2 sm:grid-cols-3">
           {[
@@ -1011,6 +1403,181 @@ export default function UmpireScorerPage() {
         >
           ↩ Undo Last Ball
         </button>
+
+        <BottomSheet
+          isOpen={benchSheetOpen}
+          onClose={() => {
+            setBenchSheetOpen(false);
+            setBenchingPosition(null);
+          }}
+          title={`Bench ${benchingPosition === "striker"
+            ? match?.currentStriker
+            : match?.currentNonStriker} — Select Replacement`}
+        >
+          {(() => {
+            const batterBeingBenched = benchingPosition === "striker"
+              ? match?.currentStriker
+              : match?.currentNonStriker;
+
+            // Available replacements — same logic as availableReplacements
+            // but computed fresh here for the sheet
+            const replacements = (match?.playerStats || []).filter(p => {
+              if (p.team !== match?.battingTeam) return false;
+              if (p.isOut) return false;
+              if (p.name === match?.currentStriker) return false;
+              if (p.name === match?.currentNonStriker) return false;
+              return true;
+            }).filter((p, i, arr) =>
+              arr.findIndex(x => x.name === p.name) === i
+            ).sort((a, b) => {
+              // Benched players first
+              if (a.isBenched && !b.isBenched) return -1;
+              if (!a.isBenched && b.isBenched) return 1;
+              return 0;
+            });
+
+            return (
+              <div className="space-y-3">
+                {/* Who is being benched */}
+                <div className="flex items-center gap-2 rounded-xl border 
+                  border-amber-500/20 bg-amber-500/8 px-3 py-2.5">
+                  <span className="text-base">🪑</span>
+                  <div>
+                    <p className="text-[10px] font-black uppercase 
+                      tracking-widest text-amber-500/70">
+                      Benching
+                    </p>
+                    <p className="text-sm font-bold text-white">
+                      {batterBeingBenched}
+                      <span className="ml-2 text-[10px] text-slate-500 
+                        font-normal">
+                        {benchingPosition === "striker" 
+                          ? `${match?.playerStats?.find(
+                              p => p.name === batterBeingBenched
+                            )?.batting?.runs ?? 0}(${
+                              match?.playerStats?.find(
+                                p => p.name === batterBeingBenched
+                              )?.batting?.balls ?? 0
+                            })` 
+                          : ""}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+
+                {/* Replacement picker */}
+                <p className="text-[10px] font-black uppercase tracking-widest 
+                  text-slate-600">
+                  Who replaces them?
+                </p>
+
+                {replacements.length === 0 ? (
+                  <div className="rounded-xl border border-dashed 
+                    border-white/8 py-6 text-center text-sm text-slate-600">
+                    No available replacements
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {replacements.map(p => (
+                      <BottomSheetOption
+                        key={p.name}
+                        label={p.name}
+                        photoUrl={p.photoUrl}
+                        sublabel={
+                          p.isBenched
+                            ? `${p.batting?.runs ?? 0}(${p.batting?.balls ?? 0
+                              }) — returning from bench`
+                            : p.didBat
+                              ? `${p.batting?.runs ?? 0}(${p.batting?.balls ?? 0})`
+                              : "Yet to bat"
+                        }
+                        badge={p.isBenched ? "↩ Return" : undefined}
+                        badgeColor={p.isBenched ? "text-amber-400" : undefined}
+                        onClick={() => {
+                          if (!batterBeingBenched || !p.name) return;
+
+                          // Set flag before emit
+                          benchReplacementInProgressRef.current = true;
+
+                          // Single atomic event - no race condition
+                          socketRef.current?.emit("benchAndReplace", {
+                            matchId,
+                            batterName: batterBeingBenched,
+                            replacementName: p.name,
+                          });
+
+                          setBenchSheetOpen(false);
+                          setBenchingPosition(null);
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </BottomSheet>
+
+        <BottomSheet
+          isOpen={manageTeamsMidOver}
+          onClose={() => setManageTeamsMidOver(false)}
+          title="Team Management"
+        >
+          <div className="space-y-4">
+            <div className="rounded-xl border border-amber-500/20 bg-amber-500/8 px-4 py-4 text-center">
+              <p className="text-2xl mb-2">⏳</p>
+              <p className="text-sm font-bold text-amber-300">
+                Available at Over Break Only
+              </p>
+              <p className="mt-1.5 text-[11px] text-slate-500 leading-relaxed">
+                Team changes, overs adjustment, and joker controls are
+                available after the current over completes.
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-white/5 bg-white/3 px-4 py-3">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">
+                Current Over
+              </p>
+              <p className="text-sm text-slate-400">
+                Over {Math.floor((match?.ballsBowled ?? 0) / 6) + 1} · Ball{" "}
+                {(match?.ballsBowled ?? 0) % 6} of 6
+              </p>
+              <p className="mt-1 text-[11px] text-slate-600">
+                {6 - ((match?.ballsBowled ?? 0) % 6)} ball
+                {6 - ((match?.ballsBowled ?? 0) % 6) !== 1 ? "s" : ""} until
+                over break
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setManageTeamsMidOver(false)}
+              className="w-full rounded-xl border border-white/10 bg-white/5 py-3 text-xs font-black uppercase tracking-widest text-slate-300 hover:border-white/20 transition-all"
+            >
+              Got It
+            </button>
+          </div>
+        </BottomSheet>
+
+        {/* RISK: innings break takes priority — only show over break drawer
+            if match is still live (not innings_complete or completed) */}
+        {match?.status !== "innings_complete" &&
+          match?.status !== "completed" && (
+            <OverBreakDrawer
+              isOpen={overBreakOpen}
+              match={match}
+              groupPlayers={groupPlayers}
+              onCommit={handleOverBreakCommit}
+              onClose={() => setOverBreakOpen(false)}
+              onSelectBatter={(batterName) => {
+                socketRef.current?.emit("setNewBatter", {
+                  matchId,
+                  batter: batterName,
+                });
+              }}
+            />
+          )}
       </div>
     </main>
   );

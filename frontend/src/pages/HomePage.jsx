@@ -113,7 +113,8 @@ function LiveMatchCard({ match, onUmpireMode }) {
   const [openingUmpire, setOpeningUmpire] = useState(false);
   const overs = calcOvers(match.ballsBowled);
   function getPlayerStat(playerStats, name) {
-    return (playerStats || []).find((p) => p?.name === name) || null;
+    if (!name || !playerStats) return null;
+    return playerStats.find((p) => p?.name === name) || null;
   }
 
   const handleUmpire = async (event) => {
@@ -637,6 +638,10 @@ function HomePage() {
           battingTeam: data.battingTeam,
           bowlingTeam: data.bowlingTeam,
           status: data.status,
+          currentStriker: data.currentStriker ?? null,
+          currentNonStriker: data.currentNonStriker ?? null,
+          currentBowler: data.currentBowler ?? null,
+          playerStats: data.playerStats ?? null,
         },
       }));
     };

@@ -67,29 +67,52 @@ function mapMatchSummary(match) {
     // Innings 1 summary
     firstInningsScore: m.innings1?.score  ?? null,
     targetScore:       m.innings1?.target ?? null,
+    // RISK: ScoreboardPage needs full innings1 for batting/bowling tables
+    // Must include battingRows and bowlingRows for first innings display
+    innings1: m.innings1 ? {
+      battingTeam:  m.innings1.battingTeam === "team1"
+        ? m.team1.name
+        : m.team2.name,
+      bowlingTeam:  m.innings1.battingTeam === "team1"
+        ? m.team2.name
+        : m.team1.name,
+      score:        m.innings1.score   ?? 0,
+      wickets:      m.innings1.wickets ?? 0,
+      overs:        m.innings1.overs   ?? 0,
+      target:       m.innings1.target  ?? null,
+      battingRows:  Array.isArray(m.innings1.battingRows)
+        ? m.innings1.battingRows
+        : [],
+      bowlingRows:  Array.isArray(m.innings1.bowlingRows)
+        ? m.innings1.bowlingRows
+        : [],
+    } : null,
 
     // Player stats
     playerStats: (m.playerStats || []).map((p) => ({
       playerId: p.playerId,
-      name: p.name,
-      team: p.team === "team1" ? m.team1.name : m.team2.name,
-      didBat:  p.didBat,
-      didBowl: p.didBowl,
-      isOut:   p.isOut,
+      name:     p.name,
+      team:     p.team === "team1" ? m.team1.name : m.team2.name,
+      didBat:   p.didBat  === true,
+      didBowl:  p.didBowl === true,
+      isOut:    p.isOut   === true,
+      isBenched:       p.isBenched       === true,
+      isJoker:         p.isJoker         === true,
+      skipCareerStats: p.skipCareerStats === true,
       batting: {
-        runs:  p.batting?.runs  || 0,
-        balls: p.batting?.balls || 0,
-        fours: p.batting?.fours || 0,
-        sixes: p.batting?.sixes || 0,
+        runs:          Number(p.batting?.runs)  || 0,
+        balls:         Number(p.batting?.balls) || 0,
+        fours:         Number(p.batting?.fours) || 0,
+        sixes:         Number(p.batting?.sixes) || 0,
         dismissalType: p.batting?.dismissalType || "",
       },
       bowling: {
-        overs:   p.bowling?.overs   || 0,
-        balls:   p.bowling?.balls   || 0,
-        runs:    p.bowling?.runs    || 0,
-        wickets: p.bowling?.wickets || 0,
-        wides:   p.bowling?.wides   || 0,
-        noBalls: p.bowling?.noBalls || 0,
+        overs:   Number(p.bowling?.overs)   || 0,
+        balls:   Number(p.bowling?.balls)   || 0,
+        runs:    Number(p.bowling?.runs)    || 0,
+        wickets: Number(p.bowling?.wickets) || 0,
+        wides:   Number(p.bowling?.wides)   || 0,
+        noBalls: Number(p.bowling?.noBalls) || 0,
       },
     })),
 
@@ -102,7 +125,15 @@ function mapMatchSummary(match) {
 // ─── createUpcomingMatch ──────────────────────────────────────────────────────
 const createUpcomingMatch = async (req, res) => {
   try {
-    const { groupId, team1Name, team2Name, team1PlayerIds, team2PlayerIds, totalOvers } = req.body;
+    const {
+      groupId,
+      team1Name,
+      team2Name,
+      team1PlayerIds,
+      team2PlayerIds,
+      totalOvers,
+      jokerPlayerId,
+    } = req.body;
 
     if (!groupId || !mongoose.Types.ObjectId.isValid(groupId)) {
       return res.status(400).json({ success: false, message: "Valid groupId is required" });
@@ -125,7 +156,12 @@ const createUpcomingMatch = async (req, res) => {
 
     // Validate that all submitted player IDs belong to the group's playerPool
     const poolIds = new Set(group.playerPool.map(id => id.toString()));
-    const allSubmittedIds = [...(team1PlayerIds || []), ...(team2PlayerIds || [])];
+    const allSubmittedIds = [
+      ...(team1PlayerIds || []),
+      ...(team2PlayerIds || []),
+      // RISK: validate joker belongs to group pool too
+      ...(jokerPlayerId ? [jokerPlayerId] : []),
+    ];
     const invalidIds = allSubmittedIds.filter(id => !poolIds.has(id.toString()));
     if (invalidIds.length > 0) {
       return res.status(400).json({
@@ -134,24 +170,92 @@ const createUpcomingMatch = async (req, res) => {
       });
     }
 
-    // ✅ Fetch player snapshots (name + photoUrl) once at creation time
-    // After this, no populate is ever needed on match reads
+    // ── Fetch player snapshots for both teams ──────────────────────
     const [t1Players, t2Players] = await Promise.all([
-      Player.find({ _id: { $in: team1PlayerIds || [] } }).select("name photoUrl").lean(),
-      Player.find({ _id: { $in: team2PlayerIds || [] } }).select("name photoUrl").lean(),
+      Player.find({ _id: { $in: team1PlayerIds || [] } })
+        .select("name photoUrl").lean(),
+      Player.find({ _id: { $in: team2PlayerIds || [] } })
+        .select("name photoUrl").lean(),
     ]);
 
-    const toSnapshot = (p) => ({ playerId: p._id, name: p.name, photoUrl: p.photoUrl || "" });
+    // ── Fetch joker player separately if provided ──────────────────
+    let jokerPlayer = null;
+    if (jokerPlayerId && mongoose.Types.ObjectId.isValid(jokerPlayerId)) {
+      jokerPlayer = await Player.findById(jokerPlayerId)
+        .select("name photoUrl").lean();
+    }
 
+    const toSnapshot = (p) => ({
+      playerId: p._id,
+      name: p.name,
+      photoUrl: p.photoUrl || "",
+    });
+
+    // ── Build team snapshots ───────────────────────────────────────
+    // RISK: joker appears in BOTH team snapshot arrays
+    const t1Snapshots = t1Players.map(toSnapshot);
+    const t2Snapshots = t2Players.map(toSnapshot);
+
+    if (jokerPlayer) {
+      // Add joker to both team snapshot arrays if not already present
+      if (!t1Snapshots.find(s => s.name === jokerPlayer.name)) {
+        t1Snapshots.push(toSnapshot(jokerPlayer));
+      }
+      if (!t2Snapshots.find(s => s.name === jokerPlayer.name)) {
+        t2Snapshots.push(toSnapshot(jokerPlayer));
+      }
+    }
+
+    // ── Build playerStats ──────────────────────────────────────────
     const playerStats = [
-      ...t1Players.map((p) => ({ playerId: p._id, name: p.name, team: "team1" })),
-      ...t2Players.map((p) => ({ playerId: p._id, name: p.name, team: "team2" })),
+      // Team 1 regular players
+      ...t1Players.map((p) => ({
+        playerId: p._id,
+        name: p.name,
+        team: "team1",
+        isJoker: false,
+        isBenched: false,
+        skipCareerStats: false,
+      })),
+      // Team 2 regular players
+      ...t2Players.map((p) => ({
+        playerId: p._id,
+        name: p.name,
+        team: "team2",
+        isJoker: false,
+        isBenched: false,
+        skipCareerStats: false,
+      })),
     ];
 
+    if (jokerPlayer) {
+      // RISK: joker gets TWO entries — one per team
+      // This is intentional — they bat/bowl for both teams
+      // Both entries have the same playerId
+      // statsUpdater merges them into one career record on completion
+      playerStats.push({
+        playerId: jokerPlayer._id,
+        name: jokerPlayer.name,
+        team: "team1",
+        isJoker: true,
+        isBenched: false,
+        skipCareerStats: false,
+      });
+      playerStats.push({
+        playerId: jokerPlayer._id,
+        name: jokerPlayer.name,
+        team: "team2",
+        isJoker: true,
+        isBenched: false,
+        skipCareerStats: false,
+      });
+    }
+
+    // ── Create match ───────────────────────────────────────────────
     const match = await Match.create({
       groupId,
-      team1: { name: team1Name.trim(), players: t1Players.map(toSnapshot) },
-      team2: { name: team2Name.trim(), players: t2Players.map(toSnapshot) },
+      team1: { name: team1Name.trim(), players: t1Snapshots },
+      team2: { name: team2Name.trim(), players: t2Snapshots },
       totalOvers: totalOvers || 5,
       status: "upcoming",
       current: { battingTeam: "team1", inningsNumber: 1 },
@@ -159,8 +263,10 @@ const createUpcomingMatch = async (req, res) => {
     });
 
     broadcastGroupUpdate(groupId, "match_created");
-
-    return res.status(201).json({ success: true, match: mapMatchSummary(match) });
+    return res.status(201).json({ 
+      success: true, 
+      match: mapMatchSummary(match) 
+    });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
