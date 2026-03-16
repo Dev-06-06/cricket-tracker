@@ -60,9 +60,16 @@ function buildCurrentOver(timeline = []) {
 
 function getBatterStat(match, name) {
   if (!name) return { runs: 0, balls: 0, fours: 0, sixes: 0 };
-  const p = (match?.playerStats || []).find((x) => x.name === name);
+  // RISK: joker has two entries — find by name AND batting team
+  // to get the correct innings entry
+  const battingTeam = match?.battingTeam;
+  const p = (match?.playerStats || []).find(
+    (x) => x.name === name && x.team === battingTeam
+  ) || (match?.playerStats || []).find(
+    (x) => x.name === name
+  );
   return {
-    runs: p?.batting?.runs ?? 0,
+    runs:  p?.batting?.runs  ?? 0,
     balls: p?.batting?.balls ?? 0,
     fours: p?.batting?.fours ?? 0,
     sixes: p?.batting?.sixes ?? 0,
@@ -71,11 +78,17 @@ function getBatterStat(match, name) {
 
 function getBowlerStat(match, name) {
   if (!name) return { balls: 0, wickets: 0, runs: 0 };
-  const p = (match?.playerStats || []).find((x) => x.name === name);
+  // RISK: joker has two entries — find by bowling team entry
+  const bowlingTeam = match?.bowlingTeam;
+  const p = (match?.playerStats || []).find(
+    (x) => x.name === name && x.team === bowlingTeam
+  ) || (match?.playerStats || []).find(
+    (x) => x.name === name
+  );
   return {
-    balls: p?.bowling?.balls ?? 0,
+    balls:   p?.bowling?.balls   ?? 0,
     wickets: p?.bowling?.wickets ?? 0,
-    runs: p?.bowling?.runs ?? 0,
+    runs:    p?.bowling?.runs    ?? 0,
   };
 }
 

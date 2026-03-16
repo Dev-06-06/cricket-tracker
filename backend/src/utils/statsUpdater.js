@@ -123,14 +123,33 @@ async function updateCareerStats(match, options = {}) {
     let totalBalls = 0;
     let totalFours = 0;
     let totalSixes = 0;
+    // RISK: milestones must be computed PER INNINGS not on merged total —
+    // 20 + 30 = 50 merged but neither innings qualifies as a fifty
+    let thirties     = 0;
+    let fifties      = 0;
+    let hundreds     = 0;
+    let highestScore = 0;
 
     for (const entry of entries) {
       if (entry.didBat) {
         didBat = true;
-        totalRuns  += Number(entry.batting?.runs)  || 0;
-        totalBalls += Number(entry.batting?.balls) || 0;
-        totalFours += Number(entry.batting?.fours) || 0;
-        totalSixes += Number(entry.batting?.sixes) || 0;
+        const runs  = Number(entry.batting?.runs)  || 0;
+        const balls = Number(entry.batting?.balls) || 0;
+        const fours = Number(entry.batting?.fours) || 0;
+        const sixes = Number(entry.batting?.sixes) || 0;
+
+        totalRuns  += runs;
+        totalBalls += balls;
+        totalFours += fours;
+        totalSixes += sixes;
+
+        // Milestones per innings — not on merged total
+        if (runs >= 100) hundreds++;
+        else if (runs >= 50) fifties++;
+        else if (runs >= 30) thirties++;
+
+        if (runs > highestScore) highestScore = runs;
+
         // RISK: isOut true if dismissed in ANY of their entries
         if (entry.isOut) isOut = true;
       }
@@ -156,12 +175,12 @@ async function updateCareerStats(match, options = {}) {
       inc["batting.fours"]    = totalFours;
       inc["batting.sixes"]    = totalSixes;
 
-      if (!isOut)              inc["batting.notOuts"]  = 1;
-      if (totalRuns >= 100)    inc["batting.hundreds"] = 1;
-      else if (totalRuns >= 50) inc["batting.fifties"]  = 1;
-      else if (totalRuns >= 30) inc["batting.thirties"] = 1;
+      if (!isOut)           inc["batting.notOuts"]  = 1;
+      if (hundreds > 0)     inc["batting.hundreds"] = hundreds;
+      if (fifties  > 0)     inc["batting.fifties"]  = fifties;
+      if (thirties > 0)     inc["batting.thirties"] = thirties;
 
-      max["batting.highestScore"] = totalRuns;
+      max["batting.highestScore"] = highestScore;
     }
 
     // STEP 2c: Bowling stats — preserve ALL existing fields

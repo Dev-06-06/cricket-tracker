@@ -326,7 +326,8 @@ function MatchSummaryView({ match, fullTimeline = [] }) {
   const innings1BattingRows = match?.innings1?.battingRows || [];
   const innings1BowlingRows = match?.innings1?.bowlingRows || [];
   const innings1Team = match?.innings1?.battingTeam ?? match?.team1Name ?? "";
-  const innings2BattingTeam = match?.innings1?.battingTeam === match?.team1Name
+  // Innings 2 batting team = opposite of innings 1 batting team
+  const innings2BattingTeam = innings1Team === match?.team1Name
     ? match?.team2Name
     : match?.team1Name;
   const seenI2Bat = new Set();
@@ -334,10 +335,10 @@ function MatchSummaryView({ match, fullTimeline = [] }) {
     ? match?.innings2?.battingRows
     : (match?.playerStats || [])
         .filter((p) => {
-          // innings2BattingTeam is a name string
-          // p.team is also a name string from socket
           if (p.team !== innings2BattingTeam) return false;
-          if (!p.didBat) return false;
+          // Include if didBat OR currently at crease
+          if (!p.didBat && p.name !== match?.currentStriker &&
+              p.name !== match?.currentNonStriker) return false;
           if (seenI2Bat.has(p.name)) return false;
           seenI2Bat.add(p.name);
           return true;
@@ -356,29 +357,58 @@ function MatchSummaryView({ match, fullTimeline = [] }) {
           isJoker: p.isJoker || false,
         }));
 
-  // Innings 2 bowling team = team that BATTED in innings 1
-  // Because innings 1 batting team is now bowling in innings 2
-  const innings2BowlingTeam = innings1Team === match?.team1Name
-    ? match?.team2Name
-    : match?.team1Name;
+  // Innings 2 bowling team = SAME as innings 1 batting team
+  // (team that batted in innings 1 now bowls in innings 2)
+  // RISK: previous code returned innings2BattingTeam which is WRONG
+  const innings2BowlingTeam = innings1Team;
 
+  // Build innings2BowlingRows by subtracting innings1
+  // bowling from total playerStats bowling
+  // innings2BowlingTeam is the team that batted in innings 1
   const seenI2Bowl = new Set();
-  const innings2BowlingRows = (match?.playerStats || [])
-    .filter((p) => {
-      if (p.team !== innings2BowlingTeam) return false;
-      if (!p.didBowl) return false;
-      if (seenI2Bowl.has(p.name)) return false;
-      seenI2Bowl.add(p.name);
-      return true;
-    })
-    .map((p) => ({
-      name: p.name,
-      overs:   p.bowling?.overs   || 0,
-      runs:    p.bowling?.runs    || 0,
-      wickets: p.bowling?.wickets || 0,
-      balls:   p.bowling?.balls   || 0,
-      isJoker: p.isJoker || false,
-    }));
+  const innings2BowlingRows = (() => {
+    // Get innings 1 bowling figures by bowler name
+    const inn1BowlMap = {};
+    (match?.innings1?.bowlingRows || []).forEach(row => {
+      inn1BowlMap[row.name] = {
+        balls:   Number(row.balls)   || 0,
+        runs:    Number(row.runs)    || 0,
+        wickets: Number(row.wickets) || 0,
+      };
+    });
+
+    return (match?.playerStats || [])
+      .filter(p => {
+        if (p.team !== innings2BowlingTeam) return false;
+        if (!p.didBowl) return false;
+        if (seenI2Bowl.has(p.name)) return false;
+        seenI2Bowl.add(p.name);
+        return true;
+      })
+      .map(p => {
+        // Subtract innings 1 figures to get innings 2 only
+        const inn1 = inn1BowlMap[p.name] ||
+                     { balls: 0, runs: 0, wickets: 0 };
+        const inn2Balls   = Math.max(0, (p.bowling?.balls   || 0) - inn1.balls);
+        const inn2Runs    = Math.max(0, (p.bowling?.runs    || 0) - inn1.runs);
+        const inn2Wickets = Math.max(0, (p.bowling?.wickets || 0) - inn1.wickets);
+
+        // Only include if they bowled in innings 2
+        if (inn2Balls === 0 && inn2Runs === 0 && inn2Wickets === 0) {
+          return null;
+        }
+
+        return {
+          name:    p.name,
+          overs:   Math.floor(inn2Balls / 6) + (inn2Balls % 6) / 10,
+          runs:    inn2Runs,
+          wickets: inn2Wickets,
+          balls:   inn2Balls,
+          isJoker: p.isJoker || false,
+        };
+      })
+      .filter(Boolean);
+  })();
   const innings1Score = match?.innings1?.score ?? match?.firstInningsScore ?? 0;
   const innings1Wickets = match?.innings1?.wickets ?? 0;
   const innings1Overs = match?.innings1?.overs ?? 0;

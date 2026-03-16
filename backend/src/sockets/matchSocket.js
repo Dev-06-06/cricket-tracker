@@ -483,16 +483,20 @@ function applyWicketState(match, { dismissedBatter, dismissedPlayerType, wicketT
     // RISK: joker has TWO playerStats entries (one per team)
     // When joker is dismissed, BOTH entries must be marked isOut
     // Otherwise their other-team entry still appears as available batter
+    // For dismissal, mark BOTH entries isOut (existing behavior)
+    // but also ensure dismissalType goes to batting team entry only
+    const battingTeam = match.current.battingTeam;
     const allEntries = match.playerStats.filter(
       (p) => p.name === resolvedDismissed
+    );
+    // Find the batting team entry specifically for dismissalType
+    const battingEntry = match.playerStats.find(
+      (p) => p.name === resolvedDismissed && p.team === battingTeam
     );
 
     allEntries.forEach(entry => {
       entry.isOut = true;
       if (!entry.batting) entry.batting = {};
-      // Only set dismissalType on the batting team entry
-      // (the one that was actually batting)
-      const battingTeam = match.current.battingTeam;
       if (entry.team === battingTeam) {
         entry.batting.dismissalType = wicketType || "";
       }
@@ -765,13 +769,25 @@ function setupSockets(io) {
           return;
         }
 
-        // Resolve playerIds from playerStats
-        const findPlayerEntry = (name) =>
-          match.playerStats.find((p) => p.name === name);
+        // RISK: joker has two entries — find by name AND
+        // current batting team to get correct innings entry
+        const battingTeamKey = match.current.battingTeam;
+        const bowlingTeamKey = battingTeamKey === "team1"
+          ? "team2" : "team1";
 
-        const strikerEntry    = findPlayerEntry(striker);
-        const nonStrikerEntry = findPlayerEntry(nonStriker);
-        const bowlerEntry     = findPlayerEntry(bowler);
+        const findBattingEntry = (name) =>
+          match.playerStats.find(
+            (p) => p.name === name && p.team === battingTeamKey
+          ) || match.playerStats.find((p) => p.name === name);
+
+        const findBowlingEntry = (name) =>
+          match.playerStats.find(
+            (p) => p.name === name && p.team === bowlingTeamKey
+          ) || match.playerStats.find((p) => p.name === name);
+
+        const strikerEntry    = findBattingEntry(striker);
+        const nonStrikerEntry = findBattingEntry(nonStriker);
+        const bowlerEntry     = findBowlingEntry(bowler);
 
         match.current.striker    = { name: striker,    playerId: strikerEntry?.playerId    || null };
         match.current.nonStriker = { name: nonStriker, playerId: nonStrikerEntry?.playerId || null };
@@ -779,9 +795,18 @@ function setupSockets(io) {
         match.current.nextBatterFor = null;
         match.status = "live";
 
+        // RISK: only mark didBat on the BATTING team entry
+        // Only mark didBowl on the BOWLING team entry
+        // For jokers, the wrong entry getting didBat=true
+        // causes innings2BattingRows to filter incorrectly
         match.playerStats.forEach((ps) => {
-          if (ps.name === striker || ps.name === nonStriker) ps.didBat  = true;
-          if (ps.name === bowler)                             ps.didBowl = true;
+          if ((ps.name === striker || ps.name === nonStriker) &&
+              ps.team === battingTeamKey) {
+            ps.didBat = true;
+          }
+          if (ps.name === bowler && ps.team === bowlingTeamKey) {
+            ps.didBowl = true;
+          }
         });
 
         await match.save();
@@ -1463,7 +1488,13 @@ function setupSockets(io) {
 
           // ── Update batter stats ──────────────────────────────────────────
           if (match.current.striker?.name) {
-            const strikerPs = match.playerStats.find((p) => p.name === match.current.striker.name);
+            const battingTeam = match.current.battingTeam;
+            const strikerPs = match.playerStats.find(
+              (p) => p.name === match.current.striker.name && 
+                     p.team === battingTeam
+            ) || match.playerStats.find(
+              (p) => p.name === match.current.striker.name
+            );
             if (strikerPs) {
               if (!strikerPs.batting) strikerPs.batting = {};
               if (normalizedExtraType !== "wide") {
@@ -1477,7 +1508,14 @@ function setupSockets(io) {
 
           // ── Update bowler stats ──────────────────────────────────────────
           if (match.current.bowler?.name) {
-            const bowlerPs = match.playerStats.find((p) => p.name === match.current.bowler.name);
+            const bowlingTeam = match.current.battingTeam === "team1" 
+              ? "team2" : "team1";
+            const bowlerPs = match.playerStats.find(
+              (p) => p.name === match.current.bowler.name && 
+                     p.team === bowlingTeam
+            ) || match.playerStats.find(
+              (p) => p.name === match.current.bowler.name
+            );
             if (bowlerPs) {
               if (!bowlerPs.bowling) bowlerPs.bowling = {};
               if (isValidBall) bowlerPs.bowling.balls = (bowlerPs.bowling.balls || 0) + 1;
@@ -1619,7 +1657,13 @@ function setupSockets(io) {
 
           // Batter stats
           if (match.current.striker?.name) {
-            const strikerPs = match.playerStats.find((p) => p.name === match.current.striker.name);
+            const battingTeam = match.current.battingTeam;
+            const strikerPs = match.playerStats.find(
+              (p) => p.name === match.current.striker.name && 
+                     p.team === battingTeam
+            ) || match.playerStats.find(
+              (p) => p.name === match.current.striker.name
+            );
             if (strikerPs) {
               if (!strikerPs.batting) strikerPs.batting = {};
               if (deliveryData.extraType !== "wide") {
@@ -1633,7 +1677,14 @@ function setupSockets(io) {
 
           // Bowler stats (umpire_update path)
           if (match.current.bowler?.name) {
-            const bowlerPs = match.playerStats.find((p) => p.name === match.current.bowler.name);
+            const bowlingTeam = match.current.battingTeam === "team1" 
+              ? "team2" : "team1";
+            const bowlerPs = match.playerStats.find(
+              (p) => p.name === match.current.bowler.name && 
+                     p.team === bowlingTeam
+            ) || match.playerStats.find(
+              (p) => p.name === match.current.bowler.name
+            );
             if (bowlerPs) {
               if (!bowlerPs.bowling) bowlerPs.bowling = {};
               if (isValidBall) bowlerPs.bowling.balls = (bowlerPs.bowling.balls || 0) + 1;
@@ -1796,7 +1847,13 @@ function setupSockets(io) {
             const isValid = isValidBallType(delivery.extraType);
 
             if (delivery.striker) {
-              const sp = match.playerStats.find((p) => p.name === delivery.striker);
+              const battingTeam = match.current.battingTeam;
+              const sp = match.playerStats.find(
+                (p) => p.name === delivery.striker && 
+                       p.team === battingTeam
+              ) || match.playerStats.find(
+                (p) => p.name === delivery.striker
+              );
               if (sp) {
                 sp.didBat = true;
                 if (delivery.extraType !== "wide") {
@@ -1817,7 +1874,14 @@ function setupSockets(io) {
             }
 
             if (delivery.bowler) {
-              const bp = match.playerStats.find((p) => p.name === delivery.bowler);
+              const bowlingTeam = battingTeam === "team1" 
+                ? "team2" : "team1";
+              const bp = match.playerStats.find(
+                (p) => p.name === delivery.bowler && 
+                       p.team === bowlingTeam
+              ) || match.playerStats.find(
+                (p) => p.name === delivery.bowler
+              );
               if (bp) {
                 bp.didBowl = true;
                 if (isValid) bp.bowling.balls += 1;
