@@ -63,13 +63,12 @@ function getBatterStat(match, name) {
   // RISK: joker has two entries — find by name AND batting team
   // to get the correct innings entry
   const battingTeam = match?.battingTeam;
-  const p = (match?.playerStats || []).find(
-    (x) => x.name === name && x.team === battingTeam
-  ) || (match?.playerStats || []).find(
-    (x) => x.name === name
-  );
+  const p =
+    (match?.playerStats || []).find(
+      (x) => x.name === name && x.team === battingTeam,
+    ) || (match?.playerStats || []).find((x) => x.name === name);
   return {
-    runs:  p?.batting?.runs  ?? 0,
+    runs: p?.batting?.runs ?? 0,
     balls: p?.batting?.balls ?? 0,
     fours: p?.batting?.fours ?? 0,
     sixes: p?.batting?.sixes ?? 0,
@@ -80,15 +79,14 @@ function getBowlerStat(match, name) {
   if (!name) return { balls: 0, wickets: 0, runs: 0 };
   // RISK: joker has two entries — find by bowling team entry
   const bowlingTeam = match?.bowlingTeam;
-  const p = (match?.playerStats || []).find(
-    (x) => x.name === name && x.team === bowlingTeam
-  ) || (match?.playerStats || []).find(
-    (x) => x.name === name
-  );
+  const p =
+    (match?.playerStats || []).find(
+      (x) => x.name === name && x.team === bowlingTeam,
+    ) || (match?.playerStats || []).find((x) => x.name === name);
   return {
-    balls:   p?.bowling?.balls   ?? 0,
+    balls: p?.bowling?.balls ?? 0,
     wickets: p?.bowling?.wickets ?? 0,
-    runs:    p?.bowling?.runs    ?? 0,
+    runs: p?.bowling?.runs ?? 0,
   };
 }
 
@@ -223,6 +221,7 @@ export default function UmpireScorerPage() {
   const prevBallsBowledRef = useRef(null);
   const lastOversSummaryRef = useRef([]);
   const overBreakOpenRef = useRef(false);
+  const prevOverBreakOpenRef = useRef(null);
   const benchReplacementInProgressRef = useRef(false);
 
   const [match, setMatch] = useState(null);
@@ -275,51 +274,53 @@ export default function UmpireScorerPage() {
       const prev = prevBallsBowledRef.current;
 
       // Append new balls FIRST before setMatch.
-        if (data.ballsBowled !== undefined) {
-          setFullTimeline((prevTimeline) => {
-            // RISK: after undo, ballsBowled decreases
-            // fullTimeline must be trimmed to remove the undone ball
-            // We detect undo by comparing ballsBowled to fullTimeline
-            // valid ball count
-            const prevValidCount = prevTimeline.filter(
-              (b) =>
-                !b.extraType ||
-                b.extraType === "none" ||
-                b.extraType === "bye" ||
-                b.extraType === "leg-bye",
-            ).length;
+      if (data.ballsBowled !== undefined) {
+        setFullTimeline((prevTimeline) => {
+          // RISK: after undo, ballsBowled decreases
+          // fullTimeline must be trimmed to remove the undone ball
+          // We detect undo by comparing ballsBowled to fullTimeline
+          // valid ball count
+          const prevValidCount = prevTimeline.filter(
+            (b) =>
+              !b.extraType ||
+              b.extraType === "none" ||
+              b.extraType === "bye" ||
+              b.extraType === "leg-bye",
+          ).length;
 
-            const newValidCount = data.ballsBowled ?? 0;
+          const newValidCount = data.ballsBowled ?? 0;
 
-            // Undo detected — ballsBowled decreased
-            if (newValidCount < prevValidCount && prevTimeline.length > 0) {
-              // Remove balls from the end until valid count matches
-              const trimmed = [...prevTimeline];
-              let currentValid = prevValidCount;
-              while (currentValid > newValidCount && trimmed.length > 0) {
-                const last = trimmed[trimmed.length - 1];
-                trimmed.pop();
-                const wasValid =
-                  !last.extraType ||
-                  last.extraType === "none" ||
-                  last.extraType === "bye" ||
-                  last.extraType === "leg-bye";
-                if (wasValid) currentValid--;
-              }
-              return trimmed;
+          // Undo detected — ballsBowled decreased
+          if (newValidCount < prevValidCount && prevTimeline.length > 0) {
+            // Remove balls from the end until valid count matches
+            const trimmed = [...prevTimeline];
+            let currentValid = prevValidCount;
+            while (currentValid > newValidCount && trimmed.length > 0) {
+              const last = trimmed[trimmed.length - 1];
+              trimmed.pop();
+              const wasValid =
+                !last.extraType ||
+                last.extraType === "none" ||
+                last.extraType === "bye" ||
+                last.extraType === "leg-bye";
+              if (wasValid) currentValid--;
             }
+            return trimmed;
+          }
 
-            // Normal delivery — append new balls only
-            if (!data.timeline || data.timeline.length === 0) return prevTimeline;
-            const existingIds = new Set(
-              prevTimeline.map((b) => b._id?.toString()).filter(Boolean),
-            );
-            const newBalls = (data.timeline || []).filter(
-              (b) => b._id && !existingIds.has(b._id.toString()),
-            );
-            return newBalls.length > 0 ? [...prevTimeline, ...newBalls] : prevTimeline;
-          });
-        }
+          // Normal delivery — append new balls only
+          if (!data.timeline || data.timeline.length === 0) return prevTimeline;
+          const existingIds = new Set(
+            prevTimeline.map((b) => b._id?.toString()).filter(Boolean),
+          );
+          const newBalls = (data.timeline || []).filter(
+            (b) => b._id && !existingIds.has(b._id.toString()),
+          );
+          return newBalls.length > 0
+            ? [...prevTimeline, ...newBalls]
+            : prevTimeline;
+        });
+      }
 
       const shouldEval =
         (m.inningsNumber === 2 || typeof m.firstInningsScore === "number") &&
@@ -381,9 +382,11 @@ export default function UmpireScorerPage() {
 
       // Only close innings break drawer after setOpeners
       // is confirmed — check striker is set
-      if (data.status === "live" &&
-          data.currentStriker &&
-          data.currentNonStriker) {
+      if (
+        data.status === "live" &&
+        data.currentStriker &&
+        data.currentNonStriker
+      ) {
         setInningsBreakOpen(false);
         setShowSecondInningsModal(false);
       }
@@ -506,6 +509,25 @@ export default function UmpireScorerPage() {
   }, [match?.nextBatterFor, overBreakOpen, inningsBreakOpen]);
 
   useEffect(() => {
+    const prevOverBreakOpen = prevOverBreakOpenRef.current;
+    const overBreakJustClosed =
+      prevOverBreakOpen === true && overBreakOpen === false;
+
+    if (
+      overBreakJustClosed &&
+      !benchReplacementInProgressRef.current &&
+      !inningsBreakOpen &&
+      (match?.nextBatterFor === "striker" ||
+        match?.nextBatterFor === "nonStriker")
+    ) {
+      setBatterSheetOpen(true);
+      setSelectedNewBatter("");
+    }
+
+    prevOverBreakOpenRef.current = overBreakOpen;
+  }, [overBreakOpen, match?.nextBatterFor, inningsBreakOpen]);
+
+  useEffect(() => {
     if (!match?.groupId || !token) return;
     getGroupPlayers(match.groupId, token)
       .then((response) => setGroupPlayers(response.players || []))
@@ -606,15 +628,19 @@ export default function UmpireScorerPage() {
       // Emit setOpeners directly — socket already in match room
       socketRef.current.emit("setOpeners", {
         matchId,
-        striker:    payload.striker,
+        striker: payload.striker,
         nonStriker: payload.nonStriker,
-        bowler:     payload.bowler,
+        bowler: payload.bowler,
       });
 
       // Only emit overBreakCommit if there are team changes
-      if (payload.addPlayers || payload.reshuffles ||
-          payload.setJokers || payload.dissolveJokers ||
-          payload.newTotalOvers) {
+      if (
+        payload.addPlayers ||
+        payload.reshuffles ||
+        payload.setJokers ||
+        payload.dissolveJokers ||
+        payload.newTotalOvers
+      ) {
         socketRef.current.emit("overBreakCommit", {
           matchId,
           payload: {
@@ -677,7 +703,7 @@ export default function UmpireScorerPage() {
     const nonStrikerName = match.currentNonStriker;
     const seen = new Set();
 
-    return (match.playerStats || []).filter(p => {
+    return (match.playerStats || []).filter((p) => {
       // p.team is a name string — compare directly
       if (p.team !== match.battingTeam) return false;
       if (p.isOut) return false;
@@ -704,14 +730,17 @@ export default function UmpireScorerPage() {
     // RISK: return previous value if fullTimeline temporarily empty
     if (!timelineForOvers.length) return [];
     const overs = [];
-    let cur = [], curBowlers = [], valid = 0;
+    let cur = [],
+      curBowlers = [],
+      valid = 0;
     for (const ball of timelineForOvers) {
       cur.push(ball);
       if (ball?.bowler) curBowlers.push(ball.bowler);
-      const isV = !ball.extraType ||
-                  ball.extraType === "none" ||
-                  ball.extraType === "bye" ||
-                  ball.extraType === "leg-bye";
+      const isV =
+        !ball.extraType ||
+        ball.extraType === "none" ||
+        ball.extraType === "bye" ||
+        ball.extraType === "leg-bye";
       if (isV) {
         valid++;
         if (valid % 6 === 0) {
@@ -730,9 +759,8 @@ export default function UmpireScorerPage() {
   if (oversSummary.length > 0) {
     lastOversSummaryRef.current = oversSummary;
   }
-  const stableOversSummary = oversSummary.length > 0
-    ? oversSummary
-    : lastOversSummaryRef.current;
+  const stableOversSummary =
+    oversSummary.length > 0 ? oversSummary : lastOversSummaryRef.current;
 
   // RISK: when ballsBowled % 6 === 0, an over just
   // completed — show empty circles for new over
@@ -754,8 +782,9 @@ export default function UmpireScorerPage() {
 
   const currentOverAllDeliveries = currentOverDeliveries;
 
-  const currentBowlerStats = (match?.playerStats || [])
-    .find((p) => p.name === match?.currentBowler);
+  const currentBowlerStats = (match?.playerStats || []).find(
+    (p) => p.name === match?.currentBowler,
+  );
 
   const getPhoto = (name) => {
     if (!name) return null;
@@ -817,7 +846,8 @@ export default function UmpireScorerPage() {
     matchEndStatus.isMatchOver || match.status === "completed";
 
   const isOverBreak = overBreakOpen;
-  const midOver = !isOverBreak &&
+  const midOver =
+    !isOverBreak &&
     match?.status === "live" &&
     (match?.ballsBowled ?? 0) % 6 !== 0;
 
@@ -876,62 +906,63 @@ export default function UmpireScorerPage() {
       {!inningsBreakOpen &&
         match?.status === "innings_complete" &&
         showSecondInningsModal && (
-        <Modal title="Set 2nd Innings — Choose Openers &amp; Bowler">
-          <ModalSelect
-            value={secondInningsStriker}
-            onChange={(v) => {
-              setSecondInningsStriker(v);
-              if (v === secondInningsNonStriker) setSecondInningsNonStriker("");
-            }}
-            options={battingTeamAll.filter(
-              (p) => p.name !== secondInningsNonStriker,
-            )}
-            placeholder="— Striker —"
-          />
-          <ModalSelect
-            value={secondInningsNonStriker}
-            onChange={(v) => {
-              setSecondInningsNonStriker(v);
-              if (v === secondInningsStriker) setSecondInningsStriker("");
-            }}
-            options={battingTeamAll.filter(
-              (p) => p.name !== secondInningsStriker,
-            )}
-            placeholder="— Non-Striker —"
-          />
-          <ModalSelect
-            value={secondInningsBowler}
-            onChange={setSecondInningsBowler}
-            options={bowlingTeamPlayers}
-            placeholder="— Bowler —"
-          />
-          <ModalBtn
-            onClick={() => {
-              if (
+          <Modal title="Set 2nd Innings — Choose Openers &amp; Bowler">
+            <ModalSelect
+              value={secondInningsStriker}
+              onChange={(v) => {
+                setSecondInningsStriker(v);
+                if (v === secondInningsNonStriker)
+                  setSecondInningsNonStriker("");
+              }}
+              options={battingTeamAll.filter(
+                (p) => p.name !== secondInningsNonStriker,
+              )}
+              placeholder="— Striker —"
+            />
+            <ModalSelect
+              value={secondInningsNonStriker}
+              onChange={(v) => {
+                setSecondInningsNonStriker(v);
+                if (v === secondInningsStriker) setSecondInningsStriker("");
+              }}
+              options={battingTeamAll.filter(
+                (p) => p.name !== secondInningsStriker,
+              )}
+              placeholder="— Non-Striker —"
+            />
+            <ModalSelect
+              value={secondInningsBowler}
+              onChange={setSecondInningsBowler}
+              options={bowlingTeamPlayers}
+              placeholder="— Bowler —"
+            />
+            <ModalBtn
+              onClick={() => {
+                if (
+                  !secondInningsStriker ||
+                  !secondInningsNonStriker ||
+                  !secondInningsBowler ||
+                  secondInningsStriker === secondInningsNonStriker
+                )
+                  return;
+                socketRef.current?.emit("setOpeners", {
+                  matchId,
+                  striker: secondInningsStriker,
+                  nonStriker: secondInningsNonStriker,
+                  bowler: secondInningsBowler,
+                });
+                setShowSecondInningsModal(false);
+              }}
+              disabled={
                 !secondInningsStriker ||
                 !secondInningsNonStriker ||
                 !secondInningsBowler ||
                 secondInningsStriker === secondInningsNonStriker
-              )
-                return;
-              socketRef.current?.emit("setOpeners", {
-                matchId,
-                striker: secondInningsStriker,
-                nonStriker: secondInningsNonStriker,
-                bowler: secondInningsBowler,
-              });
-              setShowSecondInningsModal(false);
-            }}
-            disabled={
-              !secondInningsStriker ||
-              !secondInningsNonStriker ||
-              !secondInningsBowler ||
-              secondInningsStriker === secondInningsNonStriker
-            }
-            label="Start 2nd Innings"
-          />
-        </Modal>
-      )}
+              }
+              label="Start 2nd Innings"
+            />
+          </Modal>
+        )}
 
       <BottomSheet
         isOpen={bowlerSheetOpen}
@@ -945,7 +976,7 @@ export default function UmpireScorerPage() {
         <div className="space-y-2">
           {/* bowling team players — filter out benched players */}
           {(match?.playerStats || [])
-            .filter(p => {
+            .filter((p) => {
               // p.team is a name string — compare directly to bowlingTeam
               if (p.team !== match.bowlingTeam) return false;
               // RISK: isBenched may be undefined from older socket emissions
@@ -954,9 +985,9 @@ export default function UmpireScorerPage() {
               return true;
             })
             .reduce((acc, p) => {
-              // Deduplicate by name — joker has two entries but only 
+              // Deduplicate by name — joker has two entries but only
               // bowling team entry passes the filter above
-              if (!acc.find(x => x.name === p.name)) acc.push(p);
+              if (!acc.find((x) => x.name === p.name)) acc.push(p);
               return acc;
             }, [])
             .map((p) => (
@@ -1009,7 +1040,7 @@ export default function UmpireScorerPage() {
             const strikerName = match?.currentStriker;
             const nonStrikerName = match?.currentNonStriker;
 
-            const allBatters = (match?.playerStats || []).filter(p => {
+            const allBatters = (match?.playerStats || []).filter((p) => {
               // p.team is a name string — compare directly
               if (p.team !== match.battingTeam) return false;
               if (p.isOut) return false;
@@ -1300,8 +1331,9 @@ export default function UmpireScorerPage() {
         {/* Current over chips */}
         <div className="mt-2 flex items-center gap-1.5 overflow-x-auto">
           <span className="text-[10px] font-black uppercase tracking-wider text-slate-700 shrink-0 mr-1">
-            OV {ballsInCurrentOver === 0
-              ? (Math.floor((match?.ballsBowled ?? 0) / 6) + 1)
+            OV{" "}
+            {ballsInCurrentOver === 0
+              ? Math.floor((match?.ballsBowled ?? 0) / 6) + 1
               : stableOversSummary.length > 0
                 ? stableOversSummary.length
                 : 1}
@@ -1310,14 +1342,19 @@ export default function UmpireScorerPage() {
             const isWide = ball.extraType === "wide";
             const isNoBall = ball.extraType === "no-ball";
             const isWicket = ball.isWicket === true;
-            const totalRuns = Number(ball.runsOffBat ?? ball.runs ?? 0) +
-                              Number(ball.extraRuns || 0);
+            const totalRuns =
+              Number(ball.runsOffBat ?? ball.runs ?? 0) +
+              Number(ball.extraRuns || 0);
 
-            const displayVal = isWicket ? "W" :
-                               isWide ? "Wd" :
-                               isNoBall ? "Nb" :
-                               totalRuns === 0 ? "•" :
-                               String(totalRuns);
+            const displayVal = isWicket
+              ? "W"
+              : isWide
+                ? "Wd"
+                : isNoBall
+                  ? "Nb"
+                  : totalRuns === 0
+                    ? "•"
+                    : String(totalRuns);
 
             const circleColor = isWicket
               ? "border-red-500/60 bg-red-500/20 text-red-400"
@@ -1343,7 +1380,7 @@ export default function UmpireScorerPage() {
 
           {/* Empty placeholder circles */}
           {Array.from({
-            length: Math.max(0, 6 - currentOverAllDeliveries.length)
+            length: Math.max(0, 6 - currentOverAllDeliveries.length),
           }).map((_, i) => (
             <span
               key={`empty-${i}`}
@@ -1535,55 +1572,69 @@ export default function UmpireScorerPage() {
             setBenchSheetOpen(false);
             setBenchingPosition(null);
           }}
-          title={`Bench ${benchingPosition === "striker"
-            ? match?.currentStriker
-            : match?.currentNonStriker} — Select Replacement`}
+          title={`Bench ${
+            benchingPosition === "striker"
+              ? match?.currentStriker
+              : match?.currentNonStriker
+          } — Select Replacement`}
         >
           {(() => {
-            const batterBeingBenched = benchingPosition === "striker"
-              ? match?.currentStriker
-              : match?.currentNonStriker;
+            const batterBeingBenched =
+              benchingPosition === "striker"
+                ? match?.currentStriker
+                : match?.currentNonStriker;
 
             // Available replacements — same logic as availableReplacements
             // but computed fresh here for the sheet
-            const replacements = (match?.playerStats || []).filter(p => {
-              if (p.team !== match?.battingTeam) return false;
-              if (p.isOut) return false;
-              if (p.name === match?.currentStriker) return false;
-              if (p.name === match?.currentNonStriker) return false;
-              return true;
-            }).filter((p, i, arr) =>
-              arr.findIndex(x => x.name === p.name) === i
-            ).sort((a, b) => {
-              // Benched players first
-              if (a.isBenched && !b.isBenched) return -1;
-              if (!a.isBenched && b.isBenched) return 1;
-              return 0;
-            });
+            const replacements = (match?.playerStats || [])
+              .filter((p) => {
+                if (p.team !== match?.battingTeam) return false;
+                if (p.isOut) return false;
+                if (p.name === match?.currentStriker) return false;
+                if (p.name === match?.currentNonStriker) return false;
+                return true;
+              })
+              .filter(
+                (p, i, arr) => arr.findIndex((x) => x.name === p.name) === i,
+              )
+              .sort((a, b) => {
+                // Benched players first
+                if (a.isBenched && !b.isBenched) return -1;
+                if (!a.isBenched && b.isBenched) return 1;
+                return 0;
+              });
 
             return (
               <div className="space-y-3">
                 {/* Who is being benched */}
-                <div className="flex items-center gap-2 rounded-xl border 
-                  border-amber-500/20 bg-amber-500/8 px-3 py-2.5">
+                <div
+                  className="flex items-center gap-2 rounded-xl border 
+                  border-amber-500/20 bg-amber-500/8 px-3 py-2.5"
+                >
                   <span className="text-base">🪑</span>
                   <div>
-                    <p className="text-[10px] font-black uppercase 
-                      tracking-widest text-amber-500/70">
+                    <p
+                      className="text-[10px] font-black uppercase 
+                      tracking-widest text-amber-500/70"
+                    >
                       Benching
                     </p>
                     <p className="text-sm font-bold text-white">
                       {batterBeingBenched}
-                      <span className="ml-2 text-[10px] text-slate-500 
-                        font-normal">
-                        {benchingPosition === "striker" 
-                          ? `${match?.playerStats?.find(
-                              p => p.name === batterBeingBenched
-                            )?.batting?.runs ?? 0}(${
+                      <span
+                        className="ml-2 text-[10px] text-slate-500 
+                        font-normal"
+                      >
+                        {benchingPosition === "striker"
+                          ? `${
                               match?.playerStats?.find(
-                                p => p.name === batterBeingBenched
+                                (p) => p.name === batterBeingBenched,
+                              )?.batting?.runs ?? 0
+                            }(${
+                              match?.playerStats?.find(
+                                (p) => p.name === batterBeingBenched,
                               )?.batting?.balls ?? 0
-                            })` 
+                            })`
                           : ""}
                       </span>
                     </p>
@@ -1591,26 +1642,31 @@ export default function UmpireScorerPage() {
                 </div>
 
                 {/* Replacement picker */}
-                <p className="text-[10px] font-black uppercase tracking-widest 
-                  text-slate-600">
+                <p
+                  className="text-[10px] font-black uppercase tracking-widest 
+                  text-slate-600"
+                >
                   Who replaces them?
                 </p>
 
                 {replacements.length === 0 ? (
-                  <div className="rounded-xl border border-dashed 
-                    border-white/8 py-6 text-center text-sm text-slate-600">
+                  <div
+                    className="rounded-xl border border-dashed 
+                    border-white/8 py-6 text-center text-sm text-slate-600"
+                  >
                     No available replacements
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {replacements.map(p => (
+                    {replacements.map((p) => (
                       <BottomSheetOption
                         key={p.name}
                         label={p.name}
                         photoUrl={p.photoUrl}
                         sublabel={
                           p.isBenched
-                            ? `${p.batting?.runs ?? 0}(${p.batting?.balls ?? 0
+                            ? `${p.batting?.runs ?? 0}(${
+                                p.batting?.balls ?? 0
                               }) — returning from bench`
                             : p.didBat
                               ? `${p.batting?.runs ?? 0}(${p.batting?.balls ?? 0})`
@@ -1655,8 +1711,8 @@ export default function UmpireScorerPage() {
                 Available at Over Break Only
               </p>
               <p className="mt-1.5 text-[11px] text-slate-500 leading-relaxed">
-                Team changes, overs adjustment, and joker controls are
-                available after the current over completes.
+                Team changes, overs adjustment, and joker controls are available
+                after the current over completes.
               </p>
             </div>
 
