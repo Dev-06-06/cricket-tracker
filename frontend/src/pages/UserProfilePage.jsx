@@ -72,7 +72,10 @@ export default function UserProfilePage() {
     let isMounted = true;
 
     const init = async () => {
-      if (!token) return;
+      if (!token) {
+        setLoadingGroups(false);
+        return;
+      }
       try {
         setLoadingGroups(true);
         setError("");

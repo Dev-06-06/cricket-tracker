@@ -217,14 +217,22 @@ export default function UmpireScorerPage() {
   const { token } = useAuth();
   const navigate = useNavigate();
   const socketRef = useRef(null);
+  const matchRef = useRef(null);
   const redirectedRef = useRef(false);
   const prevBallsBowledRef = useRef(null);
   const lastOversSummaryRef = useRef([]);
   const overBreakOpenRef = useRef(false);
   const prevOverBreakOpenRef = useRef(null);
   const benchReplacementInProgressRef = useRef(false);
+  const isDeliveryInFlight = useRef(false);
+  const isUndoInFlight = useRef(false);
 
   const [match, setMatch] = useState(null);
+  const matchEndStatus = useMemo(
+    () =>
+      match ? checkMatchEnd(match) : { isMatchOver: false, resultMessage: "" },
+    [match],
+  );
   const [groupPlayers, setGroupPlayers] = useState([]);
   const [overBreakOpen, setOverBreakOpen] = useState(false);
   const [inningsBreakOpen, setInningsBreakOpen] = useState(false);
@@ -244,10 +252,6 @@ export default function UmpireScorerPage() {
   const [benchSheetOpen, setBenchSheetOpen] = useState(false);
   const [benchingPosition, setBenchingPosition] = useState(null);
   // "striker" | "nonStriker"
-  const [matchEndStatus, setMatchEndStatus] = useState({
-    isMatchOver: false,
-    resultMessage: "",
-  });
   const [lastBall, setLastBall] = useState(null);
   const [manageTeamsMidOver, setManageTeamsMidOver] = useState(false);
 
@@ -280,12 +284,8 @@ export default function UmpireScorerPage() {
           // fullTimeline must be trimmed to remove the undone ball
           // We detect undo by comparing ballsBowled to fullTimeline
           // valid ball count
-          const prevValidCount = prevTimeline.filter(
-            (b) =>
-              !b.extraType ||
-              b.extraType === "none" ||
-              b.extraType === "bye" ||
-              b.extraType === "leg-bye",
+          const prevValidCount = prevTimeline.filter((b) =>
+            isValidBall(b),
           ).length;
 
           const newValidCount = data.ballsBowled ?? 0;
@@ -322,29 +322,6 @@ export default function UmpireScorerPage() {
         });
       }
 
-      const shouldEval =
-        (m.inningsNumber === 2 || typeof m.firstInningsScore === "number") &&
-        typeof m.firstInningsScore === "number";
-      if (shouldEval) {
-        const cnt = (m.playerStats || []).filter(
-          (p) => p.team === m.battingTeam,
-        ).length;
-        setMatchEndStatus(
-          checkMatchEnd({
-            teamAScore: m.firstInningsScore,
-            teamBScore: m.totalRuns,
-            teamBWickets: m.wickets,
-            teamBPlayersCount: cnt,
-            totalValidBalls: m.ballsBowled,
-            totalOvers: m.totalOvers,
-            teamAName: m.bowlingTeam,
-            teamBName: m.battingTeam,
-          }),
-        );
-      } else {
-        setMatchEndStatus({ isMatchOver: false, resultMessage: "" });
-      }
-
       if (m.status === "innings_complete") {
         setBatterSheetOpen(false);
         setSelectedNewBatter("");
@@ -366,13 +343,20 @@ export default function UmpireScorerPage() {
       }
 
       // RISK: innings 2 starts fresh — clear fullTimeline
-      if (data.inningsNumber === 2 && match?.inningsNumber === 1) {
+      if (data.inningsNumber === 2 && matchRef.current?.inningsNumber === 1) {
         setFullTimeline([]);
       }
 
       prevBallsBowledRef.current = curr;
       setMatch({ ...m });
+      matchRef.current = m;
+      isDeliveryInFlight.current = false;
+      isUndoInFlight.current = false;
       benchReplacementInProgressRef.current = false;
+      // Close bench sheet on any matchState — server is source of truth
+      // If undo was called, bench state is invalidated
+      setBenchSheetOpen(false);
+      setBenchingPosition(null);
 
       if (m.status === "completed" && !redirectedRef.current) {
         // Fallback redirect — catches case where match_completed
@@ -391,15 +375,6 @@ export default function UmpireScorerPage() {
         setInningsBreakOpen(false);
         setShowSecondInningsModal(false);
       }
-
-      // RISK: open over break drawer when backend signals pending over break
-      // data.current?.overBreakPending is not in flat emit — use ballsBowled
-      // The backend emits "overBreakStarted" as a separate event
-      // Handle that below.
-      setOverBreakOpen((prevOpen) => {
-        if (prevOpen && curr > (prev ?? 0)) return false;
-        return prevOpen;
-      });
     };
 
     const handleOverBreakStarted = (data) => {
@@ -463,7 +438,15 @@ export default function UmpireScorerPage() {
     socket.on("overBreakStarted", handleOverBreakStarted);
     socket.on("inningsBreakStarted", handleInningsBreakStarted);
     socket.on("matchEnded", () => navigate(`/scoreboard/${matchId}`));
-    socket.on("error", ({ message }) => alert("Error: " + message));
+    socket.on("error", ({ message }) => {
+      isDeliveryInFlight.current = false;
+      isUndoInFlight.current = false;
+      alert("Error: " + message);
+    });
+    socket.on("matchError", ({ message }) => {
+      isDeliveryInFlight.current = false;
+      isUndoInFlight.current = false;
+    });
 
     return () => {
       socket.off("matchState", handleMatchState);
@@ -476,6 +459,7 @@ export default function UmpireScorerPage() {
         "innings_complete",
         "matchEnded",
         "error",
+        "matchError",
       ].forEach((e) => socket.off(e));
       socket.disconnect();
       socketRef.current = null;
@@ -486,7 +470,7 @@ export default function UmpireScorerPage() {
     if (overBreakOpen && manageTeamsMidOver) {
       setManageTeamsMidOver(false);
     }
-  }, [overBreakOpen]);
+  }, [overBreakOpen, manageTeamsMidOver]);
 
   useEffect(() => {
     // RISK: suppress auto-open during bench replacement flow
@@ -521,8 +505,7 @@ export default function UmpireScorerPage() {
       (match?.nextBatterFor === "striker" ||
         match?.nextBatterFor === "nonStriker")
     ) {
-      setBatterSheetOpen(true);
-      setSelectedNewBatter("");
+      // Batter sheet opening is handled by the primary nextBatterFor effect.
     }
 
     prevOverBreakOpenRef.current = overBreakOpen;
@@ -537,6 +520,9 @@ export default function UmpireScorerPage() {
 
   /* ── delivery ── */
   function recordDelivery(runs) {
+    if (isDeliveryInFlight.current) return;
+    isDeliveryInFlight.current = true;
+
     const socket = socketRef.current;
     if (
       !socket ||
@@ -544,8 +530,10 @@ export default function UmpireScorerPage() {
       matchEndStatus.isMatchOver ||
       inningsBreakOpen ||
       bowlerSheetOpen
-    )
+    ) {
+      isDeliveryInFlight.current = false;
       return;
+    }
 
     let payload;
     if (extraType === "wide") {
@@ -615,6 +603,13 @@ export default function UmpireScorerPage() {
   }
 
   function undoDelivery() {
+    if (isUndoInFlight.current) return;
+    if (benchSheetOpen) return;
+    if (batterSheetOpen) return;
+    if (overBreakOpen) return;
+    if (inningsBreakOpen) return;
+    isUndoInFlight.current = true;
+
     socketRef.current?.emit("undo_delivery", { matchId });
     setIsWicket(false);
     setWicketType("");
@@ -696,7 +691,7 @@ export default function UmpireScorerPage() {
     (match?.team2Players || []).forEach(collectPhoto);
 
     return map;
-  }, [match?.playerStats, match?.team1Players, match?.team2Players]);
+  }, [match?.ballsBowled, match?.inningsNumber, match?.wickets]);
 
   const availableReplacements = useMemo(() => {
     if (!match?.playerStats) return [];
@@ -713,13 +708,7 @@ export default function UmpireScorerPage() {
       seen.add(p.name);
       return true;
     });
-  }, [
-    match?.playerStats,
-    match?.battingTeam,
-    match?.team1Name,
-    match?.currentStriker,
-    match?.currentNonStriker,
-  ]);
+  }, [match?.ballsBowled, match?.wickets, match?.inningsNumber]);
 
   // These derived values are safe before early returns
   // because they handle null match gracefully
@@ -1111,6 +1100,47 @@ export default function UmpireScorerPage() {
         >
           Send to Crease
         </button>
+
+        {(() => {
+          const strikerName = match?.currentStriker;
+          const nonStrikerName = match?.currentNonStriker;
+
+          const allBatters = (match?.playerStats || []).filter((p) => {
+            if (p.team !== match.battingTeam) return false;
+            if (p.isOut) return false;
+            if (p.name === strikerName || p.name === nonStrikerName)
+              return false;
+            return true;
+          });
+
+          const seen = new Set();
+          const deduped = allBatters.filter((p) => {
+            if (seen.has(p.name)) return false;
+            seen.add(p.name);
+            return true;
+          });
+
+          const sorted = [...deduped].sort((a, b) => {
+            if (a.isBenched && !b.isBenched) return -1;
+            if (!a.isBenched && b.isBenched) return 1;
+            return 0;
+          });
+
+          if (sorted.length > 0) return null;
+
+          return (
+            <button
+              type="button"
+              onClick={() => {
+                socketRef.current?.emit("complete_match", { matchId });
+                setBatterSheetOpen(false);
+              }}
+              className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 py-3 text-sm font-black uppercase tracking-widest text-slate-300 hover:border-white/20 transition-all"
+            >
+              End Innings
+            </button>
+          );
+        })()}
       </BottomSheet>
 
       {/* ═══════════════════════════════════════

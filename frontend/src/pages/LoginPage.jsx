@@ -30,7 +30,7 @@ export default function LoginPage() {
         password,
       });
 
-      login(response.token);
+      login(response.token, response.user);
       navigate(from, { replace: true });
     } catch (requestError) {
       setError(requestError.message || "Unable to login");

@@ -1,3 +1,4 @@
+const helmet = require("helmet");
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
@@ -10,6 +11,7 @@ const setupSockets = require("./sockets/matchSocket");
 connectDB();
 
 const app = express();
+app.use(helmet());
 const allowedOrigins = process.env.CLIENT_ORIGIN
   ? process.env.CLIENT_ORIGIN.split(",").map((s) => s.trim())
   : ["http://localhost:5173"];

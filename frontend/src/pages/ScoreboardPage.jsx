@@ -131,14 +131,20 @@ function calcEcon(r, b) {
 
 function getDismissal(player, striker, nonStriker) {
   if (!player.isOut) {
-    if (player.name === striker || player.name === nonStriker)
-      return "batting";
+    if (player.name === striker || player.name === nonStriker) return "batting";
     // RISK: benched player shows as retired not out
     if (player.isBenched) return "retired not out";
     return "not out";
   }
   const dt = player.batting?.dismissalType || "";
   return dt ? dt.charAt(0).toUpperCase() + dt.slice(1) : "Out";
+}
+
+function firstInningsDismissalText(player) {
+  const dismissal = String(
+    player?.batting?.dismissalType ?? player?.dismissal ?? "dismissed",
+  ).trim();
+  return dismissal || "dismissed";
 }
 
 function buildBattingRows(match) {
@@ -169,7 +175,8 @@ function buildBattingRows(match) {
   });
 }
 
-function buildBowlingRows(match) {
+function buildBowlingRows(matchData) {
+  const match = matchData || {};
   // RISK: deduplicate joker by name (two entries, same name)
   const seen = new Set();
   const bowlers = (match.playerStats || []).filter((p) => {
@@ -327,9 +334,8 @@ function MatchSummaryView({ match, fullTimeline = [] }) {
   const innings1BowlingRows = match?.innings1?.bowlingRows || [];
   const innings1Team = match?.innings1?.battingTeam ?? match?.team1Name ?? "";
   // Innings 2 batting team = opposite of innings 1 batting team
-  const innings2BattingTeam = innings1Team === match?.team1Name
-    ? match?.team2Name
-    : match?.team1Name;
+  const innings2BattingTeam =
+    innings1Team === match?.team1Name ? match?.team2Name : match?.team1Name;
   const seenI2Bat = new Set();
   const innings2BattingRows = (match?.innings2?.battingRows || []).length
     ? match?.innings2?.battingRows
@@ -337,8 +343,12 @@ function MatchSummaryView({ match, fullTimeline = [] }) {
         .filter((p) => {
           if (p.team !== innings2BattingTeam) return false;
           // Include if didBat OR currently at crease
-          if (!p.didBat && p.name !== match?.currentStriker &&
-              p.name !== match?.currentNonStriker) return false;
+          if (
+            !p.didBat &&
+            p.name !== match?.currentStriker &&
+            p.name !== match?.currentNonStriker
+          )
+            return false;
           if (seenI2Bat.has(p.name)) return false;
           seenI2Bat.add(p.name);
           return true;
@@ -346,14 +356,14 @@ function MatchSummaryView({ match, fullTimeline = [] }) {
         .map((p) => ({
           name: p.name,
           dismissal: p.isOut
-            ? (p.batting?.dismissalType || "out")
+            ? p.batting?.dismissalType || "out"
             : p.isBenched
               ? "retired not out"
               : "not out",
-          runs:    p.batting?.runs   || 0,
-          balls:   p.batting?.balls  || 0,
-          fours:   p.batting?.fours  || 0,
-          sixes:   p.batting?.sixes  || 0,
+          runs: p.batting?.runs || 0,
+          balls: p.batting?.balls || 0,
+          fours: p.batting?.fours || 0,
+          sixes: p.batting?.sixes || 0,
           isJoker: p.isJoker || false,
         }));
 
@@ -365,33 +375,35 @@ function MatchSummaryView({ match, fullTimeline = [] }) {
   // Build innings2BowlingRows by subtracting innings1
   // bowling from total playerStats bowling
   // innings2BowlingTeam is the team that batted in innings 1
-  const seenI2Bowl = new Set();
-  const innings2BowlingRows = (() => {
+  const innings2BowlingRows = useMemo(() => {
+    const seenI2Bowl = new Set();
     // Get innings 1 bowling figures by bowler name
     const inn1BowlMap = {};
-    (match?.innings1?.bowlingRows || []).forEach(row => {
+    (match?.innings1?.bowlingRows || []).forEach((row) => {
       inn1BowlMap[row.name] = {
-        balls:   Number(row.balls)   || 0,
-        runs:    Number(row.runs)    || 0,
+        balls: Number(row.balls) || 0,
+        runs: Number(row.runs) || 0,
         wickets: Number(row.wickets) || 0,
       };
     });
 
     return (match?.playerStats || [])
-      .filter(p => {
+      .filter((p) => {
         if (p.team !== innings2BowlingTeam) return false;
         if (!p.didBowl) return false;
         if (seenI2Bowl.has(p.name)) return false;
         seenI2Bowl.add(p.name);
         return true;
       })
-      .map(p => {
+      .map((p) => {
         // Subtract innings 1 figures to get innings 2 only
-        const inn1 = inn1BowlMap[p.name] ||
-                     { balls: 0, runs: 0, wickets: 0 };
-        const inn2Balls   = Math.max(0, (p.bowling?.balls   || 0) - inn1.balls);
-        const inn2Runs    = Math.max(0, (p.bowling?.runs    || 0) - inn1.runs);
-        const inn2Wickets = Math.max(0, (p.bowling?.wickets || 0) - inn1.wickets);
+        const inn1 = inn1BowlMap[p.name] || { balls: 0, runs: 0, wickets: 0 };
+        const inn2Balls = Math.max(0, (p.bowling?.balls || 0) - inn1.balls);
+        const inn2Runs = Math.max(0, (p.bowling?.runs || 0) - inn1.runs);
+        const inn2Wickets = Math.max(
+          0,
+          (p.bowling?.wickets || 0) - inn1.wickets,
+        );
 
         // Only include if they bowled in innings 2
         if (inn2Balls === 0 && inn2Runs === 0 && inn2Wickets === 0) {
@@ -399,16 +411,16 @@ function MatchSummaryView({ match, fullTimeline = [] }) {
         }
 
         return {
-          name:    p.name,
-          overs:   Math.floor(inn2Balls / 6) + (inn2Balls % 6) / 10,
-          runs:    inn2Runs,
+          name: p.name,
+          overs: Math.floor(inn2Balls / 6) + (inn2Balls % 6) / 10,
+          runs: inn2Runs,
           wickets: inn2Wickets,
-          balls:   inn2Balls,
+          balls: inn2Balls,
           isJoker: p.isJoker || false,
         };
       })
       .filter(Boolean);
-  })();
+  }, [match, fullTimeline]);
   const innings1Score = match?.innings1?.score ?? match?.firstInningsScore ?? 0;
   const innings1Wickets = match?.innings1?.wickets ?? 0;
   const innings1Overs = match?.innings1?.overs ?? 0;
@@ -494,9 +506,8 @@ function MatchSummaryView({ match, fullTimeline = [] }) {
     return false;
   };
 
-  const timeline = fullTimeline.length > 0
-    ? fullTimeline
-    : (match?.timeline || []);
+  const timeline =
+    fullTimeline.length > 0 ? fullTimeline : match?.timeline || [];
 
   const firstInningsTimeline = timeline.filter(isFirstInningsBall);
   const secondInningsTimeline = timeline.filter(isSecondInningsBall);
@@ -504,73 +515,31 @@ function MatchSummaryView({ match, fullTimeline = [] }) {
   const calcExtras = (timeline = []) =>
     timeline.reduce((sum, ball) => sum + Number(ball?.extraRuns || 0), 0);
 
-  const firstInningsDismissedBatters = innings1BattingRows.filter(
-    (player) => {
-      const dismissal = String(
-        player?.batting?.dismissalType ?? player?.dismissal ?? "",
-      )
-        .trim()
-        .toLowerCase();
-      return dismissal && dismissal !== "not out" && dismissal !== "batting";
-    },
-  );
-
-  const firstInningsDismissalText = (player) => {
-    const dismissal = String(
-      player?.batting?.dismissalType ?? player?.dismissal ?? "dismissed",
-    ).trim();
-    return dismissal || "dismissed";
-  };
-
-  const firstInningsWicketEvents = (() => {
-    if (!timeline.length) return [];
-    let runningScore = 0;
-    let wicketCount = 0;
-    const events = [];
-
-    for (const ball of timeline) {
-      runningScore +=
-        Number(ball?.runsOffBat || 0) + Number(ball?.extraRuns || 0);
-      if (ball?.isWicket) {
-        wicketCount += 1;
-        events.push({
-          score: runningScore,
-          wicketNum: wicketCount,
-          playerName: ball?.batterDismissed || "Unknown",
-          over: ball?.overNumber,
-          ball: ball?.ballInOver,
-        });
-      }
-    }
-
-    if (!firstInningsDismissedBatters.length) return events;
-
-    return firstInningsDismissedBatters
-      .map((batter) => {
-        const batterName = String(batter?.name || "")
+  const firstInningsWicketEvents = useMemo(() => {
+    return (match?.innings1?.battingRows || [])
+      .filter((row) => {
+        const d = String(row?.dismissal ?? "")
           .trim()
           .toLowerCase();
-        const matched = events.find(
-          (event) =>
-            String(event?.playerName || "")
-              .trim()
-              .toLowerCase() === batterName,
+        return (
+          d && d !== "not out" && d !== "batting" && d !== "retired not out"
         );
-        if (!matched) return null;
-        return {
-          ...matched,
-          playerName: batter?.name || matched.playerName,
-        };
       })
-      .filter(Boolean);
-  })();
+      .map((row, i) => ({
+        wicketNum: i + 1,
+        playerName: row.name,
+        score: null,
+        over: null,
+        ball: null,
+        dismissal: row.dismissal,
+      }));
+  }, [match, fullTimeline]);
 
-  const secondInningsWicketEvents = (() => {
+  const secondInningsWicketEvents = useMemo(() => {
     let runningScore = 0;
     let wicketCount = 0;
     const events = [];
-
-    for (const ball of secondInningsTimeline) {
+    for (const ball of fullTimeline) {
       runningScore +=
         Number(ball?.runsOffBat || 0) + Number(ball?.extraRuns || 0);
       if (ball?.isWicket) {
@@ -584,58 +553,73 @@ function MatchSummaryView({ match, fullTimeline = [] }) {
         });
       }
     }
-
     return events;
-  })();
+  }, [match, fullTimeline]);
 
-  const firstInningsScorecardBatting = [...innings1BattingRows];
-  const firstInningsTopScorer = [...firstInningsScorecardBatting].sort(
-    (a, b) => getBatRuns(b) - getBatRuns(a),
-  )[0];
-  const firstInningsScorecardBowling = [...innings1BowlingRows];
-  const firstInningsBestBowler = [...firstInningsScorecardBowling].sort(
-    (a, b) => getBowlWickets(b) - getBowlWickets(a),
-  )[0];
-
-  const firstInningsBatters = [...innings1BattingRows]
-    .sort(
-      (a, b) =>
-        Number(b?.batting?.runs ?? b?.runs ?? 0) -
-        Number(a?.batting?.runs ?? a?.runs ?? 0),
-    )
-    .slice(0, 2);
-  const firstInningsTopBowler = [...innings1BowlingRows].sort(
-    (a, b) =>
-      Number(b?._wickets ?? b?.bowling?.wickets ?? b?.wickets ?? 0) -
-      Number(a?._wickets ?? a?.bowling?.wickets ?? a?.wickets ?? 0),
-  )[0];
-
-  const seenSib = new Set();
-  const secondInningsBatters = [...(match?.playerStats || [])]
-    .filter((p) => {
-      if (p?.team !== match?.battingTeam) return false;
-      if (!p?.didBat) return false;
-      if (seenSib.has(p.name)) return false;
-      seenSib.add(p.name);
-      return true;
-    })
-    .sort(
-      (a, b) => Number(b?.batting?.runs ?? 0) - Number(a?.batting?.runs ?? 0),
-    )
-    .slice(0, 2);
-  const seenStb = new Set();
-  const secondInningsTopBowler = [...(match?.playerStats || [])]
-    .filter((p) => {
-      if (p?.team !== match?.bowlingTeam) return false;
-      if (!p?.didBowl) return false;
-      if (seenStb.has(p.name)) return false;
-      seenStb.add(p.name);
-      return true;
-    })
-    .sort(
-      (a, b) =>
-        Number(b?.bowling?.wickets ?? 0) - Number(a?.bowling?.wickets ?? 0),
+  const firstInningsTopScorer = useMemo(() => {
+    const firstInningsScorecardBatting = [...innings1BattingRows];
+    return [...firstInningsScorecardBatting].sort(
+      (a, b) => getBatRuns(b) - getBatRuns(a),
     )[0];
+  }, [match, fullTimeline]);
+  const firstInningsBestBowler = useMemo(() => {
+    const firstInningsScorecardBowling = [...innings1BowlingRows];
+    return [...firstInningsScorecardBowling].sort(
+      (a, b) => getBowlWickets(b) - getBowlWickets(a),
+    )[0];
+  }, [match, fullTimeline]);
+
+  const firstInningsBatters = useMemo(
+    () =>
+      [...innings1BattingRows]
+        .sort(
+          (a, b) =>
+            Number(b?.batting?.runs ?? b?.runs ?? 0) -
+            Number(a?.batting?.runs ?? a?.runs ?? 0),
+        )
+        .slice(0, 2),
+    [match, fullTimeline],
+  );
+  const firstInningsTopBowler = useMemo(
+    () =>
+      [...innings1BowlingRows].sort(
+        (a, b) =>
+          Number(b?._wickets ?? b?.bowling?.wickets ?? b?.wickets ?? 0) -
+          Number(a?._wickets ?? a?.bowling?.wickets ?? a?.wickets ?? 0),
+      )[0],
+    [match, fullTimeline],
+  );
+
+  const secondInningsBatters = useMemo(() => {
+    const seenSib = new Set();
+    return [...(match?.playerStats || [])]
+      .filter((p) => {
+        if (p?.team !== match?.battingTeam) return false;
+        if (!p?.didBat) return false;
+        if (seenSib.has(p.name)) return false;
+        seenSib.add(p.name);
+        return true;
+      })
+      .sort(
+        (a, b) => Number(b?.batting?.runs ?? 0) - Number(a?.batting?.runs ?? 0),
+      )
+      .slice(0, 2);
+  }, [match, fullTimeline]);
+  const secondInningsTopBowler = useMemo(() => {
+    const seenStb = new Set();
+    return [...(match?.playerStats || [])]
+      .filter((p) => {
+        if (p?.team !== match?.bowlingTeam) return false;
+        if (!p?.didBowl) return false;
+        if (seenStb.has(p.name)) return false;
+        seenStb.add(p.name);
+        return true;
+      })
+      .sort(
+        (a, b) =>
+          Number(b?.bowling?.wickets ?? 0) - Number(a?.bowling?.wickets ?? 0),
+      )[0];
+  }, [match, fullTimeline]);
 
   const firstInningsRuns = Number(innings1Score ?? 0);
   const firstInningsWickets = Number(innings1Wickets ?? 0);
@@ -687,84 +671,118 @@ function MatchSummaryView({ match, fullTimeline = [] }) {
     return "Match Complete";
   })();
 
-  const allMatchPlayers = [
-    ...(firstInnings?.battingRows || []).map((r) => ({
-      name: r.name,
-      batting: { runs: r.runs, balls: r.balls, fours: r.fours, sixes: r.sixes },
-      bowling: { wickets: 0, balls: 0, runs: 0 },
-    })),
-    ...(match?.playerStats || []),
-  ].reduce((acc, p) => {
-    // merge by name — playerStats has bowling, battingRows has batting
-    const existing = acc.find((x) => x.name === p.name);
-    if (existing) {
-      // merge batting from battingRows into playerStats entry if better
-      if (!existing.batting?.balls && p.batting?.balls)
-        existing.batting = p.batting;
-      if (!existing.bowling?.balls && p.bowling?.balls)
-        existing.bowling = p.bowling;
-    } else {
-      acc.push({ ...p });
-    }
-    return acc;
-  }, []);
+  const allMatchPlayers = useMemo(
+    () =>
+      [
+        ...(firstInnings?.battingRows || []).map((r) => ({
+          name: r.name,
+          batting: {
+            runs: r.runs,
+            balls: r.balls,
+            fours: r.fours,
+            sixes: r.sixes,
+          },
+          bowling: { wickets: 0, balls: 0, runs: 0 },
+        })),
+        ...(match?.playerStats || []),
+      ].reduce((acc, p) => {
+        // merge by name — playerStats has bowling, battingRows has batting
+        const existing = acc.find((x) => x.name === p.name);
+        if (existing) {
+          // merge batting from battingRows into playerStats entry if better
+          if (!existing.batting?.balls && p.batting?.balls)
+            existing.batting = p.batting;
+          if (!existing.bowling?.balls && p.bowling?.balls)
+            existing.bowling = p.bowling;
+        } else {
+          acc.push({ ...p });
+        }
+        return acc;
+      }, []),
+    [match, fullTimeline],
+  );
 
-  const motmPlayer = [...allMatchPlayers]
-    .map((p) => ({ ...p, motmScore: calcMOTMScore(p, allMatchPlayers) }))
-    .sort((a, b) => b.motmScore - a.motmScore)[0];
+  const motmPlayer = useMemo(
+    () =>
+      [...allMatchPlayers]
+        .map((p) => ({ ...p, motmScore: calcMOTMScore(p, allMatchPlayers) }))
+        .sort((a, b) => b.motmScore - a.motmScore)[0],
+    [match, fullTimeline],
+  );
 
   // Top scorer across both innings from playerStats (has batting for 2nd innings)
   // + battingRows for 1st innings
-  const topBatter = [...allMatchPlayers]
-    .filter((p) => Number(p?.batting?.balls ?? 0) > 0)
-    .sort(
-      (a, b) => Number(b?.batting?.runs ?? 0) - Number(a?.batting?.runs ?? 0),
-    )[0];
+  const topBatter = useMemo(
+    () =>
+      [...allMatchPlayers]
+        .filter((p) => Number(p?.batting?.balls ?? 0) > 0)
+        .sort(
+          (a, b) =>
+            Number(b?.batting?.runs ?? 0) - Number(a?.batting?.runs ?? 0),
+        )[0],
+    [match, fullTimeline],
+  );
+
+  const bowlingMap = useMemo(() => {
+    const map = {};
+    (match?.playerStats || []).forEach((p) => {
+      if (!p?.bowling?.balls && !p?.bowling?.wickets) return;
+      map[p.name] = {
+        name: p.name,
+        wickets: Number(p?.bowling?.wickets ?? 0),
+        balls: Number(p?.bowling?.balls ?? 0),
+        runs: Number(p?.bowling?.runs ?? 0),
+      };
+    });
+    (firstInnings?.bowlingRows || []).forEach((r) => {
+      const existing = map[r.name];
+      const w = Number(r?.wickets ?? r?._wickets ?? 0);
+      const b = Number(r?.balls ?? r?._balls ?? 0);
+      const ru = Number(r?.runs ?? r?._runs ?? 0);
+      if (existing) {
+        existing.wickets += w;
+        existing.balls += b;
+        existing.runs += ru;
+      } else {
+        map[r.name] = { name: r.name, wickets: w, balls: b, runs: ru };
+      }
+    });
+    return map;
+  }, [match, fullTimeline]);
 
   // Top wicket taker — combine both innings
-  const bowlingMap = {};
-  (match?.playerStats || []).forEach((p) => {
-    if (!p?.bowling?.balls && !p?.bowling?.wickets) return;
-    bowlingMap[p.name] = {
-      name: p.name,
-      wickets: Number(p?.bowling?.wickets ?? 0),
-      balls: Number(p?.bowling?.balls ?? 0),
-      runs: Number(p?.bowling?.runs ?? 0),
-    };
-  });
-  (firstInnings?.bowlingRows || []).forEach((r) => {
-    const existing = bowlingMap[r.name];
-    const w = Number(r?.wickets ?? r?._wickets ?? r?.bowling?.wickets ?? 0);
-    const b = Number(r?.balls ?? r?._balls ?? r?.bowling?.balls ?? 0);
-    const ru = Number(r?.runs ?? r?._runs ?? r?.bowling?.runs ?? 0);
-    if (existing) {
-      existing.wickets += w;
-      existing.balls += b;
-      existing.runs += ru;
-    } else {
-      bowlingMap[r.name] = { name: r.name, wickets: w, balls: b, runs: ru };
-    }
-  });
-  const allBowlers = Object.values(bowlingMap);
-  const topBowler = [...allBowlers].sort(
-    (a, b) => b.wickets - a.wickets || a.runs - b.runs,
-  )[0];
+  const allBowlers = useMemo(() => Object.values(bowlingMap), [bowlingMap]);
+  const topBowler = useMemo(
+    () =>
+      [...allBowlers].sort(
+        (a, b) => b.wickets - a.wickets || a.runs - b.runs,
+      )[0],
+    [match, fullTimeline],
+  );
 
   // Best economy — minimum 1 over (6 balls), lower threshold for short format
-  const bestEcon = [...allBowlers]
-    .filter((p) => p.balls >= 6)
-    .map((p) => ({ ...p, econ: p.balls > 0 ? p.runs / (p.balls / 6) : 99 }))
-    .sort((a, b) => a.econ - b.econ)[0];
+  const bestEcon = useMemo(
+    () =>
+      [...allBowlers]
+        .filter((p) => p.balls >= 6)
+        .map((p) => ({ ...p, econ: p.balls > 0 ? p.runs / (p.balls / 6) : 99 }))
+        .sort((a, b) => a.econ - b.econ)[0],
+    [match, fullTimeline],
+  );
 
   // Best strike rate — minimum 4 balls faced (short format friendly)
-  const bestSR = [...allMatchPlayers]
-    .filter((p) => Number(p?.batting?.balls ?? 0) >= 4)
-    .map((p) => {
-      const r = Number(p?.batting?.runs ?? 0);
-      const b = Number(p?.batting?.balls ?? 0);
-      return { ...p, sr: b > 0 ? (r / b) * 100 : 0 };
-    })
-    .sort((a, b) => b.sr - a.sr)[0];
+  const bestSR = useMemo(
+    () =>
+      [...allMatchPlayers]
+        .filter((p) => Number(p?.batting?.balls ?? 0) >= 4)
+        .map((p) => {
+          const r = Number(p?.batting?.runs ?? 0);
+          const b = Number(p?.batting?.balls ?? 0);
+          return { ...p, sr: b > 0 ? (r / b) * 100 : 0 };
+        })
+        .sort((a, b) => b.sr - a.sr)[0],
+    [match, fullTimeline],
+  );
 
   return (
     <main
@@ -819,12 +837,11 @@ function MatchSummaryView({ match, fullTimeline = [] }) {
             <p className="text-[10px] font-black uppercase tracking-widest text-[#f97316]">
               {innings1Team || "1st Innings"}
             </p>
-            {winningTeam &&
-              winningTeam === (innings1Team || "") && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-emerald-400">
-                  🏆 Won
-                </span>
-              )}
+            {winningTeam && winningTeam === (innings1Team || "") && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-emerald-400">
+                🏆 Won
+              </span>
+            )}
           </div>
           <div className="mt-2 flex items-end gap-2">
             <p className="score-num text-3xl font-extrabold text-white">
@@ -923,7 +940,10 @@ function MatchSummaryView({ match, fullTimeline = [] }) {
                   <tbody>
                     {innings1BattingRows.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="py-4 text-center text-sm text-slate-600">
+                        <td
+                          colSpan={7}
+                          className="py-4 text-center text-sm text-slate-600"
+                        >
                           No batting data
                         </td>
                       </tr>
@@ -933,7 +953,9 @@ function MatchSummaryView({ match, fullTimeline = [] }) {
                           <td className="py-2 text-sm font-medium text-white">
                             {row.name}
                             {jokerNames.has(row.name) && (
-                              <span className="ml-1 text-amber-400 text-xs">🃏</span>
+                              <span className="ml-1 text-amber-400 text-xs">
+                                🃏
+                              </span>
                             )}
                           </td>
                           <td className="py-2 text-xs text-slate-500">
@@ -996,7 +1018,10 @@ function MatchSummaryView({ match, fullTimeline = [] }) {
                   <tbody>
                     {innings1BowlingRows.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="py-4 text-center text-sm text-slate-600">
+                        <td
+                          colSpan={5}
+                          className="py-4 text-center text-sm text-slate-600"
+                        >
                           No bowling data
                         </td>
                       </tr>
@@ -1006,7 +1031,9 @@ function MatchSummaryView({ match, fullTimeline = [] }) {
                           <td className="py-2 text-sm font-medium text-white">
                             {row.name}
                             {jokerNames.has(row.name) && (
-                              <span className="ml-1 text-amber-400 text-xs">🃏</span>
+                              <span className="ml-1 text-amber-400 text-xs">
+                                🃏
+                              </span>
                             )}
                           </td>
                           <td className="py-2 text-xs text-slate-500 text-right">
@@ -1037,33 +1064,10 @@ function MatchSummaryView({ match, fullTimeline = [] }) {
                 {firstInningsWicketEvents.length ? (
                   firstInningsWicketEvents.map((entry, index) => (
                     <span
-                      key={`fow-first-${index}`}
+                      key={index}
                       className="rounded-full border border-slate-800 bg-slate-900 px-2 py-0.5 text-[10px] text-slate-500"
                     >
-                      {(() => {
-                        const hasOver = Number.isFinite(Number(entry?.over));
-                        const hasBall = Number.isFinite(Number(entry?.ball));
-                        const overBall =
-                          hasOver && hasBall
-                            ? `${entry.over}.${entry.ball}`
-                            : "-";
-                        return (
-                          <>
-                            {entry.score}/{entry.wicketNum} · {entry.playerName}{" "}
-                            ({overBall})
-                          </>
-                        );
-                      })()}
-                    </span>
-                  ))
-                ) : firstInningsDismissedBatters.length ? (
-                  firstInningsDismissedBatters.map((player, index) => (
-                    <span
-                      key={`fow-first-fallback-${player?.name || index}`}
-                      className="rounded-full border border-slate-800 bg-slate-900/60 px-2.5 py-1 text-[11px] text-slate-400"
-                    >
-                      {player?.name || "Unknown"} ·{" "}
-                      {firstInningsDismissalText(player)}
+                      {entry.playerName} · {entry.dismissal}
                     </span>
                   ))
                 ) : (
@@ -1094,7 +1098,10 @@ function MatchSummaryView({ match, fullTimeline = [] }) {
                   <tbody>
                     {innings2BattingRows.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="py-4 text-center text-sm text-slate-600">
+                        <td
+                          colSpan={7}
+                          className="py-4 text-center text-sm text-slate-600"
+                        >
                           No batting data
                         </td>
                       </tr>
@@ -1104,7 +1111,9 @@ function MatchSummaryView({ match, fullTimeline = [] }) {
                           <td className="py-2 text-sm font-medium text-white">
                             {row.name}
                             {row.isJoker && (
-                              <span className="ml-1 text-amber-400 text-xs">🃏</span>
+                              <span className="ml-1 text-amber-400 text-xs">
+                                🃏
+                              </span>
                             )}
                           </td>
                           <td className="py-2 text-xs text-slate-500">
@@ -1167,7 +1176,10 @@ function MatchSummaryView({ match, fullTimeline = [] }) {
                   <tbody>
                     {innings2BowlingRows.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="py-4 text-center text-sm text-slate-600">
+                        <td
+                          colSpan={5}
+                          className="py-4 text-center text-sm text-slate-600"
+                        >
                           No bowling data
                         </td>
                       </tr>
@@ -1177,7 +1189,9 @@ function MatchSummaryView({ match, fullTimeline = [] }) {
                           <td className="py-2 text-sm font-medium text-white">
                             {row.name}
                             {row.isJoker && (
-                              <span className="ml-1 text-amber-400 text-xs">🃏</span>
+                              <span className="ml-1 text-amber-400 text-xs">
+                                🃏
+                              </span>
                             )}
                           </td>
                           <td className="py-2 text-xs text-slate-500 text-right">
@@ -1250,7 +1264,9 @@ function MatchSummaryView({ match, fullTimeline = [] }) {
                       <p className="text-lg font-black text-white truncate">
                         {motmPlayer.name}
                         {jokerNames.has(motmPlayer.name) && (
-                          <span className="ml-1 text-amber-400 text-xs">🃏</span>
+                          <span className="ml-1 text-amber-400 text-xs">
+                            🃏
+                          </span>
                         )}
                       </p>
                       <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
@@ -1400,6 +1416,7 @@ function ScoreboardPage() {
   const { token } = useAuth();
   const [searchParams] = useSearchParams();
   const socketRef = useRef(null);
+  const lastMatchUpdateRef = useRef(null);
   const lastCurrentOverRef = useRef([]);
 
   const [match, setMatch] = useState(null);
@@ -1407,10 +1424,28 @@ function ScoreboardPage() {
   const [loadError, setLoadError] = useState("");
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState("scorecard");
-  const [matchEndStatus, setMatchEndStatus] = useState({
-    isMatchOver: false,
-    resultMessage: "",
-  });
+  const matchEndStatus = useMemo(() => {
+    if (
+      !match ||
+      match.firstInningsScore === null ||
+      match.firstInningsScore === undefined ||
+      match.inningsNumber !== 2
+    ) {
+      return { isMatchOver: false, resultMessage: "" };
+    }
+    return checkMatchEnd({
+      teamAScore: match.firstInningsScore,
+      teamBScore: match.totalRuns,
+      teamBWickets: match.wickets,
+      teamBPlayersCount: (match.playerStats || []).filter(
+        (p) => p.team === match.battingTeam,
+      ).length,
+      totalValidBalls: match.ballsBowled,
+      totalOvers: match.totalOvers,
+      teamAName: match.bowlingTeam,
+      teamBName: match.battingTeam,
+    });
+  }, [match]);
   const [tossLiveState, setTossLiveState] = useState({
     isFlipping: false,
     result: "",
@@ -1437,7 +1472,7 @@ function ScoreboardPage() {
     (match?.team2Players || []).forEach(collectPhoto);
 
     return map;
-  }, [match?.playerStats, match?.team1Players, match?.team2Players]);
+  }, [match?.ballsBowled, match?.inningsNumber, match?.wickets]);
 
   const jokerNames = useMemo(() => {
     const names = new Set();
@@ -1445,7 +1480,12 @@ function ScoreboardPage() {
       .filter((p) => p.isJoker)
       .forEach((p) => names.add(p.name));
     return names;
-  }, [match?.playerStats]);
+  }, [match?.ballsBowled, match?.inningsNumber]);
+
+  const bowlingRows = useMemo(
+    () => buildBowlingRows(match, fullTimeline),
+    [match?.ballsBowled, match?.inningsNumber, fullTimeline?.length],
+  );
 
   useEffect(() => {
     setFullTimeline([]);
@@ -1457,45 +1497,43 @@ function ScoreboardPage() {
     socketRef.current = socket;
     let pollInterval = null;
     let retryTimer = null;
+    const mountedRef = { current: true };
 
     const apply = (updatedMatch) => {
-      setMatch(updatedMatch);
-        if (updatedMatch.ballsBowled !== undefined) {
+      if (
+        !lastMatchUpdateRef.current ||
+        new Date(updatedMatch.updatedAt) > new Date(lastMatchUpdateRef.current)
+      ) {
+        lastMatchUpdateRef.current = updatedMatch.updatedAt;
+        setMatch(updatedMatch);
+      }
+      if (updatedMatch.ballsBowled !== undefined) {
         setFullTimeline((prev) => {
-            // RISK: after undo, ballsBowled decreases
-            // fullTimeline must be trimmed to remove the undone ball
-            // We detect undo by comparing ballsBowled to fullTimeline
-            // valid ball count
-            const prevValidCount = prev.filter(
-              (b) =>
-                !b.extraType ||
-                b.extraType === "none" ||
-                b.extraType === "bye" ||
-                b.extraType === "leg-bye",
-            ).length;
+          // RISK: after undo, ballsBowled decreases
+          // fullTimeline must be trimmed to remove the undone ball
+          // We detect undo by comparing ballsBowled to fullTimeline
+          // valid ball count
+          const prevValidCount = prev.filter((b) => isValidBall(b)).length;
 
-            const newValidCount = updatedMatch.ballsBowled ?? 0;
+          const newValidCount = updatedMatch.ballsBowled ?? 0;
 
-            // Undo detected — ballsBowled decreased
-            if (newValidCount < prevValidCount && prev.length > 0) {
-              // Remove balls from the end until valid count matches
-              const trimmed = [...prev];
-              let currentValid = prevValidCount;
-              while (currentValid > newValidCount && trimmed.length > 0) {
-                const last = trimmed[trimmed.length - 1];
-                trimmed.pop();
-                const wasValid =
-                  !last.extraType ||
-                  last.extraType === "none" ||
-                  last.extraType === "bye" ||
-                  last.extraType === "leg-bye";
-                if (wasValid) currentValid--;
-              }
-              return trimmed;
+          // Undo detected — ballsBowled decreased
+          if (newValidCount < prevValidCount && prev.length > 0) {
+            // Remove balls from the end until valid count matches
+            const trimmed = [...prev];
+            let currentValid = prevValidCount;
+            while (currentValid > newValidCount && trimmed.length > 0) {
+              const last = trimmed[trimmed.length - 1];
+              trimmed.pop();
+              const wasValid = isValidBall(last);
+              if (wasValid) currentValid--;
             }
+            return trimmed;
+          }
 
-            // Normal delivery — append new balls only
-            if (!updatedMatch.timeline || updatedMatch.timeline.length === 0) return prev;
+          // Normal delivery — append new balls only
+          if (!updatedMatch.timeline || updatedMatch.timeline.length === 0)
+            return prev;
           const existingIds = new Set(
             prev.map((b) => b._id?.toString()).filter(Boolean),
           );
@@ -1504,29 +1542,6 @@ function ScoreboardPage() {
           );
           return newBalls.length > 0 ? [...prev, ...newBalls] : prev;
         });
-      }
-      const shouldEval =
-        (updatedMatch.inningsNumber === 2 ||
-          typeof updatedMatch.firstInningsScore === "number") &&
-        typeof updatedMatch.firstInningsScore === "number";
-      if (shouldEval) {
-        const cnt = (updatedMatch.playerStats || []).filter(
-          (p) => p.team === updatedMatch.battingTeam,
-        ).length;
-        setMatchEndStatus(
-          checkMatchEnd({
-            teamAScore: updatedMatch.firstInningsScore,
-            teamBScore: updatedMatch.totalRuns,
-            teamBWickets: updatedMatch.wickets,
-            teamBPlayersCount: cnt,
-            totalValidBalls: updatedMatch.ballsBowled,
-            totalOvers: updatedMatch.totalOvers,
-            teamAName: updatedMatch.bowlingTeam,
-            teamBName: updatedMatch.battingTeam,
-          }),
-        );
-      } else {
-        setMatchEndStatus({ isMatchOver: false, resultMessage: "" });
       }
     };
 
@@ -1547,11 +1562,13 @@ function ScoreboardPage() {
       try {
         const data = await getMatch(matchId, token);
         if (data?.match) {
+          if (!mountedRef.current) return;
           apply(data.match);
 
           // RISK: redirect can arrive before match status is written
           // to DB — if not completed yet, retry once after 1 second
           if (data.match?.status !== "completed") {
+            if (!mountedRef.current) return;
             retryTimer = setTimeout(fetchMatch, 1000);
           }
         }
@@ -1584,13 +1601,8 @@ function ScoreboardPage() {
       }
     });
     socket.on("score_updated", apply);
-    socket.on("match_completed", (payload) => {
-      if (payload) apply(payload);
-      if (payload?.resultMessage)
-        setMatchEndStatus({
-          isMatchOver: true,
-          resultMessage: payload.resultMessage,
-        });
+    socket.on("match_completed", () => {
+      fetchMatch();
     });
     socket.on("toss_flip_started", () =>
       setTossLiveState({ isFlipping: true, result: "", winner: "" }),
@@ -1608,6 +1620,7 @@ function ScoreboardPage() {
 
     return () => {
       stopFallbackPolling();
+      mountedRef.current = false;
       if (retryTimer) clearTimeout(retryTimer);
       socket.off("connect", handleConnect);
       socket.off("disconnect", handleDisconnect);
@@ -1648,24 +1661,20 @@ function ScoreboardPage() {
   /* ── computed values ── */
   // RISK: match.timeline is only last 12 balls — flickers
   // Use fullTimeline which persists across matchState updates
-  const stableTimeline = fullTimeline.length > 0
-    ? fullTimeline
-    : (match.timeline || []);
+  const stableTimeline =
+    fullTimeline.length > 0 ? fullTimeline : match.timeline || [];
   const currentOver = buildCurrentOver(stableTimeline);
   if (currentOver.length > 0) {
     lastCurrentOverRef.current = currentOver;
   }
-  const stableCurrentOver = currentOver.length > 0
-    ? currentOver
-    : lastCurrentOverRef.current;
+  const stableCurrentOver =
+    currentOver.length > 0 ? currentOver : lastCurrentOverRef.current;
 
-  const timelineForHistory = fullTimeline.length > 0
-    ? fullTimeline
-    : (match.timeline || []);
+  const timelineForHistory =
+    fullTimeline.length > 0 ? fullTimeline : match.timeline || [];
   const oversSummary = buildOversSummary(timelineForHistory);
   const fallOfWickets = buildFallOfWickets(timelineForHistory);
   const battingRows = buildBattingRows(match);
-  const bowlingRows = buildBowlingRows(match);
   const ballsBowled = match.ballsBowled || 0;
   const oversBowled = Math.floor(ballsBowled / 6);
   const ballsInOver = ballsBowled % 6;
@@ -1983,13 +1992,14 @@ function ScoreboardPage() {
                   </p>
                   <p className="text-sm font-semibold text-white truncate">
                     {match.currentStriker || "—"}
-                    {match.currentStriker && jokerNames.has(match.currentStriker) && (
-                      <span className="ml-1 text-amber-400 text-xs">🃏</span>
-                    )}
+                    {match.currentStriker &&
+                      jokerNames.has(match.currentStriker) && (
+                        <span className="ml-1 text-amber-400 text-xs">🃏</span>
+                      )}
                   </p>
                   <p className="text-xs text-slate-400">
-                    {strikerRow?.batting?.runs ?? 0}/
-                    {strikerRow?.batting?.balls ?? 0}
+                    {strikerRow?.batting?.runs ?? 0}(
+                    {strikerRow?.batting?.balls ?? 0})
                   </p>
                 </div>
               </div>
@@ -2012,8 +2022,8 @@ function ScoreboardPage() {
                       )}
                   </p>
                   <p className="text-xs text-slate-500">
-                    {nonStrikerRow?.batting?.runs ?? 0}/
-                    {nonStrikerRow?.batting?.balls ?? 0}
+                    {nonStrikerRow?.batting?.runs ?? 0}(
+                    {nonStrikerRow?.batting?.balls ?? 0})
                   </p>
                 </div>
               </div>
@@ -2030,9 +2040,10 @@ function ScoreboardPage() {
                   </p>
                   <p className="text-sm font-semibold text-slate-300 truncate">
                     {match.currentBowler || "—"}
-                    {match.currentBowler && jokerNames.has(match.currentBowler) && (
-                      <span className="ml-1 text-amber-400 text-xs">🃏</span>
-                    )}
+                    {match.currentBowler &&
+                      jokerNames.has(match.currentBowler) && (
+                        <span className="ml-1 text-amber-400 text-xs">🃏</span>
+                      )}
                   </p>
                   <p className="text-xs text-slate-500">
                     {currentBowlerRow
@@ -2136,10 +2147,12 @@ function ScoreboardPage() {
                                     {isStriker && (
                                       <span className="ml-1 text-[#f97316]">
                                         *
-                                                                                                                                                                                                                                                                                                                                                                                                         </span>
+                                      </span>
                                     )}
                                     {player.isJoker && (
-                                      <span className="ml-1 text-amber-400 text-xs">🃏</span>
+                                      <span className="ml-1 text-amber-400 text-xs">
+                                        🃏
+                                      </span>
                                     )}
                                   </p>
                                   <p
@@ -2278,7 +2291,9 @@ function ScoreboardPage() {
                                     </span>
                                   )}
                                   {player.isJoker && (
-                                    <span className="ml-1 text-amber-400 text-xs">🃏</span>
+                                    <span className="ml-1 text-amber-400 text-xs">
+                                      🃏
+                                    </span>
                                   )}
                                 </p>
                               </div>

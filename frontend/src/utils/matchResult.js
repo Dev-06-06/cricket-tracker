@@ -1,13 +1,17 @@
-export function checkMatchEnd({
-  teamAScore,
-  teamBScore,
-  teamBWickets,
-  teamBPlayersCount = 11,
-  totalValidBalls,
-  totalOvers,
-  teamAName = "Team A",
-  teamBName = "Team B",
-}) {
+export function checkMatchEnd(match) {
+  if (!match) return { isMatchOver: false, resultMessage: "" };
+
+  const {
+    teamAScore,
+    teamBScore,
+    teamBWickets,
+    teamBPlayersCount = 11,
+    totalValidBalls,
+    totalOvers,
+    teamAName = "Team A",
+    teamBName = "Team B",
+  } = match;
+
   const firstInningsScore = Number(teamAScore) || 0;
   const chasingScore = Number(teamBScore) || 0;
   const wicketsLost = Number(teamBWickets) || 0;

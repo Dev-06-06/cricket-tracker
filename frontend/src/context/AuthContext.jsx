@@ -15,6 +15,9 @@ export function AuthProvider({ children }) {
   const [token, setToken] = useState(
     () => localStorage.getItem(TOKEN_STORAGE_KEY) || "",
   );
+  const [authLoading, setAuthLoading] = useState(
+    () => Boolean(localStorage.getItem(TOKEN_STORAGE_KEY)),
+  );
   const [user, setUser] = useState(() => {
     try {
       const s = localStorage.getItem("crictrack_user");
@@ -74,7 +77,10 @@ export function AuthProvider({ children }) {
 
     const loadCurrentUser = async () => {
       if (!token) {
-        if (isMounted) setUser(null);
+        if (isMounted) {
+          setUser(null);
+          setAuthLoading(false);
+        }
         return;
       }
 
@@ -98,10 +104,12 @@ export function AuthProvider({ children }) {
 
         if (isMounted) {
           setUser(data.user);
+          setAuthLoading(false);
         }
       } catch {
         if (isMounted) {
           logout();
+          setAuthLoading(false);
         }
       }
     };
@@ -121,9 +129,10 @@ export function AuthProvider({ children }) {
       logout,
       refreshUser,
       updateUser,
+      authLoading,
       isAuthenticated: Boolean(token),
     }),
-    [user, token, login, logout, refreshUser, updateUser],
+    [user, token, login, logout, refreshUser, updateUser, authLoading],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

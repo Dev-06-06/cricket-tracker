@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import BottomNav from "../components/BottomNav";
@@ -117,18 +117,21 @@ export default function GroupsPage() {
   const [joining, setJoining] = useState(false);
   const [leavingGroupId, setLeavingGroupId] = useState("");
 
-  const loadGroups = async () => {
+  const loadGroups = useCallback(async () => {
     const response = await getMyGroups(token);
     const nextGroups = response.groups || [];
     setGroups(nextGroups);
     return nextGroups;
-  };
+  }, [token]);
 
   useEffect(() => {
     let isMounted = true;
 
     const init = async () => {
-      if (!token) return;
+      if (!token) {
+        setLoading(false);
+        return;
+      }
       try {
         setLoading(true);
         setError("");
@@ -166,7 +169,7 @@ export default function GroupsPage() {
     return () => {
       isMounted = false;
     };
-  }, [token]);
+  }, [token, loadGroups]);
 
   useEffect(() => {
     if (!activeGroupId) {

@@ -286,6 +286,31 @@ const createMatch = async (req, res) => {
       return res.status(403).json({ success: false, message: "You are not a member of this group" });
     }
 
+    const group = await Group.findById(groupId).select("playerPool");
+    if (!group) {
+      return res.status(404).json({ success: false, message: "Group not found" });
+    }
+
+    const poolIds = group.playerPool.map((id) => id.toString());
+
+    const invalidTeam1 = (team1PlayerIds || []).filter(
+      (id) => !poolIds.includes(id.toString())
+    );
+    if (invalidTeam1.length > 0) {
+      return res.status(400).json({
+        message: "One or more team 1 players are not in the group pool"
+      });
+    }
+
+    const invalidTeam2 = (team2PlayerIds || []).filter(
+      (id) => !poolIds.includes(id.toString())
+    );
+    if (invalidTeam2.length > 0) {
+      return res.status(400).json({
+        message: "One or more team 2 players are not in the group pool"
+      });
+    }
+
     const [t1Players, t2Players] = await Promise.all([
       Player.find({ _id: { $in: team1PlayerIds || [] } }).select("name photoUrl").lean(),
       Player.find({ _id: { $in: team2PlayerIds || [] } }).select("name photoUrl").lean(),
@@ -348,7 +373,7 @@ const listUpcomingMatches = async (req, res) => {
     filter.groupId = groupId;
 
     // ✅ Hits { groupId, status } compound index. No populate.
-    const matches = await Match.find(filter).sort({ createdAt: -1 }).lean();
+    const matches = await Match.find(filter).sort({ createdAt: -1 }).limit(50).lean();
     res.status(200).json({ success: true, matches: matches.map(mapMatchSummary) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -374,7 +399,7 @@ const listLiveMatches = async (req, res) => {
     }
     filter.groupId = groupId;
 
-    const matches = await Match.find(filter).sort({ updatedAt: -1 }).lean();
+    const matches = await Match.find(filter).sort({ updatedAt: -1 }).limit(50).lean();
     res.status(200).json({ success: true, matches: matches.map(mapMatchSummary) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -400,7 +425,7 @@ const listCompletedMatches = async (req, res) => {
     }
     filter.groupId = groupId;
 
-    const matches = await Match.find(filter).sort({ updatedAt: -1 }).lean();
+    const matches = await Match.find(filter).sort({ updatedAt: -1 }).limit(50).lean();
     res.status(200).json({ success: true, matches: matches.map(mapMatchSummary) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

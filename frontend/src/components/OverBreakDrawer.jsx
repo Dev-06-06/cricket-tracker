@@ -17,9 +17,7 @@ export default function OverBreakDrawer({
   const [inningsStriker, setInningsStriker] = useState("");
   const [inningsNonStriker, setInningsNonStriker] = useState("");
   const [inningsBowler, setInningsBowler] = useState("");
-  const [pendingOvers, setPendingOvers] = useState(
-    match?.totalOvers ?? 5
-  );
+  const [pendingOvers, setPendingOvers] = useState(match?.totalOvers ?? 5);
   const [activeSection, setActiveSection] = useState("bowler");
   const [teamChanges, setTeamChanges] = useState({
     reshuffles: [],
@@ -53,8 +51,7 @@ export default function OverBreakDrawer({
   const currentTotalOvers = match?.totalOvers ?? 5;
 
   const needsBatter =
-    match?.nextBatterFor === "striker" ||
-    match?.nextBatterFor === "nonStriker";
+    match?.nextBatterFor === "striker" || match?.nextBatterFor === "nonStriker";
 
   useEffect(() => {
     if (isOpen) {
@@ -72,7 +69,7 @@ export default function OverBreakDrawer({
         dissolveJokers: [],
       });
     }
-  }, [isOpen]);
+  }, [isOpen, needsBatter, match?.totalOvers]);
 
   useEffect(() => {
     if (isOpen && needsBatter) {
@@ -122,11 +119,8 @@ export default function OverBreakDrawer({
 
   const handleTouchEnd = (e) => {
     if (touchStartXRef.current === null) return;
-
-    const deltaX = e.changedTouches[0].clientX -
-      touchStartXRef.current;
-    const deltaY = e.changedTouches[0].clientY -
-      (touchStartYRef.current || 0);
+    const deltaX = e.changedTouches[0].clientX - touchStartXRef.current;
+    const deltaY = e.changedTouches[0].clientY - (touchStartYRef.current || 0);
 
     if (Math.abs(deltaX) < Math.abs(deltaY)) return;
     if (Math.abs(deltaX) < 50) return;
@@ -135,10 +129,7 @@ export default function OverBreakDrawer({
     if (currentIndex === -1) return;
 
     if (deltaX < 0) {
-      const nextIndex = Math.min(
-        currentIndex + 1,
-        visibleSections.length - 1
-      );
+      const nextIndex = Math.min(currentIndex + 1, visibleSections.length - 1);
       setActiveSection(visibleSections[nextIndex]);
     } else {
       const prevIndex = Math.max(currentIndex - 1, 0);
@@ -164,40 +155,34 @@ export default function OverBreakDrawer({
           striker: inningsStriker,
           nonStriker: inningsNonStriker,
           bowler: inningsBowler,
-          newTotalOvers: pendingOvers !== currentTotalOvers
-            ? pendingOvers
-            : null,
-          addPlayers: teamChanges.addPlayers.length > 0
-            ? teamChanges.addPlayers
-            : null,
-          reshuffles: teamChanges.reshuffles.length > 0
-            ? teamChanges.reshuffles
-            : null,
-          setJokers: teamChanges.setJokers.length > 0
-            ? teamChanges.setJokers
-            : null,
-          dissolveJokers: teamChanges.dissolveJokers.length > 0
-            ? teamChanges.dissolveJokers
-            : null,
+          newTotalOvers:
+            pendingOvers !== currentTotalOvers ? pendingOvers : null,
+          addPlayers:
+            teamChanges.addPlayers.length > 0 ? teamChanges.addPlayers : null,
+          reshuffles:
+            teamChanges.reshuffles.length > 0 ? teamChanges.reshuffles : null,
+          setJokers:
+            teamChanges.setJokers.length > 0 ? teamChanges.setJokers : null,
+          dissolveJokers:
+            teamChanges.dissolveJokers.length > 0
+              ? teamChanges.dissolveJokers
+              : null,
         });
       } else {
         const payload = {
           newBowler: selectedBowler,
-          newTotalOvers: pendingOvers !== currentTotalOvers
-            ? pendingOvers
-            : null,
-          addPlayers: teamChanges.addPlayers.length > 0
-            ? teamChanges.addPlayers
-            : null,
-          reshuffles: teamChanges.reshuffles.length > 0
-            ? teamChanges.reshuffles
-            : null,
-          setJokers: teamChanges.setJokers.length > 0
-            ? teamChanges.setJokers
-            : null,
-          dissolveJokers: teamChanges.dissolveJokers.length > 0
-            ? teamChanges.dissolveJokers
-            : null,
+          newTotalOvers:
+            pendingOvers !== currentTotalOvers ? pendingOvers : null,
+          addPlayers:
+            teamChanges.addPlayers.length > 0 ? teamChanges.addPlayers : null,
+          reshuffles:
+            teamChanges.reshuffles.length > 0 ? teamChanges.reshuffles : null,
+          setJokers:
+            teamChanges.setJokers.length > 0 ? teamChanges.setJokers : null,
+          dissolveJokers:
+            teamChanges.dissolveJokers.length > 0
+              ? teamChanges.dissolveJokers
+              : null,
         };
         await onCommit(payload);
       }
@@ -238,14 +223,16 @@ export default function OverBreakDrawer({
     teams: false,
   };
 
-  const quickOvers = [...new Set([
-    oversFloor,
-    oversFloor + 1,
-    oversFloor + 2,
-    oversFloor + 5,
-    oversFloor + 10,
-    oversFloor + 15,
-  ])];
+  const quickOvers = [
+    ...new Set([
+      oversFloor,
+      oversFloor + 1,
+      oversFloor + 2,
+      oversFloor + 5,
+      oversFloor + 10,
+      oversFloor + 15,
+    ]),
+  ];
 
   return (
     <BottomSheet
@@ -258,52 +245,53 @@ export default function OverBreakDrawer({
       <div className="mb-4 flex gap-1 rounded-xl border border-white/5 bg-white/3 p-1">
         {visibleSections.map((key) => {
           return (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setActiveSection(key)}
-            className={`flex-1 rounded-lg py-2 text-[11px] font-black uppercase tracking-widest transition-all ${activeSection === key
-              ? "bg-[#f97316] text-white"
-              : "text-slate-500 hover:text-slate-300"
-            }`}
-          >
-            {sectionLabels[key]}
-            {key === "bowler" && !selectedBowler && !isInningsBreak && (
-              <span className="ml-1 text-red-400">*</span>
-            )}
-            {key === "bowler" && selectedBowler && (
-              <span className="ml-1 text-emerald-400">✓</span>
-            )}
-            {key === "striker" && isInningsBreak && !inningsStriker && (
-              <span className="ml-1 text-red-400">*</span>
-            )}
-            {key === "striker" && isInningsBreak && inningsStriker && (
-              <span className="ml-1 text-emerald-400">✓</span>
-            )}
-            {key === "nonStriker" && isInningsBreak && !inningsNonStriker && (
-              <span className="ml-1 text-red-400">*</span>
-            )}
-            {key === "nonStriker" && isInningsBreak && inningsNonStriker && (
-              <span className="ml-1 text-emerald-400">✓</span>
-            )}
-            {key === "bowler" && isInningsBreak && !inningsBowler && (
-              <span className="ml-1 text-red-400">*</span>
-            )}
-            {key === "bowler" && isInningsBreak && inningsBowler && (
-              <span className="ml-1 text-emerald-400">✓</span>
-            )}
-            {sectionRequired[key] && key === "batter" && !selectedBatter && (
-              <span className="ml-1 text-red-400">*</span>
-            )}
-            {sectionRequired[key] && key === "batter" && selectedBatter && (
-              <span className="ml-1 text-emerald-400">✓</span>
-            )}
-            {key === "teams" && teamChangesCount > 0 && (
-              <span className="ml-1 rounded-full bg-[#f97316] px-1 text-[8px] text-white">
-                {teamChangesCount}
-              </span>
-            )}
-          </button>
+            <button
+              key={key}
+              type="button"
+              onClick={() => setActiveSection(key)}
+              className={`flex-1 rounded-lg py-2 text-[11px] font-black uppercase tracking-widest transition-all ${
+                activeSection === key
+                  ? "bg-[#f97316] text-white"
+                  : "text-slate-500 hover:text-slate-300"
+              }`}
+            >
+              {sectionLabels[key]}
+              {key === "bowler" && !selectedBowler && !isInningsBreak && (
+                <span className="ml-1 text-red-400">*</span>
+              )}
+              {key === "bowler" && selectedBowler && (
+                <span className="ml-1 text-emerald-400">✓</span>
+              )}
+              {key === "striker" && isInningsBreak && !inningsStriker && (
+                <span className="ml-1 text-red-400">*</span>
+              )}
+              {key === "striker" && isInningsBreak && inningsStriker && (
+                <span className="ml-1 text-emerald-400">✓</span>
+              )}
+              {key === "nonStriker" && isInningsBreak && !inningsNonStriker && (
+                <span className="ml-1 text-red-400">*</span>
+              )}
+              {key === "nonStriker" && isInningsBreak && inningsNonStriker && (
+                <span className="ml-1 text-emerald-400">✓</span>
+              )}
+              {key === "bowler" && isInningsBreak && !inningsBowler && (
+                <span className="ml-1 text-red-400">*</span>
+              )}
+              {key === "bowler" && isInningsBreak && inningsBowler && (
+                <span className="ml-1 text-emerald-400">✓</span>
+              )}
+              {sectionRequired[key] && key === "batter" && !selectedBatter && (
+                <span className="ml-1 text-red-400">*</span>
+              )}
+              {sectionRequired[key] && key === "batter" && selectedBatter && (
+                <span className="ml-1 text-emerald-400">✓</span>
+              )}
+              {key === "teams" && teamChangesCount > 0 && (
+                <span className="ml-1 rounded-full bg-[#f97316] px-1 text-[8px] text-white">
+                  {teamChangesCount}
+                </span>
+              )}
+            </button>
           );
         })}
       </div>
@@ -334,308 +322,336 @@ export default function OverBreakDrawer({
         className="w-full transition-opacity duration-150"
         key={activeSection}
       >
-      {activeSection === "striker" && isInningsBreak && (
-        <div className="space-y-3">
-          <div className="rounded-xl border border-[#f97316]/20 bg-[#f97316]/5 px-3 py-2.5">
-            <p className="text-[10px] font-black uppercase tracking-widest text-[#f97316] mb-1">
-              2nd Innings - {match?.battingTeam} Batting
-            </p>
-            <p className="text-[11px] text-slate-500">
-              Target: {(match?.firstInningsScore ?? 0) + 1} runs
-            </p>
-          </div>
-          <p className="text-[11px] text-slate-500 mb-2">
-            Select opening striker
-          </p>
-          <div className="space-y-2">
-            {(() => {
-              const seen = new Set();
-              return (match?.playerStats || [])
-                .filter(p => {
-                  if (p.team !== match?.battingTeam) return false;
-                  if (seen.has(p.name)) return false;
-                  seen.add(p.name);
-                  return true;
-                })
-                .map(p => (
-                  <BottomSheetOption
-                    key={p.name}
-                    label={p.name}
-                    photoUrl={p.photoUrl}
-                    selected={inningsStriker === p.name}
-                    disabled={p.name === inningsNonStriker}
-                    onClick={() => setInningsStriker(p.name)}
-                  />
-                ));
-            })()}
-          </div>
-        </div>
-      )}
-
-      {activeSection === "nonStriker" && isInningsBreak && (
-        <div className="space-y-3">
-          <p className="text-[11px] text-slate-500 mb-2">
-            Select opening non-striker
-          </p>
-          <div className="space-y-2">
-            {(() => {
-              const seen = new Set();
-              return (match?.playerStats || [])
-                .filter(p => {
-                  if (p.team !== match?.battingTeam) return false;
-                  if (seen.has(p.name)) return false;
-                  seen.add(p.name);
-                  return true;
-                })
-                .map(p => (
-                  <BottomSheetOption
-                    key={p.name}
-                    label={p.name}
-                    photoUrl={p.photoUrl}
-                    selected={inningsNonStriker === p.name}
-                    disabled={p.name === inningsStriker}
-                    onClick={() => setInningsNonStriker(p.name)}
-                  />
-                ));
-            })()}
-          </div>
-        </div>
-      )}
-
-      {activeSection === "batter" && (
-        <div className="space-y-3">
-          <div className="rounded-xl border border-red-500/20 bg-red-500/5 px-3 py-2.5">
-            <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-red-400">
-              Wicket - Select New Batter
-            </p>
-            <p className="text-[11px] text-slate-500">
-              {match?.nextBatterFor === "striker"
-                ? "Striker needs replacement"
-                : "Non-striker needs replacement"}
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            {(() => {
-              const seen = new Set();
-              const options = (match?.playerStats || [])
-                .filter((p) => {
-                  if (p.team !== match?.battingTeam) return false;
-                  if (p.isOut) return false;
-                  if (p.name === match?.currentStriker) return false;
-                  if (p.name === match?.currentNonStriker) return false;
-                  if (seen.has(p.name)) return false;
-                  seen.add(p.name);
-                  return true;
-                })
-                .sort((a, b) => {
-                  if (a.isBenched && !b.isBenched) return -1;
-                  if (!a.isBenched && b.isBenched) return 1;
-                  return 0;
-                });
-
-              if (options.length === 0) {
-                return (
-                  <div className="rounded-xl border border-dashed border-white/10 py-8 text-center text-sm text-slate-600">
-                    No batters available - innings will end
-                  </div>
-                );
-              }
-
-              return options.map((p) => (
-                <BottomSheetOption
-                  key={p.name}
-                  label={p.name}
-                  photoUrl={p.photoUrl}
-                  sublabel={
-                    p.isBenched
-                      ? `${p.batting?.runs ?? 0}(${p.batting?.balls ?? 0}) - returning`
-                      : p.didBat
-                        ? `${p.batting?.runs ?? 0}(${p.batting?.balls ?? 0})`
-                        : "Yet to bat"
-                  }
-                  badge={p.isBenched ? "↩ Return" : undefined}
-                  badgeColor={p.isBenched ? "text-amber-400" : undefined}
-                  selected={selectedBatter === p.name}
-                  onClick={() => setSelectedBatter(p.name)}
-                />
-              ));
-            })()}
-          </div>
-        </div>
-      )}
-
-      {activeSection === "bowler" && (
-        <div className="space-y-2">
-          <p className="mb-3 text-[11px] text-slate-500">
-            {isInningsBreak
-              ? "Select opening bowler"
-              : `Select the bowler for over ${completedOvers + 1}`}
-          </p>
-          {bowlingTeamPlayers.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-white/10 py-8 text-center text-sm text-slate-600">
-              No bowling team players found
+        {activeSection === "striker" && isInningsBreak && (
+          <div className="space-y-3">
+            <div className="rounded-xl border border-[#f97316]/20 bg-[#f97316]/5 px-3 py-2.5">
+              <p className="text-[10px] font-black uppercase tracking-widest text-[#f97316] mb-1">
+                2nd Innings - {match?.battingTeam} Batting
+              </p>
+              <p className="text-[11px] text-slate-500">
+                Target: {(match?.firstInningsScore ?? 0) + 1} runs
+              </p>
             </div>
-          ) : (
-            bowlingTeamPlayers.map((player) => (
-              <BottomSheetOption
-                key={player.name}
-                label={player.name}
-                photoUrl={player.photoUrl}
-                sublabel={
-                  (player.bowling?.balls ?? 0) > 0
-                    ? `${Math.floor(player.bowling.balls / 6)}.${player.bowling.balls % 6} ov ${player.bowling.wickets ?? 0}/${player.bowling.runs ?? 0}`
-                    : "Yet to bowl"
+            <p className="text-[11px] text-slate-500 mb-2">
+              Select opening striker
+            </p>
+            <div className="space-y-2">
+              {(() => {
+                const seen = new Set();
+                return (match?.playerStats || [])
+                  .filter((p) => {
+                    if (p.team !== match?.battingTeam) return false;
+                    if (seen.has(p.name)) return false;
+                    seen.add(p.name);
+                    return true;
+                  })
+                  .map((p) => (
+                    <BottomSheetOption
+                      key={p.name}
+                      label={p.name}
+                      photoUrl={p.photoUrl}
+                      selected={inningsStriker === p.name}
+                      disabled={p.name === inningsNonStriker}
+                      onClick={() => setInningsStriker(p.name)}
+                    />
+                  ));
+              })()}
+            </div>
+          </div>
+        )}
+
+        {activeSection === "nonStriker" && isInningsBreak && (
+          <div className="space-y-3">
+            <p className="text-[11px] text-slate-500 mb-2">
+              Select opening non-striker
+            </p>
+            <div className="space-y-2">
+              {(() => {
+                const seen = new Set();
+                return (match?.playerStats || [])
+                  .filter((p) => {
+                    if (p.team !== match?.battingTeam) return false;
+                    if (seen.has(p.name)) return false;
+                    seen.add(p.name);
+                    return true;
+                  })
+                  .map((p) => (
+                    <BottomSheetOption
+                      key={p.name}
+                      label={p.name}
+                      photoUrl={p.photoUrl}
+                      selected={inningsNonStriker === p.name}
+                      disabled={p.name === inningsStriker}
+                      onClick={() => setInningsNonStriker(p.name)}
+                    />
+                  ));
+              })()}
+            </div>
+          </div>
+        )}
+
+        {activeSection === "batter" && (
+          <div className="space-y-3">
+            <div className="rounded-xl border border-red-500/20 bg-red-500/5 px-3 py-2.5">
+              <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-red-400">
+                Wicket - Select New Batter
+              </p>
+              <p className="text-[11px] text-slate-500">
+                {match?.nextBatterFor === "striker"
+                  ? "Striker needs replacement"
+                  : "Non-striker needs replacement"}
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              {(() => {
+                const seen = new Set();
+                const options = (match?.playerStats || [])
+                  .filter((p) => {
+                    if (p.team !== match?.battingTeam) return false;
+                    if (p.isOut) return false;
+                    if (p.name === match?.currentStriker) return false;
+                    if (p.name === match?.currentNonStriker) return false;
+                    if (seen.has(p.name)) return false;
+                    seen.add(p.name);
+                    return true;
+                  })
+                  .sort((a, b) => {
+                    if (a.isBenched && !b.isBenched) return -1;
+                    if (!a.isBenched && b.isBenched) return 1;
+                    return 0;
+                  });
+
+                if (options.length === 0) {
+                  return (
+                    <div className="rounded-xl border border-dashed border-white/10 py-8 text-center text-sm text-slate-600">
+                      No batters available - innings will end
+                    </div>
+                  );
                 }
-                selected={isInningsBreak
-                  ? inningsBowler === player.name
-                  : selectedBowler === player.name}
-                onClick={() => {
-                  if (isInningsBreak) {
-                    setInningsBowler(player.name);
-                  } else {
-                    setSelectedBowler(player.name);
-                  }
-                }}
-              />
-            ))
-          )}
-        </div>
-      )}
 
-      {activeSection === "overs" && (
-        <div className="space-y-4">
-
-          {/* Info row */}
-          <div className="grid grid-cols-3 gap-2 text-center">
-            <div className="rounded-xl border border-white/5 bg-white/3 
-              px-2 py-3">
-              <p className="text-[9px] font-black uppercase tracking-widest 
-                text-slate-600 mb-1">
-                Completed
-              </p>
-              <p className="text-2xl font-extrabold text-slate-400"
-                style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
-                {completedOvers}
-              </p>
-            </div>
-            <div className={`rounded-xl border px-2 py-3
-              ${pendingOvers !== currentTotalOvers
-                ? "border-[#f97316]/30 bg-[#f97316]/8"
-                : "border-white/5 bg-white/3"
-              }`}>
-              <p className="text-[9px] font-black uppercase tracking-widest 
-                text-slate-600 mb-1">
-                Total
-              </p>
-              <p className={`text-2xl font-extrabold
-                ${pendingOvers !== currentTotalOvers
-                  ? "text-[#f97316]"
-                  : "text-white"
-                }`}
-                style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
-                {pendingOvers}
-              </p>
-            </div>
-            <div className="rounded-xl border border-white/5 bg-white/3 
-              px-2 py-3">
-              <p className="text-[9px] font-black uppercase tracking-widest 
-                text-slate-600 mb-1">
-                Remaining
-              </p>
-              <p className="text-2xl font-extrabold text-slate-400"
-                style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
-                {Math.max(0, pendingOvers - completedOvers)}
-              </p>
+                return options.map((p) => (
+                  <BottomSheetOption
+                    key={p.name}
+                    label={p.name}
+                    photoUrl={p.photoUrl}
+                    sublabel={
+                      p.isBenched
+                        ? `${p.batting?.runs ?? 0}(${p.batting?.balls ?? 0}) - returning`
+                        : p.didBat
+                          ? `${p.batting?.runs ?? 0}(${p.batting?.balls ?? 0})`
+                          : "Yet to bat"
+                    }
+                    badge={p.isBenched ? "↩ Return" : undefined}
+                    badgeColor={p.isBenched ? "text-amber-400" : undefined}
+                    selected={selectedBatter === p.name}
+                    onClick={() => setSelectedBatter(p.name)}
+                  />
+                ));
+              })()}
             </div>
           </div>
+        )}
 
-          {/* +/− toggle — single tap to change */}
-          <div className="flex items-center justify-between gap-4 
-            rounded-2xl border border-white/8 bg-white/4 px-6 py-5">
+        {activeSection === "bowler" && (
+          <div className="space-y-2">
+            <p className="mb-3 text-[11px] text-slate-500">
+              {isInningsBreak
+                ? "Select opening bowler"
+                : `Select the bowler for over ${completedOvers + 1}`}
+            </p>
+            {bowlingTeamPlayers.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-white/10 py-8 text-center text-sm text-slate-600">
+                No bowling team players found
+              </div>
+            ) : (
+              bowlingTeamPlayers.map((player) => (
+                <BottomSheetOption
+                  key={player.name}
+                  label={player.name}
+                  photoUrl={player.photoUrl}
+                  sublabel={
+                    (player.bowling?.balls ?? 0) > 0
+                      ? `${Math.floor(player.bowling.balls / 6)}.${player.bowling.balls % 6} ov ${player.bowling.wickets ?? 0}/${player.bowling.runs ?? 0}`
+                      : "Yet to bowl"
+                  }
+                  selected={
+                    isInningsBreak
+                      ? inningsBowler === player.name
+                      : selectedBowler === player.name
+                  }
+                  onClick={() => {
+                    if (isInningsBreak) {
+                      setInningsBowler(player.name);
+                    } else {
+                      setSelectedBowler(player.name);
+                    }
+                  }}
+                />
+              ))
+            )}
+          </div>
+        )}
 
-            <button
-              type="button"
-              onClick={() => 
-                setPendingOvers(v => Math.max(oversFloor, v - 1))}
-              disabled={pendingOvers <= oversFloor}
-              className="flex h-14 w-14 items-center justify-center 
+        {activeSection === "overs" && (
+          <div className="space-y-4">
+            {/* Info row */}
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div
+                className="rounded-xl border border-white/5 bg-white/3 
+              px-2 py-3"
+              >
+                <p
+                  className="text-[9px] font-black uppercase tracking-widest 
+                text-slate-600 mb-1"
+                >
+                  Completed
+                </p>
+                <p
+                  className="text-2xl font-extrabold text-slate-400"
+                  style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
+                >
+                  {completedOvers}
+                </p>
+              </div>
+              <div
+                className={`rounded-xl border px-2 py-3
+              ${
+                pendingOvers !== currentTotalOvers
+                  ? "border-[#f97316]/30 bg-[#f97316]/8"
+                  : "border-white/5 bg-white/3"
+              }`}
+              >
+                <p
+                  className="text-[9px] font-black uppercase tracking-widest 
+                text-slate-600 mb-1"
+                >
+                  Total
+                </p>
+                <p
+                  className={`text-2xl font-extrabold
+                ${
+                  pendingOvers !== currentTotalOvers
+                    ? "text-[#f97316]"
+                    : "text-white"
+                }`}
+                  style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
+                >
+                  {pendingOvers}
+                </p>
+              </div>
+              <div
+                className="rounded-xl border border-white/5 bg-white/3 
+              px-2 py-3"
+              >
+                <p
+                  className="text-[9px] font-black uppercase tracking-widest 
+                text-slate-600 mb-1"
+                >
+                  Remaining
+                </p>
+                <p
+                  className="text-2xl font-extrabold text-slate-400"
+                  style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
+                >
+                  {Math.max(0, pendingOvers - completedOvers)}
+                </p>
+              </div>
+            </div>
+
+            {/* +/− toggle — single tap to change */}
+            <div
+              className="flex items-center justify-between gap-4 
+            rounded-2xl border border-white/8 bg-white/4 px-6 py-5"
+            >
+              <button
+                type="button"
+                onClick={() =>
+                  setPendingOvers((v) => Math.max(oversFloor, v - 1))
+                }
+                disabled={pendingOvers <= oversFloor}
+                className="flex h-14 w-14 items-center justify-center 
                 rounded-full border border-white/15 bg-white/8 
                 text-3xl font-black text-white transition-all 
                 hover:bg-white/15 active:scale-90
                 disabled:opacity-25 disabled:cursor-not-allowed"
-            >
-              −
-            </button>
+              >
+                −
+              </button>
 
-            <div className="text-center">
-              <p className="text-6xl font-extrabold leading-none"
-                style={{
-                  fontFamily: "'Barlow Condensed', sans-serif",
-                  color: pendingOvers !== currentTotalOvers
-                    ? "#f97316" : "white"
-                }}>
-                {pendingOvers}
-              </p>
-              <p className="text-[10px] uppercase tracking-widest 
-                text-slate-600 mt-1">
-                overs
-              </p>
-              {pendingOvers !== currentTotalOvers && (
-                <p className="text-[10px] text-slate-600 mt-0.5">
-                  was {currentTotalOvers}
+              <div className="text-center">
+                <p
+                  className="text-6xl font-extrabold leading-none"
+                  style={{
+                    fontFamily: "'Barlow Condensed', sans-serif",
+                    color:
+                      pendingOvers !== currentTotalOvers ? "#f97316" : "white",
+                  }}
+                >
+                  {pendingOvers}
                 </p>
-              )}
-            </div>
+                <p
+                  className="text-[10px] uppercase tracking-widest 
+                text-slate-600 mt-1"
+                >
+                  overs
+                </p>
+                {pendingOvers !== currentTotalOvers && (
+                  <p className="text-[10px] text-slate-600 mt-0.5">
+                    was {currentTotalOvers}
+                  </p>
+                )}
+              </div>
 
-            <button
-              type="button"
-              onClick={() => setPendingOvers(v => v + 1)}
-              className="flex h-14 w-14 items-center justify-center 
+              <button
+                type="button"
+                onClick={() => setPendingOvers((v) => v + 1)}
+                className="flex h-14 w-14 items-center justify-center 
                 rounded-full border border-white/15 bg-white/8 
                 text-3xl font-black text-white transition-all 
                 hover:bg-white/15 active:scale-90"
+              >
+                +
+              </button>
+            </div>
+
+            {/* Feedback */}
+            <div
+              className={`rounded-xl border px-3 py-2.5 text-center
+            ${
+              pendingOvers < oversFloor
+                ? "border-red-500/20 bg-red-500/8"
+                : pendingOvers !== currentTotalOvers
+                  ? "border-[#f97316]/15 bg-[#f97316]/5"
+                  : "border-white/5 bg-white/3"
+            }`}
             >
-              +
-            </button>
+              {pendingOvers < oversFloor ? (
+                <p className="text-[11px] text-red-400">
+                  ⚠ Minimum {oversFloor} overs ({completedOvers} already
+                  completed)
+                </p>
+              ) : pendingOvers !== currentTotalOvers ? (
+                <p className="text-[11px] text-[#f97316]">
+                  {currentTotalOvers} → {pendingOvers} overs · saves when you
+                  tap Start Next Over
+                </p>
+              ) : (
+                <p className="text-[11px] text-slate-600">
+                  Tap − or + to adjust total overs
+                </p>
+              )}
+            </div>
           </div>
+        )}
 
-          {/* Feedback */}
-          <div className={`rounded-xl border px-3 py-2.5 text-center
-            ${pendingOvers < oversFloor
-              ? "border-red-500/20 bg-red-500/8"
-              : pendingOvers !== currentTotalOvers
-                ? "border-[#f97316]/15 bg-[#f97316]/5"
-              : "border-white/5 bg-white/3"
-            }`}>
-            {pendingOvers < oversFloor ? (
-              <p className="text-[11px] text-red-400">
-                ⚠ Minimum {oversFloor} overs 
-                ({completedOvers} already completed)
-              </p>
-            ) : pendingOvers !== currentTotalOvers ? (
-              <p className="text-[11px] text-[#f97316]">
-                {currentTotalOvers} → {pendingOvers} overs · 
-                saves when you tap Start Next Over
-              </p>
-            ) : (
-              <p className="text-[11px] text-slate-600">
-                Tap − or + to adjust total overs
-              </p>
-            )}
-          </div>
-
-        </div>
-      )}
-
-      {activeSection === "teams" && (
-        <PlayerManagerTab
-          match={match}
-          groupPlayers={groupPlayers}
-          onChange={setTeamChanges}
-        />
-      )}
-
+        {activeSection === "teams" && (
+          <PlayerManagerTab
+            match={match}
+            groupPlayers={groupPlayers}
+            onChange={setTeamChanges}
+          />
+        )}
       </div>
 
       <div className="mt-6 space-y-2">

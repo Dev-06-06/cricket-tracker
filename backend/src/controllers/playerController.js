@@ -40,7 +40,7 @@ const calculateComputedStats = (batting, bowling) => {
 const getPlayers = async (_req, res) => {
   try {
     // ✅ Player docs are now tiny (name, photoUrl, userId only) — very fast
-    const players = await Player.find({}).sort({ name: 1 }).lean();
+    const players = await Player.find({}).sort({ name: 1 }).limit(500).lean();
     res.json({ success: true, players });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
