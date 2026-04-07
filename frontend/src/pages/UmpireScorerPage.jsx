@@ -372,6 +372,7 @@ export default function UmpireScorerPage() {
 
       prevBallsBowledRef.current = curr;
       setMatch({ ...m });
+      benchReplacementInProgressRef.current = false;
 
       if (m.status === "completed" && !redirectedRef.current) {
         // Fallback redirect — catches case where match_completed
