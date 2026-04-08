@@ -175,8 +175,8 @@ function buildBattingRows(match) {
   });
 }
 
-function buildBowlingRows(matchData) {
-  const match = matchData || {};
+function buildBowlingRows(match, timeline) {
+  match = match || {};
   // RISK: deduplicate joker by name (two entries, same name)
   const seen = new Set();
   const bowlers = (match.playerStats || []).filter((p) => {
@@ -187,7 +187,7 @@ function buildBowlingRows(matchData) {
     return true;
   });
   return bowlers.map((p) => {
-    const bb = (match.timeline || []).filter((ball) => ball.bowler === p.name);
+    const bb = (timeline || []).filter((ball) => ball.bowler === p.name);
     const balls = bb.filter(
       (b) => b.extraType !== "wide" && b.extraType !== "no-ball",
     ).length;
