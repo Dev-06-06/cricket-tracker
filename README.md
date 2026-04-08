@@ -1,10 +1,124 @@
 # CricTrack 🏏
 
-> **From gully to glory — track every ball.**
+> Built for the way real cricket is actually played.
 
-CricTrack is a full-stack, real-time cricket match management platform built for local and gully cricket groups. It handles everything from toss to final result — live ball-by-ball scoring, automatic strike rotation, over breaks, wicket flows, and per-group career statistics — all synced instantly across every connected device via WebSockets.
+<div align="center">
 
-🔗 **Live App:** [bit.ly/crictrack](https://bit.ly/crictrack) &nbsp;|&nbsp; 📦 **Repo:** [github.com/Dev-06-06/cricket-tracker](https://github.com/Dev-06-06/cricket-tracker)
+**[Live App](https://bit.ly/crictrack)** &nbsp;·&nbsp; **[GitHub](https://github.com/Dev-06-06/cricket-tracker)**
+
+![CricTrack Home](https://github.com/user-attachments/assets/33476494-e7fb-4978-9120-0d7812c6e85b)
+
+</div>
+
+---
+
+## What is CricTrack?
+
+Every cricket scoring app assumes both teams are locked before the match starts, overs never change, and no player can appear in both sides. None of that is true in turf cricket, college cricket, or gully cricket.
+
+CricTrack is a real-time match management platform built specifically for local cricket — where a player shows up late, overs get renegotiated mid-game, and one person genuinely plays for both teams. It handles the full match lifecycle from toss to career stats, syncing every delivery instantly across all connected devices via WebSockets.
+
+---
+
+## Screenshots
+
+<table>
+  <tr>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/e9146ae9-13f6-491c-8063-c4c27590e970" alt="Live Scoring"/>
+      <br/><sub><b>Live Scoring — Umpire View</b></sub>
+    </td>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/08efdf03-c586-45a9-97dc-891b924a52b6" alt="Over Break"/>
+      <br/><sub><b>Over Break — Bowler Selection</b></sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/35649fdc-398d-41c6-8e58-50475da02a2b" alt="Match Setup"/>
+      <br/><sub><b>Match Setup — Joker Player Selection</b></sub>
+    </td>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/e6dabdce-a0ad-4159-8641-1c70e078cea4" alt="Match Summary"/>
+      <br/><sub><b>Match Summary — Top Performers</b></sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/db3f4b7a-f37c-46a1-9fd0-01f8550329c6" alt="The Dugout"/>
+      <br/><sub><b>The Dugout — Career Stats Table</b></sub>
+    </td>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/261762da-9614-4753-b68a-693ae1b602d9" alt="Player Card"/>
+      <br/><sub><b>Player Card — Flip for Batting / Bowling</b></sub>
+    </td>
+  </tr>
+</table>
+
+---
+
+## Why CricTrack Exists
+
+| What other apps assume | What actually happens in local cricket |
+|---|---|
+| Both squads locked before match | Players show up late — add them mid-game |
+| Overs never change | "Let's make it 8 overs" after over 3 |
+| No player on both teams | One strong player bats and bowls for both sides |
+| Substitutions follow official rules | Bench a batter, bring them back later |
+
+CricTrack is the only scoring platform built around these realities.
+
+---
+
+## Features
+
+### 🔐 Auth & Groups
+- Register, login, password reset, profile update with photo
+- Create groups with auto-generated 6-character invite codes
+- Admin and member roles — manage your regular playing group
+- Per-group career statistics completely isolated across groups
+
+### 🏟️ Match Lifecycle
+- Full status pipeline — **Upcoming → Toss → Live → Innings Break → Completed**
+- Coin flip animation with bat/bowl choice
+- Create upcoming matches in advance or start immediately
+
+### ⚡ Live Scoring
+- Record every delivery — runs, wides, no-balls, byes, leg-byes, wickets
+- Automatic strike rotation including end-of-over and odd-run edge cases
+- **Bench a batter** mid-innings — retired not out, can return later
+- **Bench and replace** — swap a batter atomically in a single socket event
+- Undo last delivery with full state restoration including bench state
+- Over break flow — bowler selection between every over
+
+### 🃏 Joker Player *(no other app does this)*
+- Designate one player to appear in **both teams** within a single match
+- Joker bats for their primary team and bowls for the opposition
+- Career statistics tracked separately per innings — no double-counting
+- Set or dissolve joker status at any over break
+
+### ⚙️ Mid-Match Flexibility *(no other app does this)*
+- **Change total overs** at any over break — increase or decrease freely
+- **Add players** to either team mid-game — late arrivals handled natively
+- **Reshuffle players** between teams at over break
+- All changes reflected instantly on every connected device
+
+### 📺 Live Scoreboard
+- Real-time score, batting pair, current bowler, overs, run rate
+- Ball-by-ball over chip display
+- Second innings target, required run rate, balls remaining
+- Shareable viewer link — opens live match feed in any browser
+
+### 🏆 The Dugout
+- Per-group batting career stats — runs, balls, strike rate, fours, sixes, 30s/50s/100s
+- Per-group bowling career stats — overs, wickets, economy, 3W/4W/5W hauls, best figures
+- Flip card per player — batting side and bowling side in one card
+- Search and filter across your entire group player pool
+
+### 📊 Match Summary
+- Full scorecard for both innings with fall of wickets
+- Man of the Match scoring across batting and bowling contributions
+- Top Performers — top scorer, top wickets, best economy, best strike rate
 
 ---
 
@@ -15,127 +129,71 @@ CricTrack is a full-stack, real-time cricket match management platform built for
 | Frontend | React 19, Vite 7, React Router DOM 7, Tailwind CSS 4 |
 | Backend | Node.js, Express 4 |
 | Real-time | Socket.IO 4 — WebSocket-only transport |
-| Database | MongoDB Atlas (Singapore) via Mongoose 8 |
+| Database | MongoDB Atlas via Mongoose 8 |
 | Auth | JWT (15-day sessions), bcryptjs |
-| Security | express-rate-limit, Socket.IO JWT handshake auth |
+| Security | Helmet, express-rate-limit, Socket.IO JWT handshake auth |
 | Deployment | Vercel (frontend) · Render (backend) |
 
 ---
 
-## Features
+## Architecture Decisions
 
-### 🔐 Auth & Profiles
-- Register, login, password reset, and profile update (name, email, photo)
-- JWT sessions with 15-day expiry; all REST routes and Socket.IO handshakes are token-authenticated
+**Why embedded player snapshots in Match documents?**
+Avoids `populate()` on the hot scoring path. Every delivery handler reads and writes a single document — no joins, no risk of stale references mid-over.
 
-### 👥 Groups & Players
-- Create groups with auto-generated 6-character invite codes
-- Admin and member roles; join, leave, and manage group player pools
-- Registered and guest player support; per-group career statistics isolated from global profiles
+**Why `GroupPlayerStats` separate from `Player`?**
+The same player can have entirely different histories in different groups. A single global stats document would be meaningless — career stats are only useful within the context of a consistent group of players.
 
-### 🏟️ Match Lifecycle
-- Full status pipeline: **Upcoming → Toss → Innings Setup → Live → Innings Complete → Completed**
-- Create upcoming matches, view live and completed match lists, delete matches
-- Joker player support — one player can appear in both teams within a single match
+**Why atomic bench+replace in one socket event?**
+Splitting bench and replace into two events creates a window where a delivery could be recorded between them, placing a ball with a vacant crease position. A single `benchAndReplace` event eliminates this race condition entirely.
 
-### 🪙 Toss
-- Custom coin flip animation — 1800° rotateY arc over 2.2s with cubic-bezier easing and ambient glow pulse
-- Multi-step flow with animated progress indicators; bat/bowl choice after winner selection
+**Why the Joker is tracked as two `playerStats` entries?**
+One entry per team. Bowling stats route to the bowling-team entry, batting stats route to the batting-team entry. No special-casing needed downstream — all existing stat aggregation logic works without modification.
 
-### ⚡ Live Scoring (Umpire View)
-- Record every delivery: runs, wides, no-balls, byes, leg-byes, wickets
-- Automatic strike rotation on odd runs and end-of-over
-- Wicket flow — opens next-batsman selection drawer automatically
-- Over break flow — bowler selection screen between every over
-- Bench and replace batsmen mid-innings
-- Undo last delivery
-- Socket auto-reconnects silently (`reconnectionAttempts: Infinity`) and re-joins match room on recovery
+**Why VersionError retry with exponential backoff on Socket.IO handlers?**
+Concurrent delivery events from multiple clients (umpire + scorer) can hit the same Mongoose document version. Three retries at 20ms, 50ms, 80ms intervals resolve conflicts without a distributed lock, keeping the handler stateless.
 
-### 📺 Live Scoreboard (Viewer View)
-- Real-time score, current batting pair, active bowler, overs bowled, wickets fallen
-- First innings summary, second innings target, ball-by-ball commentary feed
-- Dark scoreboard shell (`bg-slate-950`) with `Barlow Condensed` tabular score digits that never shift width on update
+**Why deterministic stat recalculation at match end?**
+Stats computed from the match record at completion, not accumulated live. Undos, corrections, and mid-match changes never produce drift — the final number is always exactly derivable from the timeline.
 
-### 📊 Career Statistics
-- Per-group batting: runs, balls, fours, sixes, dismissals, 30s / 50s / 100s, highest score
-- Per-group bowling: overs, runs, wickets, economy, 3W / 4W / 5W hauls, best figures
-- Stats recalculated deterministically from match data at completion — never accumulated live
+**Why WebSocket-only transport?**
+Long-polling disabled to eliminate the HTTP upgrade round-trip on mobile networks. Players score from their phones on the field — every millisecond of latency is felt.
 
 ---
 
 ## Project Structure
+
 ```
 cricket-tracker/
 │
 ├── backend/
-│   ├── src/
-│   │   ├── config/
-│   │   │   └── db.js                  # MongoDB Atlas connection
-│   │   ├── controllers/
-│   │   │   ├── authController.js      # Register, login, profile, reset password
-│   │   │   ├── groupController.js     # Groups CRUD, invite codes, player pool
-│   │   │   ├── matchController.js     # Match creation, listing, deletion
-│   │   │   └── playerController.js    # Player creation, group-scoped stats
-│   │   ├── middleware/
-│   │   │   └── authMiddleware.js      # JWT Bearer token verification
-│   │   ├── models/
-│   │   │   ├── User.js                # User schema
-│   │   │   ├── Player.js              # Player schema
-│   │   │   ├── Group.js               # Group schema with invite code
-│   │   │   ├── Match.js               # Match schema with embedded player snapshots
-│   │   │   └── GroupPlayerStats.js    # Per-group career stats schema
-│   │   ├── routes/
-│   │   │   ├── authRoutes.js
-│   │   │   ├── groupRoutes.js
-│   │   │   ├── matchRoutes.js
-│   │   │   └── playerRoutes.js
-│   │   ├── sockets/
-│   │   │   └── matchSocket.js         # All Socket.IO live match event handlers (~2,000 lines)
-│   │   ├── utils/
-│   │   │   └── statsUpdater.js        # Deterministic stat recalculation at match end
-│   │   └── server.js                  # Express + Socket.IO entry point
-│   └── package.json
+│   └── src/
+│       ├── config/         # MongoDB Atlas connection
+│       ├── controllers/    # Auth, match, player, group handlers
+│       ├── middleware/     # JWT Bearer token verification
+│       ├── models/
+│       │   ├── Match.js            # Embedded player snapshots
+│       │   ├── GroupPlayerStats.js # Per-group career stats
+│       │   ├── Group.js            # Invite code, member roles
+│       │   ├── Player.js
+│       │   └── User.js
+│       ├── routes/         # Express route definitions
+│       ├── sockets/
+│       │   └── matchSocket.js  # All live match event handlers
+│       ├── utils/
+│       │   └── statsUpdater.js # Deterministic stat recalculation
+│       └── server.js       # Express + Socket.IO entry point
 │
 └── frontend/
-    ├── src/
-    │   ├── components/
-    │   │   ├── BottomNav.jsx           # App-wide bottom navigation bar
-    │   │   ├── BottomSheet.jsx         # Reusable slide-up drawer primitive
-    │   │   ├── BottomSheetOption.jsx   # Option row inside BottomSheet
-    │   │   ├── ErrorBoundary.jsx       # React error boundary wrapper
-    │   │   ├── GroupChip.jsx           # Active group pill indicator
-    │   │   ├── OverBreakDrawer.jsx     # Bowler selection drawer between overs
-    │   │   ├── PlayerManagerTab.jsx    # Player pool management UI
-    │   │   └── ProfileToolbarButton.jsx
-    │   ├── context/
-    │   │   ├── AuthContext.jsx         # JWT auth state, login/logout
-    │   │   └── ActiveGroupContext.jsx  # Currently selected group across pages
-    │   ├── hooks/
-    │   │   └── usePageCache.js         # Caches page scroll position
-    │   ├── pages/
-    │   │   ├── LandingPage.jsx         # Marketing landing (~1,255 lines)
-    │   │   ├── HomePage.jsx            # Live / Upcoming / Completed match lists
-    │   │   ├── GroupsPage.jsx          # Group creation, joining, management
-    │   │   ├── LoginPage.jsx
-    │   │   ├── RegisterPage.jsx
-    │   │   ├── ResetPasswordPage.jsx
-    │   │   ├── TossPage.jsx            # Coin flip animation + toss flow
-    │   │   ├── UmpireSetupPage.jsx     # Opening lineup selection (~1,502 lines)
-    │   │   ├── UmpireScorerPage.jsx    # Live scoring engine (~1,776 lines)
-    │   │   ├── ScoreboardPage.jsx      # Live viewer scoreboard (~2,589 lines)
-    │   │   ├── ScorerPage.jsx          # Scorer role entry point
-    │   │   ├── PlayerProfilesPage.jsx  # Per-group career stats viewer
-    │   │   └── UserProfilePage.jsx     # Profile update page
-    │   ├── routes/
-    │   │   └── RequireAuth.jsx         # JWT-gated route guard
-    │   ├── services/
-    │   │   ├── api.js                  # Axios API client
-    │   │   └── socket.js               # Socket.IO client (WS-only, auto-reconnect)
-    │   ├── utils/
-    │   │   └── matchResult.js          # Win/loss/tie calculation helpers
-    │   └── App.jsx                     # Route definitions
-    ├── vercel.json                      # SPA rewrite config for Vercel
-    └── package.json
+    └── src/
+        ├── components/     # BottomSheet, OverBreakDrawer, BottomNav
+        ├── context/        # AuthContext, ActiveGroupContext
+        ├── hooks/          # usePageCache
+        ├── pages/          # UmpireScorerPage, ScoreboardPage,
+        │                   # PlayerProfilesPage (Dugout), HomePage
+        ├── routes/         # RequireAuth guard
+        ├── services/       # API client, Socket.IO client
+        └── utils/          # Match result calculation
 ```
 
 ---
@@ -146,43 +204,50 @@ cricket-tracker/
 - Node.js 18+
 - MongoDB Atlas cluster (free tier works)
 
-### 1. Clone the repo
+### Clone
+
 ```bash
 git clone https://github.com/Dev-06-06/cricket-tracker.git
 cd cricket-tracker
 ```
 
-### 2. Backend
+### Backend
+
 ```bash
 cd backend
 npm install
 ```
 
 Create `backend/.env`:
+
 ```env
 JWT_SECRET=your_jwt_secret_here
 PORT=5000
 CLIENT_ORIGIN=http://localhost:5173
 MONGODB_URI=your_mongodb_atlas_connection_string
 ```
+
 ```bash
 npm run dev
-# API running at http://localhost:5000
+# Runs on http://localhost:5000
 ```
 
-### 3. Frontend
+### Frontend
+
 ```bash
 cd frontend
 npm install
 ```
 
-Create `frontend/.env.local` (optional — defaults to localhost):
+Create `frontend/.env.local`:
+
 ```env
 VITE_API_BASE_URL=http://localhost:5000
 ```
+
 ```bash
 npm run dev
-# App running at http://localhost:5173
+# Runs on http://localhost:5173
 ```
 
 ---
@@ -195,14 +260,14 @@ npm run dev
 |---|---|
 | `JWT_SECRET` | Secret key for signing JWTs |
 | `PORT` | Server port (default: `5000`) |
-| `CLIENT_ORIGIN` | CORS allowed origin (e.g. `https://your-app.vercel.app`) |
+| `CLIENT_ORIGIN` | CORS allowed origin |
 | `MONGODB_URI` | MongoDB Atlas connection string |
 
 ### Frontend — `frontend/.env.local`
 
 | Variable | Purpose |
 |---|---|
-| `VITE_API_BASE_URL` | Backend base URL (e.g. `https://your-backend.onrender.com`) |
+| `VITE_API_BASE_URL` | Backend base URL |
 
 ---
 
@@ -212,34 +277,32 @@ npm run dev
 
 | Method | Endpoint | Description |
 |---|---|---|
-| POST | `/register` | Register new user (rate-limited) |
-| POST | `/login` | Login (rate-limited) |
-| GET | `/me` | Get current user info |
+| POST | `/register` | Register new user |
+| POST | `/login` | Login |
+| GET | `/me` | Get current user |
 | PUT | `/profile` | Update name, email, photo |
-| POST | `/reset-password` | Reset password (rate-limited) |
+| POST | `/reset-password` | Reset password |
 
 ### Groups — `/api/groups`
 
 | Method | Endpoint | Description |
 |---|---|---|
-| POST | `/` | Create a group |
-| GET | `/` | List all user's groups |
-| POST | `/join` | Join group via invite code |
-| POST | `/:groupId/leave` | Leave a group |
-| GET | `/:groupId/players` | List players in a group |
+| POST | `/` | Create group |
+| GET | `/` | List user's groups |
+| POST | `/join` | Join via invite code |
+| POST | `/:groupId/leave` | Leave group |
+| GET | `/:groupId/players` | List group players |
 | POST | `/:groupId/players` | Add player to group |
-| DELETE | `/:groupId/players/:playerId` | Remove player from group |
+| DELETE | `/:groupId/players/:id` | Remove player |
 
 ### Matches — `/api/match`
 
 | Method | Endpoint | Description |
 |---|---|---|
 | POST | `/` | Create match |
-| POST | `/upcoming` | Create upcoming match |
 | GET | `/live` | List live matches |
 | GET | `/upcoming` | List upcoming matches |
 | GET | `/completed` | List completed matches |
-| GET | `/ongoing` | Get user's ongoing match |
 | GET | `/:id` | Get match details |
 | DELETE | `/:id` | Delete match |
 
@@ -247,9 +310,9 @@ npm run dev
 
 | Method | Endpoint | Description |
 |---|---|---|
-| GET | `/` | List all players (rate-limited) |
-| POST | `/` | Create player (rate-limited) |
-| GET | `/by-group/:groupId` | Players with group career stats |
+| GET | `/` | List all players |
+| POST | `/` | Create player |
+| GET | `/by-group/:groupId` | Players with career stats |
 
 ---
 
@@ -260,43 +323,53 @@ npm run dev
 | Event | Purpose |
 |---|---|
 | `joinMatch` | Join match room, receive full state |
-| `tossResult` | Finalize toss winner and bat/bowl choice |
-| `setOpeners` | Set opening batter pair and first bowler |
-| `setNewBatter` | Bring in batsman after a wicket |
-| `setNewBowler` | Select bowler for a new over |
-| `umpire_update` | Record a delivery (runs, extras, wicket) |
-| `benchAndReplace` | Bench a batsman and bring in replacement |
-| `overBreakCommit` | Finalize over break and confirm new bowler |
+| `tossResult` | Finalize toss |
+| `setOpeners` | Set opening lineup |
+| `setNewBatter` | Bring in batter after wicket or bench return |
+| `setNewBowler` | Select bowler for new over |
+| `umpire_update` | Record a delivery |
+| `benchBatter` | Bench a batter |
+| `benchAndReplace` | Bench and replace atomically |
+| `overBreakCommit` | Commit over break — bowler, overs, players, joker |
 | `swapStriker` | Manually rotate strike |
-| `undo_delivery` | Undo the last recorded ball |
-| `complete_match` | Mark match as completed |
+| `undo_delivery` | Undo last ball |
+| `complete_match` | Mark match completed |
 
 ### Server → Client
 
-| Event | What It Carries |
+| Event | Purpose |
 |---|---|
-| `matchState` | Full match state — teams, players, score, innings, stats |
-| `fullTimeline` | Complete ball-by-ball commentary array |
-| `innings_complete` | First innings has ended |
-| `overBreakStarted` | Over break begun, bowler selection required |
+| `matchState` | Full match state broadcast |
+| `overBreakStarted` | Over break begun |
 | `inningsBreakStarted` | Second innings starting |
-| `match_completed` | Final result and updated career statistics |
+| `innings_complete` | First innings ended |
+| `match_completed` | Final result and career stats updated |
 | `groupMatchUpdate` | Group-level match status change |
-| `matchError` | Error message from the server |
+| `matchError` | Error with message |
 
 ---
 
-## Architecture Decisions
+## Roadmap
 
-| Decision | Rationale |
-|---|---|
-| **Embedded player snapshots in Match documents** | Avoids `populate()` on hot scoring paths; match state reads are a single document fetch |
-| **`GroupPlayerStats` separate from Player** | Career stats are group-scoped by design — the same player can have different histories in different groups |
-| **Deterministic stat recalculation** | Stats computed from match records at completion, never accumulated live — eliminates drift from undos and corrections |
-| **Socket.IO VersionError retry (3 attempts, exponential backoff)** | Concurrent delivery writes on the same match document are safe without a distributed lock |
-| **WebSocket-only transport** | Long-polling disabled to eliminate upgrade latency on mobile networks |
-| **`Barlow Condensed` with `tabular-nums`** | Score digits never shift layout width between single and double digits during live updates |
+- [ ] Scorecard sharing as image export
+- [ ] Push notifications for live match updates
+- [ ] Tournament bracket and points table
+- [ ] Match highlights reel — auto-generated from wickets and big hits
+- [ ] DLS method for rain-affected matches
+
+## Known Limitations
+
+- Password reset is name + email match only — no OTP email flow yet
+- No offline delivery queue — balls recorded during disconnect are lost on that session
+- Scoreboard viewer requires login — public shareable link planned
 
 ---
 
-*Built with React, Node.js, Socket.IO, and MongoDB Atlas.*
+<div align="center">
+
+Built with React · Node.js · Socket.IO · MongoDB Atlas  
+Deployed on Render + Vercel
+
+**[Play a match →](https://bit.ly/crictrack)**
+
+</div>
