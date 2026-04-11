@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import BottomNav from "../components/BottomNav";
 
-/* ─── Static style constants ────────────────────────────────────────────── */
+/* ─── Static style constants ─────────────────────────────────────────────── */
 const MAIN_CONTAINER_STYLE = {
   minHeight: "100vh",
   background: "#0d1117",
@@ -36,92 +36,34 @@ const SPINNING_CIRCLE_STYLE = {
   pointerEvents: "none",
 };
 
-const FEATURES_SECTION_STYLE = {
+const SECTION_STYLE = {
   maxWidth: 960,
   margin: "0 auto",
   padding: "64px 20px",
 };
 
-const FEATURES_HEADER_STYLE = {
+const SECTION_HEADER_STYLE = {
   textAlign: "center",
   marginBottom: 40,
-};
-
-const FEATURES_GRID_STYLE = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
-  gap: 14,
-};
-
-const STEPS_SECTION_STYLE = {
-  maxWidth: 960,
-  margin: "0 auto",
-  padding: "64px 20px",
-};
-
-const STEPS_HEADER_STYLE = {
-  textAlign: "center",
-  marginBottom: 48,
-};
-
-const STEPS_GRID_STYLE = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-  gap: 2,
-};
-
-const COMING_SOON_SECTION_STYLE = {
-  maxWidth: 960,
-  margin: "0 auto",
-  padding: "64px 20px",
-  textAlign: "center",
-};
-
-const COMING_SOON_BOX_STYLE = {
-  background: "linear-gradient(135deg, rgba(249,115,22,0.07), rgba(249,115,22,0.03))",
-  border: "1px solid rgba(249,115,22,0.15)",
-  borderRadius: 24,
-  padding: "48px 32px",
-  position: "relative",
-  overflow: "hidden",
-};
-
-const CTA_SECTION_STYLE = {
-  maxWidth: 960,
-  margin: "0 auto",
-  padding: "32px 20px 64px",
-  textAlign: "center",
-};
-
-const CTA_BUTTONS_CONTAINER_STYLE = {
-  marginTop: 36,
-  display: "flex",
-  gap: 12,
-  justifyContent: "center",
-  flexWrap: "wrap",
-};
-
-const SUGGESTIONS_SECTION_STYLE = {
-  maxWidth: 960,
-  margin: "0 auto",
-  padding: "64px 20px",
-  textAlign: "center",
 };
 
 const SUGGESTIONS_BOX_STYLE = {
   background: "rgba(255,255,255,0.02)",
   border: "1px solid rgba(255,255,255,0.07)",
-  borderRadius: 24,
-  padding: "48px 32px",
+  borderRadius: 20,
+  padding: "28px 24px",
   position: "relative",
   overflow: "hidden",
+  maxWidth: 560,
+  margin: "0 auto",
 };
 
 const SUGGESTIONS_OVERLAY_STYLE = {
   position: "absolute",
   inset: 0,
   borderRadius: 24,
-  background: "radial-gradient(ellipse at 50% 110%, rgba(99,102,241,0.06), transparent 65%)",
+  background:
+    "radial-gradient(ellipse at 50% 110%, rgba(99,102,241,0.06), transparent 65%)",
   pointerEvents: "none",
 };
 
@@ -157,92 +99,110 @@ function FloatingBall({ style, size = 80, opacity = 0.06 }) {
   );
 }
 
-function RoleCard({ emoji, label, desc, path, accent, navigate }) {
+function PerfectForCard({ emoji, label, desc }) {
   const [hovered, setHovered] = useState(false);
   return (
-    <button
-      onClick={() => navigate(path)}
+    <div
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        all: "unset",
-        cursor: "pointer",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: 12,
-        padding: "32px 24px",
-        borderRadius: 24,
-        flex: 1,
-        border: `1.5px solid ${hovered ? accent : "rgba(255,255,255,0.07)"}`,
-        background: hovered ? `${accent}12` : "rgba(255,255,255,0.03)",
+        padding: "28px 22px",
+        borderRadius: 20,
+        border: `1.5px solid ${hovered ? "rgba(249,115,22,0.4)" : "rgba(255,255,255,0.06)"}`,
+        background: hovered
+          ? "rgba(249,115,22,0.06)"
+          : "rgba(255,255,255,0.02)",
         transition: "all 0.18s ease",
         transform: hovered ? "translateY(-4px)" : "none",
-        boxShadow: hovered ? `0 12px 40px ${accent}20` : "none",
+        textAlign: "center",
       }}
     >
-      <div
+      <span style={{ fontSize: 36 }}>{emoji}</span>
+      <p
         style={{
-          width: 56,
-          height: 56,
-          borderRadius: 16,
-          background: hovered ? `${accent}22` : "rgba(255,255,255,0.05)",
-          border: `1px solid ${hovered ? accent + "44" : "rgba(255,255,255,0.08)"}`,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontSize: 26,
-          transition: "all 0.18s",
-        }}
-      >
-        {emoji}
-      </div>
-      <div style={{ textAlign: "center" }}>
-        <p
-          style={{
-            fontFamily: "'Barlow Condensed', sans-serif",
-            fontSize: 22,
-            fontWeight: 900,
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
-            color: hovered ? accent : "#e2e8f0",
-            transition: "color 0.18s",
-          }}
-        >
-          {label}
-        </p>
-        <p
-          style={{
-            marginTop: 4,
-            fontSize: 12,
-            color: "#64748b",
-            lineHeight: 1.5,
-          }}
-        >
-          {desc}
-        </p>
-      </div>
-      <span
-        style={{
-          marginTop: 4,
-          padding: "7px 20px",
-          borderRadius: 99,
-          background: hovered ? accent : "rgba(255,255,255,0.05)",
-          color: hovered ? "#0d1117" : "#475569",
-          fontSize: 11,
+          marginTop: 12,
+          fontFamily: "'Barlow Condensed', sans-serif",
+          fontSize: 20,
           fontWeight: 900,
-          letterSpacing: "0.12em",
+          letterSpacing: "0.1em",
           textTransform: "uppercase",
-          transition: "all 0.18s",
+          color: hovered ? "#f97316" : "#e2e8f0",
+          transition: "color 0.18s",
         }}
       >
-        Enter →
-      </span>
-    </button>
+        {label}
+      </p>
+      <p
+        style={{
+          marginTop: 6,
+          fontSize: 13,
+          color: "#64748b",
+          lineHeight: 1.6,
+        }}
+      >
+        {desc}
+      </p>
+    </div>
   );
 }
 
-function FeatureCard({ icon, title, desc, soon = false }) {
+function DifferentCard({ icon, title, desc, accent = "#f97316" }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        padding: "28px 24px",
+        borderRadius: 20,
+        border: `1.5px solid ${hovered ? accent + "55" : "rgba(255,255,255,0.06)"}`,
+        background: hovered ? accent + "08" : "rgba(255,255,255,0.02)",
+        transition: "all 0.18s ease",
+        transform: hovered ? "translateY(-4px)" : "none",
+      }}
+    >
+      <span style={{ fontSize: 32 }}>{icon}</span>
+      <p
+        style={{
+          marginTop: 14,
+          fontFamily: "'Barlow Condensed', sans-serif",
+          fontSize: 20,
+          fontWeight: 900,
+          letterSpacing: "0.08em",
+          textTransform: "uppercase",
+          color: hovered ? accent : "#e2e8f0",
+          transition: "color 0.18s",
+        }}
+      >
+        {title}
+      </p>
+      <p
+        style={{
+          marginTop: 6,
+          fontSize: 13,
+          color: "#64748b",
+          lineHeight: 1.6,
+        }}
+      >
+        {desc}
+      </p>
+      <p
+        style={{
+          marginTop: 10,
+          fontSize: 10,
+          fontWeight: 900,
+          letterSpacing: "0.15em",
+          textTransform: "uppercase",
+          color: accent + "80",
+        }}
+      >
+        No other app does this
+      </p>
+    </div>
+  );
+}
+
+function FeatureCard({ icon, title, desc }) {
   return (
     <div
       style={{
@@ -250,29 +210,8 @@ function FeatureCard({ icon, title, desc, soon = false }) {
         border: "1px solid rgba(255,255,255,0.06)",
         borderRadius: 16,
         padding: "20px 18px",
-        position: "relative",
-        overflow: "hidden",
       }}
     >
-      {soon && (
-        <span
-          style={{
-            position: "absolute",
-            top: 10,
-            right: 10,
-            background: "#f97316",
-            color: "#0d1117",
-            fontSize: 9,
-            fontWeight: 900,
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
-            padding: "2px 7px",
-            borderRadius: 99,
-          }}
-        >
-          Soon
-        </span>
-      )}
       <span style={{ fontSize: 26 }}>{icon}</span>
       <p
         style={{
@@ -343,73 +282,93 @@ export default function LandingPage() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  const roles = [
+  const perfectFor = [
     {
-      emoji: "👀",
-      label: "Viewer",
-      desc: "Watch live scores & match updates in real time",
-      path: "/view",
-      accent: "#38bdf8",
+      emoji: "🏘️",
+      label: "Gully Cricket",
+      desc: "Street games with friends — no fixed rules, no problem.",
     },
     {
-      emoji: "✋",
-      label: "Umpire",
-      desc: "Control the match — ball by ball",
-      path: "/umpire",
-      accent: "#f97316",
+      emoji: "🏟️",
+      label: "Turf Cricket",
+      desc: "Weekend warrior groups who take it seriously but keep it fun.",
+    },
+    {
+      emoji: "🎓",
+      label: "College Cricket",
+      desc: "Tournaments, rivalries, and career stats that actually matter.",
     },
   ];
 
-  const features = [
-    {
-      icon: "📡",
-      title: "Live Score Tracking",
-      desc: "Ball-by-ball updates visible to everyone watching the match.",
-    },
-    {
-      icon: "📊",
-      title: "Player Stats",
-      desc: "Runs, wickets, strike rates — full profiles for every player.",
-    },
-    {
-      icon: "📜",
-      title: "Match History",
-      desc: "Go back and relive every match ever played on CricTrack.",
-    },
-    {
-      icon: "👥",
-      title: "Team Management",
-      desc: "Build squads, manage rosters, pick your playing XI.",
-    },
+  const different = [
     {
       icon: "🃏",
       title: "Joker Player",
-      desc: "One player, two teams. Perfect for odd-numbered casual games.",
-      soon: true,
+      desc: "One player bats for one team and bowls for the other — in the same match. Stats tracked correctly for both sides.",
+      accent: "#f97316",
     },
     {
-      icon: "⏱️",
-      title: "Late Player Join",
-      desc: "Two friends arrive after 1 over? Each team takes one. Fair game.",
-      soon: true,
+      icon: "⚙️",
+      title: "Mid-Match Flexibility",
+      desc: "Change overs mid-game. Add a player who just arrived. Reshuffle teams at over break. No restarts needed.",
+      accent: "#38bdf8",
+    },
+    {
+      icon: "🪑",
+      title: "Bench & Return",
+      desc: "Retire a batter, bring them back later. Real turf cricket rules — not just official format rules.",
+      accent: "#a78bfa",
     },
   ];
 
   const steps = [
     {
       num: "01",
-      title: "Set up the match",
-      desc: "Name your teams, add players, set overs. Done in under a minute.",
+      title: "Create your group & add players",
+      desc: "Invite your squad with a 6-character code. Add player photos. Everyone's in under a minute.",
     },
     {
       num: "02",
-      title: "Umpire goes live",
-      desc: "The umpire tracks every ball — runs, wickets, extras, the works.",
+      title: "Start a match, do the toss",
+      desc: "Set teams, pick overs, flip the coin. Animated toss, bat or bowl choice — match starts live.",
     },
     {
       num: "03",
-      title: "Everyone watches",
-      desc: "Players and fans follow the live score from any device, no login needed.",
+      title: "Score live — everyone watches",
+      desc: "Every ball updates instantly on every device. Open the scoreboard link on any phone. No refresh, no lag.",
+    },
+  ];
+
+  const features = [
+    {
+      icon: "📡",
+      title: "Live Scoring",
+      desc: "Ball-by-ball updates — runs, extras, wickets, strike rotation. All automatic.",
+    },
+    {
+      icon: "📊",
+      title: "The Dugout",
+      desc: "Career batting and bowling stats per group. Flip card per player. Full history.",
+    },
+    {
+      icon: "📜",
+      title: "Match History",
+      desc: "Every match ever played — full scorecard, fall of wickets, both innings.",
+    },
+    {
+      icon: "🏆",
+      title: "Match Summary",
+      desc: "Man of the Match, top scorer, best economy, best strike rate. Auto-calculated.",
+    },
+    {
+      icon: "🔄",
+      title: "Over Break Controls",
+      desc: "New bowler, change overs, add players, set joker — all from one drawer.",
+    },
+    {
+      icon: "👥",
+      title: "Group Management",
+      desc: "Multiple groups, invite codes, admin roles. Each group has its own player pool and stats.",
     },
   ];
 
@@ -425,6 +384,7 @@ export default function LandingPage() {
         .fade-up-3 { animation-delay: 0.25s; }
         .fade-up-4 { animation-delay: 0.35s; }
         .fade-up-5 { animation-delay: 0.45s; }
+        .fade-up-6 { animation-delay: 0.55s; }
         .spin-slow { animation: spinSlow 18s linear infinite; }
         .divider { border: none; height: 1px; background: linear-gradient(to right, transparent, rgba(255,255,255,0.07), transparent); margin: 0; }
         * { box-sizing: border-box; }
@@ -485,7 +445,6 @@ export default function LandingPage() {
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
             {isAuthenticated ? (
               <>
-                {/* Profile avatar - navigates to /profile */}
                 <button
                   onClick={() => navigate("/profile")}
                   style={{
@@ -536,8 +495,6 @@ export default function LandingPage() {
                     </span>
                   )}
                 </button>
-
-                {/* Active group pill - only shown when a group is selected */}
                 {activeGroupName && (
                   <button
                     onClick={() => navigate("/groups")}
@@ -588,7 +545,6 @@ export default function LandingPage() {
               </>
             ) : (
               <>
-                {/* Login button */}
                 <button
                   onClick={() => navigate("/login")}
                   style={{
@@ -615,8 +571,6 @@ export default function LandingPage() {
                 >
                   Log in
                 </button>
-
-                {/* Register button */}
                 <button
                   onClick={() => navigate("/register")}
                   style={{
@@ -648,7 +602,7 @@ export default function LandingPage() {
         </div>
       </nav>
 
-      {/* HERO */}
+      {/* ═══ HERO ═══ */}
       <section style={HERO_SECTION_STYLE}>
         <FloatingBall
           style={{ top: "8%", left: "6%", filter: "blur(8px)" }}
@@ -670,11 +624,7 @@ export default function LandingPage() {
           size={90}
           opacity={0.07}
         />
-        <div
-          aria-hidden
-          className="spin-slow"
-          style={SPINNING_CIRCLE_STYLE}
-        />
+        <div aria-hidden className="spin-slow" style={SPINNING_CIRCLE_STYLE} />
 
         <div
           className="fade-up fade-up-1"
@@ -744,79 +694,77 @@ export default function LandingPage() {
           </span>
         </p>
 
+        {/* CTA Buttons */}
         <div
           className="fade-up fade-up-4"
           style={{
-            marginTop: 44,
+            marginTop: 40,
             display: "flex",
-            gap: 14,
-            width: "100%",
-            maxWidth: 500,
+            gap: 12,
             justifyContent: "center",
+            flexWrap: "wrap",
           }}
         >
-          {roles.map((r) => (
-            <RoleCard key={r.label} {...r} navigate={navigate} />
-          ))}
-        </div>
-
-        <div
-          className="fade-up fade-up-5"
-          style={{
-            marginTop: 20,
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-          }}
-        >
-          <div
-            style={{
-              width: 40,
-              height: 1,
-              background: "rgba(255,255,255,0.08)",
-            }}
-          />
           <button
-            onClick={() => navigate("/players")}
+            onClick={() => navigate("/login")}
             style={{
               all: "unset",
               cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "7px 16px",
-              borderRadius: 99,
-              border: "1px solid rgba(255,255,255,0.07)",
-              background: "rgba(255,255,255,0.03)",
-              color: "#475569",
-              fontSize: 12,
-              fontWeight: 700,
+              padding: "14px 32px",
+              borderRadius: 14,
+              background: "#f97316",
+              color: "#0d1117",
+              fontFamily: "'Barlow Condensed', sans-serif",
+              fontSize: 16,
+              fontWeight: 900,
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
               transition: "all 0.15s",
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.color = "#94a3b8";
-              e.currentTarget.style.borderColor = "rgba(255,255,255,0.15)";
+              e.currentTarget.style.background = "#ea6c0a";
+              e.currentTarget.style.transform = "translateY(-2px)";
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.color = "#475569";
-              e.currentTarget.style.borderColor = "rgba(255,255,255,0.07)";
+              e.currentTarget.style.background = "#f97316";
+              e.currentTarget.style.transform = "none";
             }}
           >
-            🏟️ <span>Browse the Dugout</span>
-            <span style={{ fontSize: 10, color: "#334155" }}>
-              — stats & profiles
-            </span>
+            🏏 Start Playing
           </button>
-          <div
+          <button
+            onClick={() => navigate("/login?demo=1")}
             style={{
-              width: 40,
-              height: 1,
-              background: "rgba(255,255,255,0.08)",
+              all: "unset",
+              cursor: "pointer",
+              padding: "14px 32px",
+              borderRadius: 14,
+              border: "1.5px solid rgba(249,115,22,0.4)",
+              background: "rgba(249,115,22,0.08)",
+              color: "#f97316",
+              fontFamily: "'Barlow Condensed', sans-serif",
+              fontSize: 16,
+              fontWeight: 900,
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
+              transition: "all 0.15s",
             }}
-          />
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "rgba(249,115,22,0.15)";
+              e.currentTarget.style.transform = "translateY(-2px)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "rgba(249,115,22,0.08)";
+              e.currentTarget.style.transform = "none";
+            }}
+          >
+            Try Demo
+          </button>
         </div>
 
+        {/* Scroll indicator */}
         <div
+          className="fade-up fade-up-5"
           style={{
             position: "absolute",
             bottom: 28,
@@ -850,9 +798,9 @@ export default function LandingPage() {
 
       <hr className="divider" />
 
-      {/* FEATURES */}
-      <section style={FEATURES_SECTION_STYLE}>
-        <div style={FEATURES_HEADER_STYLE}>
+      {/* ═══ PERFECT FOR ═══ */}
+      <section style={SECTION_STYLE}>
+        <div style={SECTION_HEADER_STYLE}>
           <p
             style={{
               fontSize: 11,
@@ -863,7 +811,7 @@ export default function LandingPage() {
               marginBottom: 10,
             }}
           >
-            What's Inside
+            Perfect For
           </p>
           <h2
             style={{
@@ -874,7 +822,7 @@ export default function LandingPage() {
               lineHeight: 1.05,
             }}
           >
-            Everything your match needs
+            Your cricket. Your rules.
           </h2>
           <p
             style={{
@@ -885,22 +833,82 @@ export default function LandingPage() {
               margin: "12px auto 0",
             }}
           >
-            Built for the chaos of casual cricket — with the discipline of
-            proper scoring.
+            Not just for official formats. Built for how cricket actually
+            happens.
           </p>
         </div>
-        <div style={FEATURES_GRID_STYLE}>
-          {features.map((f) => (
-            <FeatureCard key={f.title} {...f} />
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+            gap: 14,
+          }}
+        >
+          {perfectFor.map((c) => (
+            <PerfectForCard key={c.label} {...c} />
           ))}
         </div>
       </section>
 
       <hr className="divider" />
 
-      {/* HOW IT WORKS */}
-      <section style={STEPS_SECTION_STYLE}>
-        <div style={STEPS_HEADER_STYLE}>
+      {/* ═══ WHAT MAKES CRICTRACK DIFFERENT ═══ */}
+      <section style={SECTION_STYLE}>
+        <div style={SECTION_HEADER_STYLE}>
+          <p
+            style={{
+              fontSize: 11,
+              fontWeight: 900,
+              letterSpacing: "0.2em",
+              textTransform: "uppercase",
+              color: "#f97316",
+              marginBottom: 10,
+            }}
+          >
+            Only on CricTrack
+          </p>
+          <h2
+            style={{
+              fontFamily: "'Barlow Condensed', sans-serif",
+              fontSize: "clamp(32px, 6vw, 52px)",
+              fontWeight: 900,
+              textTransform: "uppercase",
+              lineHeight: 1.05,
+            }}
+          >
+            Features no other app has
+          </h2>
+          <p
+            style={{
+              marginTop: 12,
+              color: "#64748b",
+              fontSize: 14,
+              maxWidth: 440,
+              margin: "12px auto 0",
+            }}
+          >
+            Built specifically for the situations every local cricket player
+            actually faces.
+          </p>
+        </div>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+            gap: 14,
+          }}
+        >
+          {different.map((c) => (
+            <DifferentCard key={c.title} {...c} />
+          ))}
+        </div>
+      </section>
+
+      <hr className="divider" />
+
+      {/* ═══ UP AND RUNNING IN 3 STEPS ═══ */}
+      <section style={SECTION_STYLE}>
+        <div style={{ ...SECTION_HEADER_STYLE, marginBottom: 48 }}>
           <p
             style={{
               fontSize: 11,
@@ -924,7 +932,13 @@ export default function LandingPage() {
             Up and running in 3 steps
           </h2>
         </div>
-        <div style={STEPS_GRID_STYLE}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+            gap: 2,
+          }}
+        >
           {steps.map((s, i) => (
             <div
               key={s.num}
@@ -969,98 +983,68 @@ export default function LandingPage() {
 
       <hr className="divider" />
 
-      {/* COMING SOON */}
-      <section style={COMING_SOON_SECTION_STYLE}>
-        <div style={COMING_SOON_BOX_STYLE}>
-          <div style={SUGGESTIONS_OVERLAY_STYLE} />
-          <FloatingBall
-            style={{ top: -30, right: -30 }}
-            size={120}
-            opacity={0.1}
-          />
-          <FloatingBall
-            style={{ bottom: -20, left: -20 }}
-            size={80}
-            opacity={0.08}
-          />
-          <span style={{ fontSize: 40 }}>🃏</span>
-          <h2
-            style={{
-              marginTop: 16,
-              fontFamily: "'Barlow Condensed', sans-serif",
-              fontSize: "clamp(28px, 6vw, 44px)",
-              fontWeight: 900,
-              textTransform: "uppercase",
-              lineHeight: 1.1,
-            }}
-          >
-            Joker Player & Late Arrivals
-          </h2>
+      {/* ═══ WHAT'S INSIDE ═══ */}
+      <section style={SECTION_STYLE}>
+        <div style={SECTION_HEADER_STYLE}>
           <p
             style={{
-              marginTop: 12,
-              fontSize: 15,
-              color: "#94a3b8",
-              maxWidth: 480,
-              margin: "12px auto 0",
-              lineHeight: 1.7,
-            }}
-          >
-            Real casual cricket has odd players and friends who show up late.
-            <br />
-            <span style={{ color: "#f97316", fontWeight: 700 }}>
-              We get it. We're building it.
-            </span>
-          </p>
-          <div
-            style={{
-              marginTop: 28,
-              display: "flex",
-              justifyContent: "center",
-              gap: 12,
-              flexWrap: "wrap",
-            }}
-          >
-            {[
-              { icon: "🃏", text: "Joker plays for both teams" },
-              { icon: "👬", text: "2 late friends? One each." },
-            ].map(({ icon, text }) => (
-              <div
-                key={text}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  padding: "9px 16px",
-                  borderRadius: 99,
-                  border: "1px solid rgba(249,115,22,0.2)",
-                  background: "rgba(249,115,22,0.06)",
-                  fontSize: 12,
-                  color: "#cbd5e1",
-                  fontWeight: 600,
-                }}
-              >
-                {icon} {text}
-              </div>
-            ))}
-          </div>
-          <p
-            style={{
-              marginTop: 24,
               fontSize: 11,
               fontWeight: 900,
               letterSpacing: "0.2em",
               textTransform: "uppercase",
-              color: "rgba(249,115,22,0.5)",
+              color: "#f97316",
+              marginBottom: 10,
             }}
           >
-            Coming soon — stay tuned
+            What's Inside
           </p>
+          <h2
+            style={{
+              fontFamily: "'Barlow Condensed', sans-serif",
+              fontSize: "clamp(32px, 6vw, 52px)",
+              fontWeight: 900,
+              textTransform: "uppercase",
+              lineHeight: 1.05,
+            }}
+          >
+            Everything your match needs
+          </h2>
+          <p
+            style={{
+              marginTop: 12,
+              color: "#64748b",
+              fontSize: 14,
+              maxWidth: 400,
+              margin: "12px auto 0",
+            }}
+          >
+            Built for the chaos of casual cricket — with the discipline of
+            proper scoring.
+          </p>
+        </div>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
+            gap: 14,
+          }}
+        >
+          {features.map((f) => (
+            <FeatureCard key={f.title} {...f} />
+          ))}
         </div>
       </section>
 
-      {/* BOTTOM CTA */}
-      <section style={CTA_SECTION_STYLE}>
+      <hr className="divider" />
+
+      {/* ═══ FINAL CTA ═══ */}
+      <section
+        style={{
+          ...SECTION_STYLE,
+          textAlign: "center",
+          padding: "32px 20px 64px",
+        }}
+      >
         <h2
           style={{
             fontFamily: "'Barlow Condensed', sans-serif",
@@ -1070,7 +1054,7 @@ export default function LandingPage() {
             lineHeight: 1.05,
           }}
         >
-          Ready to play?
+          Your next match is
           <br />
           <span
             style={{
@@ -1079,80 +1063,101 @@ export default function LandingPage() {
               WebkitTextFillColor: "transparent",
             }}
           >
-            Pick your role.
+            one tap away.
           </span>
         </h2>
-        <div style={CTA_BUTTONS_CONTAINER_STYLE}>
-          {roles.map((r) => (
-            <button
-              key={r.label}
-              onClick={() => navigate(r.path)}
-              style={{
-                all: "unset",
-                cursor: "pointer",
-                padding: "14px 28px",
-                borderRadius: 14,
-                border: `1.5px solid ${r.accent}44`,
-                background: `${r.accent}10`,
-                color: r.accent,
-                fontFamily: "'Barlow Condensed', sans-serif",
-                fontSize: 16,
-                fontWeight: 800,
-                letterSpacing: "0.12em",
-                textTransform: "uppercase",
-                transition: "all 0.15s",
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = r.accent;
-                e.currentTarget.style.color = "#0d1117";
-                e.currentTarget.style.transform = "translateY(-2px)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = `${r.accent}10`;
-                e.currentTarget.style.color = r.accent;
-                e.currentTarget.style.transform = "none";
-              }}
-            >
-              {r.emoji} {r.label}
-            </button>
-          ))}
-        </div>
-        <button
-          onClick={() => navigate("/players")}
+        <p
           style={{
-            all: "unset",
-            cursor: "pointer",
-            marginTop: 16,
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            color: "#334155",
-            fontSize: 12,
-            fontWeight: 600,
-            transition: "color 0.15s",
+            marginTop: 12,
+            fontSize: 14,
+            color: "#475569",
+            maxWidth: 320,
+            margin: "12px auto 0",
           }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = "#64748b")}
-          onMouseLeave={(e) => (e.currentTarget.style.color = "#334155")}
         >
-          or browse the 🏟️ Dugout →
-        </button>
+          Free forever. No installs. Works on any phone.
+        </p>
+        <div
+          style={{
+            marginTop: 36,
+            display: "flex",
+            gap: 12,
+            justifyContent: "center",
+            flexWrap: "wrap",
+          }}
+        >
+          <button
+            onClick={() => navigate("/login")}
+            style={{
+              all: "unset",
+              cursor: "pointer",
+              padding: "14px 32px",
+              borderRadius: 14,
+              background: "#f97316",
+              color: "#0d1117",
+              fontFamily: "'Barlow Condensed', sans-serif",
+              fontSize: 16,
+              fontWeight: 900,
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
+              transition: "all 0.15s",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "#ea6c0a";
+              e.currentTarget.style.transform = "translateY(-2px)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "#f97316";
+              e.currentTarget.style.transform = "none";
+            }}
+          >
+            Start Playing →
+          </button>
+          <button
+            onClick={() => navigate("/login?demo=1")}
+            style={{
+              all: "unset",
+              cursor: "pointer",
+              padding: "14px 32px",
+              borderRadius: 14,
+              border: "1.5px solid rgba(249,115,22,0.4)",
+              background: "rgba(249,115,22,0.08)",
+              color: "#f97316",
+              fontFamily: "'Barlow Condensed', sans-serif",
+              fontSize: 16,
+              fontWeight: 900,
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
+              transition: "all 0.15s",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "rgba(249,115,22,0.15)";
+              e.currentTarget.style.transform = "translateY(-2px)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "rgba(249,115,22,0.08)";
+              e.currentTarget.style.transform = "none";
+            }}
+          >
+            🎮 Try Demo
+          </button>
+        </div>
       </section>
 
       <hr className="divider" />
 
-      {/* SUGGESTIONS */}
-      <section style={SUGGESTIONS_SECTION_STYLE}>
+      {/* ═══ SUGGESTIONS ═══ */}
+      <section
+        style={{ ...SECTION_STYLE, textAlign: "center", padding: "40px 20px" }}
+      >
         <div style={SUGGESTIONS_BOX_STYLE}>
           <div style={SUGGESTIONS_OVERLAY_STYLE} />
-          <span style={{ fontSize: 40 }}>💡</span>
+          <span style={{ fontSize: 28 }}>💡</span>
           <h2
             style={{
               marginTop: 16,
               fontFamily: "'Barlow Condensed', sans-serif",
-              fontSize: "clamp(26px, 5vw, 40px)",
+              fontSize: "clamp(20px, 4vw, 28px)",
               fontWeight: 900,
               textTransform: "uppercase",
               lineHeight: 1.1,
@@ -1166,7 +1171,7 @@ export default function LandingPage() {
               marginTop: 12,
               fontSize: 14,
               color: "#64748b",
-              maxWidth: 420,
+              maxWidth: 340,
               margin: "12px auto 0",
               lineHeight: 1.8,
             }}
@@ -1183,8 +1188,8 @@ export default function LandingPage() {
               display: "inline-flex",
               alignItems: "center",
               gap: 8,
-              marginTop: 28,
-              padding: "13px 26px",
+              marginTop: 20,
+              padding: "10px 20px",
               borderRadius: 12,
               border: "1px solid rgba(249,115,22,0.35)",
               background: emailHovered ? "#f97316" : "rgba(249,115,22,0.09)",
@@ -1213,7 +1218,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* FOOTER */}
+      {/* ═══ FOOTER ═══ */}
       <footer style={FOOTER_STYLE}>
         <div style={FOOTER_LOGO_CONTAINER_STYLE}>
           <div

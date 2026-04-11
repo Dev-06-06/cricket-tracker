@@ -51,6 +51,45 @@ export default function RegisterPage() {
 
       <div className="mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-md items-center">
         <section className="w-full rounded-2xl border border-white/8 bg-slate-900/60 p-6 shadow-2xl shadow-black/30">
+
+          {/* Logo — navigates to landing */}
+          <div className="flex justify-center mb-6">
+            <button
+              onClick={() => navigate("/")}
+              style={{ all: "unset", cursor: "pointer" }}
+            >
+              <div className="flex items-center gap-2">
+                <div
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: "50%",
+                    background: "#f97316",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <span style={{ fontSize: 14, fontWeight: 900, color: "#0d1117" }}>
+                    C
+                  </span>
+                </div>
+                <span
+                  style={{
+                    fontFamily: "'Barlow Condensed', sans-serif",
+                    fontSize: 18,
+                    fontWeight: 900,
+                    letterSpacing: "0.18em",
+                    textTransform: "uppercase",
+                    color: "#fff",
+                  }}
+                >
+                  CricTrack
+                </span>
+              </div>
+            </button>
+          </div>
+
           <div className="mb-5">
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#f97316]">
               Join CricTrack
