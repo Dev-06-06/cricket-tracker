@@ -5,7 +5,11 @@ const {
   login,
   me,
   updateProfile,
+  forgotPassword,
   resetPassword,
+  verifyEmail,
+  resendOTP,
+  googleAuth,
 } = require("../controllers/authController");
 const authMiddleware = require("../middleware/authMiddleware");
 
@@ -27,5 +31,9 @@ router.post("/login", authLimiter, login);
 router.get("/me", authMiddleware, me);
 router.put("/profile", authMiddleware, updateProfile);
 router.post("/reset-password", authLimiter, resetPassword);
+router.post("/verify-email", verifyEmail);
+router.post("/resend-otp", resendOTP);
+router.post("/forgot-password", forgotPassword);
+router.post("/google", googleAuth);
 
 module.exports = router;

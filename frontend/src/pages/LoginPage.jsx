@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { loginUser } from "../services/api";
 import { useAuth } from "../context/AuthContext";
+import { useGoogleAuth } from "../hooks/useGoogleAuth";
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -16,7 +17,13 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [isDemoFilled, setIsDemoFilled] = useState(false);
 
+  const { initGoogleButton } = useGoogleAuth("/view");
+
   useEffect(() => {
+    initGoogleButton("google-login-btn");
+  }, [initGoogleButton]);
+
+  useEffect(()=> {
     if (searchParams.get("demo") === "1") {
       setEmail("demo@crictrack.in");
       setPassword("Demo@1234");
@@ -220,6 +227,15 @@ export default function LoginPage() {
               {submitting ? "Logging in..." : "Login"}
             </button>
           </form>
+
+          <div className="mt-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex-1 h-px bg-white/8" />
+              <span className="text-xs text-slate-600">or</span>
+              <div className="flex-1 h-px bg-white/8" />
+            </div>
+            <div id="google-login-btn" className="w-full" />
+          </div>
 
           <p className="mt-5 text-center text-sm text-slate-400">
             New here?{" "}

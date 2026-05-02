@@ -132,6 +132,17 @@ export function registerUser(payload) {
   });
 }
 
+export async function googleLogin(idToken) {
+  const res = await fetch(`${API_BASE_URL}/api/auth/google`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ idToken }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || "Google login failed");
+  return data;
+}
+
 export function getMyGroups(token) {
   return request("/api/groups", {
     headers: {

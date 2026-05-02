@@ -1,17 +1,21 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { registerUser } from "../services/api";
-import { useAuth } from "../context/AuthContext";
+import { useGoogleAuth } from "../hooks/useGoogleAuth";
 
 export default function RegisterPage() {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { initGoogleButton } = useGoogleAuth("/view");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    initGoogleButton("google-register-btn");
+  }, [initGoogleButton]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -30,8 +34,11 @@ export default function RegisterPage() {
         password,
       });
 
-      login(response.token);
-      navigate("/", { replace: true });
+      // Don't log in yet - user needs to verify email first
+      navigate("/verify-email", {
+        state: { email: email.trim().toLowerCase() },
+        replace: true,
+      });
     } catch (requestError) {
       setError(requestError.message || "Unable to register");
     } finally {
@@ -51,7 +58,6 @@ export default function RegisterPage() {
 
       <div className="mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-md items-center">
         <section className="w-full rounded-2xl border border-white/8 bg-slate-900/60 p-6 shadow-2xl shadow-black/30">
-
           {/* Logo — navigates to landing */}
           <div className="flex justify-center mb-6">
             <button
@@ -70,7 +76,9 @@ export default function RegisterPage() {
                     justifyContent: "center",
                   }}
                 >
-                  <span style={{ fontSize: 14, fontWeight: 900, color: "#0d1117" }}>
+                  <span
+                    style={{ fontSize: 14, fontWeight: 900, color: "#0d1117" }}
+                  >
                     C
                   </span>
                 </div>
@@ -172,15 +180,35 @@ export default function RegisterPage() {
                   tabIndex={-1}
                 >
                   {showPassword ? (
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
-                      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
-                      <line x1="1" y1="1" x2="23" y2="23"/>
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+                      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+                      <line x1="1" y1="1" x2="23" y2="23" />
                     </svg>
                   ) : (
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                      <circle cx="12" cy="12" r="3"/>
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                      <circle cx="12" cy="12" r="3" />
                     </svg>
                   )}
                 </button>
@@ -194,6 +222,15 @@ export default function RegisterPage() {
             >
               {submitting ? "Creating account..." : "Register"}
             </button>
+
+            <div className="mt-4">
+              <div className="mb-4 flex items-center gap-3">
+                <div className="h-px flex-1 bg-white/8" />
+                <span className="text-xs text-slate-600">or</span>
+                <div className="h-px flex-1 bg-white/8" />
+              </div>
+              <div id="google-register-btn" className="w-full" />
+            </div>
           </form>
 
           <p className="mt-5 text-center text-sm text-slate-400">

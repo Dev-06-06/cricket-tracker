@@ -17,7 +17,9 @@ const userSchema = new mongoose.Schema(
     },
     password: {
       type: String,
-      required: true,
+      required: function () {
+        return this.authProvider === "local";
+      },
       minlength: 6,
       select: false,
     },
@@ -25,6 +27,40 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: "",
       trim: true,
+    },
+    isVerified: {
+      type: Boolean,
+      default: false,
+    },
+    authProvider: {
+      type: String,
+      enum: ["local", "google"],
+      default: "local",
+    },
+    googleId: {
+      type: String,
+      default: null,
+      sparse: true,
+    },
+    emailOTP: {
+      type: String,
+      default: null,
+      select: false,
+    },
+    emailOTPExpiry: {
+      type: Date,
+      default: null,
+      select: false,
+    },
+    passwordResetOTP: {
+      type: String,
+      default: null,
+      select: false,
+    },
+    passwordResetExpiry: {
+      type: Date,
+      default: null,
+      select: false,
     },
     // ❌ REMOVED: groups: [ObjectId]
     // Reason: was a redundant bidirectional ref that required 2 writes on
@@ -35,6 +71,7 @@ const userSchema = new mongoose.Schema(
 );
 
 // Index already created by unique:true on email above.
+userSchema.index({ googleId: 1 }, { unique: true, sparse: true });
 
 userSchema.pre("save", async function hashPassword(next) {
   if (!this.isModified("password")) return next();
