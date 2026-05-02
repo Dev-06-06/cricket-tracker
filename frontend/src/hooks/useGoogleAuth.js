@@ -28,13 +28,15 @@ export function useGoogleAuth(redirectTo = "/view") {
       window.google.accounts.id.initialize({
         client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
         callback: handleCredentialResponse,
+        ux_mode: "redirect",
+        redirect_uri: window.location.origin,
       });
       window.google.accounts.id.renderButton(
         document.getElementById(buttonElementId),
         {
           theme: "filled_black",
           size: "large",
-          width: "100%",
+          width: 400,
           text: "continue_with",
           shape: "rectangular",
         },
