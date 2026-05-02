@@ -1183,7 +1183,7 @@ export default function LandingPage() {
             </span>
           </p>
           <a
-            href="mailto:devtry55@gmail.com"
+            href="mailto:devprojects.notify@gmail.com"
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -1203,7 +1203,7 @@ export default function LandingPage() {
             onMouseEnter={() => setEmailHovered(true)}
             onMouseLeave={() => setEmailHovered(false)}
           >
-            ✉️ devtry55@gmail.com
+            ✉️ devprojects.notify@gmail.com
           </a>
           <p
             style={{
