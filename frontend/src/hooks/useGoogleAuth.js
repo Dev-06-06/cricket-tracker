@@ -28,8 +28,7 @@ export function useGoogleAuth(redirectTo = "/view") {
       window.google.accounts.id.initialize({
         client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
         callback: handleCredentialResponse,
-        ux_mode: "redirect",
-        redirect_uri: window.location.origin,
+        itp_support: true,
       });
       window.google.accounts.id.renderButton(
         document.getElementById(buttonElementId),
