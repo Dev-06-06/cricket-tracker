@@ -15,7 +15,10 @@ export function useGoogleAuth(redirectTo = "/view") {
         navigate(redirectTo, { replace: true });
       } catch (err) {
         console.error("Google login failed:", err.message);
-        // Return error so the calling component can show it
+        alert(
+          "Google sign-in was blocked by your browser. " +
+            "Please try email login or disable your browser shields for this site.",
+        );
         return err.message;
       }
     },
