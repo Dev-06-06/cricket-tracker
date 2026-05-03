@@ -30,6 +30,14 @@ app.use((req, res, next) => {
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+app.get("/health", (req, res) => {
+  res.status(200).json({
+    status: "ok",
+    service: "crictrack",
+    timestamp: new Date().toISOString(),
+  });
+});
+
 const playerRoutes = require("./routes/playerRoutes");
 const authRoutes = require("./routes/authRoutes");
 const groupRoutes = require("./routes/groupRoutes");
