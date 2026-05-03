@@ -53,12 +53,16 @@ const register = async (req, res) => {
         existingUser.emailOTP = hash;
         existingUser.emailOTPExpiry = new Date(Date.now() + 10 * 60 * 1000);
         await existingUser.save();
-        await sendOTPEmail({
-          to: normalizedEmail,
-          subject: "CricTrack — Verify your account",
-          otp,
-          purpose: "verify",
-        });
+        try {
+          await sendOTPEmail({
+            to: normalizedEmail,
+            subject: "CricTrack — Verify your account",
+            otp,
+            purpose: "verify",
+          });
+        } catch (mailErr) {
+          console.error("Failed to send OTP email:", mailErr.message);
+        }
         return res.status(200).json({
           success: true,
           requiresVerification: true,
@@ -83,12 +87,16 @@ const register = async (req, res) => {
       emailOTPExpiry: new Date(Date.now() + 10 * 60 * 1000),
     });
 
-    await sendOTPEmail({
-      to: normalizedEmail,
-      subject: "CricTrack — Verify your account",
-      otp,
-      purpose: "verify",
-    });
+    try {
+      await sendOTPEmail({
+        to: normalizedEmail,
+        subject: "CricTrack — Verify your account",
+        otp,
+        purpose: "verify",
+      });
+    } catch (mailErr) {
+      console.error("Failed to send OTP email:", mailErr.message);
+    }
 
     return res.status(201).json({
       success: true,
@@ -264,12 +272,16 @@ const resendOTP = async (req, res) => {
     user.emailOTPExpiry = new Date(Date.now() + 10 * 60 * 1000);
     await user.save();
 
-    await sendOTPEmail({
-      to: normalizedEmail,
-      subject: "CricTrack — New verification OTP",
-      otp,
-      purpose: "verify",
-    });
+    try {
+      await sendOTPEmail({
+        to: normalizedEmail,
+        subject: "CricTrack — New verification OTP",
+        otp,
+        purpose: "verify",
+      });
+    } catch (mailErr) {
+      console.error("Failed to send OTP email:", mailErr.message);
+    }
 
     return res.status(200).json({
       success: true,
@@ -476,12 +488,16 @@ const forgotPassword = async (req, res) => {
     user.passwordResetExpiry = new Date(Date.now() + 10 * 60 * 1000);
     await user.save();
 
-    await sendOTPEmail({
-      to: normalizedEmail,
-      subject: "CricTrack — Password reset OTP",
-      otp,
-      purpose: "reset",
-    });
+    try {
+      await sendOTPEmail({
+        to: normalizedEmail,
+        subject: "CricTrack — Password reset OTP",
+        otp,
+        purpose: "reset",
+      });
+    } catch (mailErr) {
+      console.error("Failed to send OTP email:", mailErr.message);
+    }
 
     return res.status(200).json({
       success: true,
